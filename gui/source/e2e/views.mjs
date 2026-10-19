@@ -298,9 +298,15 @@ async function phase4(page, state, steps, expectedStarts) {
   }
   steps.push(presetCount > 0 ? 'stacking: the rarest rows list exactly their events' : 'stacking: no preset fits this package');
 
+  // A route changes on a hash change, after goto returns: a table looked for before the view is drawn is not there yet.
+  const logons = async (hash) => {
+    await route(hash);
+    await page.locator('main.logons').waitFor();
+  };
+
   // Logons: the first row of each table lists exactly its events, successes and failures together.
   for (const [id, what] of [['logons-table', 'logons'], ['explicit-table', 'explicit credentials'], ['rdp-table', 'Remote Desktop events']]) {
-    await route('logons');
+    await logons('logons');
     const table = page.locator(`#${id}`);
     if ((await table.count()) === 0) {
       steps.push(`logons: this package has no ${what}`);
@@ -317,7 +323,7 @@ async function phase4(page, state, steps, expectedStarts) {
 
   // Sessions: a session's activity opens with its logon id and its time range, holds at least the logon itself,
   // and replaces the search that found the session: that search would cut the activity down to the logons.
-  await route(`logons?q=${encodeURIComponent('EventID:4624')}&d=1`);
+  await logons(`logons?q=${encodeURIComponent('EventID:4624')}&d=1`);
   const sessionTable = page.locator('#sessions-table');
   if ((await sessionTable.count()) > 0 && await poll(page, () => number(sessionTable, 'data-rows'), 'the sessions')) {
     const logonId = await sessionTable.locator('tbody tr').first().locator('td').nth(4).textContent();
@@ -328,6 +334,27 @@ async function phase4(page, state, steps, expectedStarts) {
     check(!hash.includes('EventID:4624') && !hash.includes('d=1'), `a session's activity kept the search that found it: ${hash}`);
     check(listed.count >= 1, 'a session\'s activity lists not even its logon');
     steps.push('logons: a session opens its activity');
+    await route('explore?q=');
+  }
+
+  // Privileged sessions: the activity of a session given special privileges holds the 4672 that gave them,
+  // written just before the logon.
+  await logons('logons');
+  if ((await sessionTable.count()) > 0 && await poll(page, () => number(sessionTable, 'data-rows'), 'the sessions')) {
+    const headers = await sessionTable.locator('thead th').allTextContents();
+    const column = headers.findIndex((text) => text.includes('Special privileges'));
+    check(column >= 0, `the sessions have no special privileges column: ${headers.join(' | ')}`);
+    const row = await sessionTable.locator('tbody tr').evaluateAll((rows, at) => rows.findIndex((r) => (r.children[at]?.textContent ?? '').trim() !== ''), column);
+    if (row < 0) {
+      steps.push('logons: no session was given special privileges');
+    } else {
+      await sessionTable.locator('tbody tr').nth(row).locator('button.value').click();
+      await reopened(page, state);
+      const q = await page.locator('#search-input').inputValue();
+      const granted = await search(page, state, `${q} EventID:4672`);
+      check(granted.count >= 1, `a privileged session's activity holds no 4672: ${q}`);
+      steps.push('logons: a privileged session\'s activity holds its special privileges');
+    }
     await route('explore?q=');
   }
 

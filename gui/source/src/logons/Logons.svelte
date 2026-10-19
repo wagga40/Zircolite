@@ -68,11 +68,14 @@
   const rdpColumns: TableColumn<RdpRow>[] = RDP_COLUMNS.map(label(RDP_LABELS));
   const SESSION_LABELS: Record<string, string> = {
     host: 'Host', account: 'Account', type_name: 'Logon type', ip: 'Source address', session: 'Logon ID', start: 'Logon (UTC)', end: 'Logoff (UTC)',
-    minutes: 'Minutes',
+    minutes: 'Minutes', privileges: 'Special privileges',
   };
-  const sessionColumns: TableColumn<SessionRow>[] = SESSION_COLUMNS.map(label(SESSION_LABELS)).map((column) =>
-    column.column.name === 'end' ? { ...column, show: (row: SessionRow) => sessionEnd(row) }
-    : column.column.name === 'minutes' ? { ...column, show: (row: SessionRow) => (row.minutes === null ? '' : formatCount(row.minutes)) } : column);
+  // Without the fields of 4672 an empty column would read as no session being privileged.
+  const privilegesKnown = $derived(!!fields.field.SubjectLogonId && !!fields.field.PrivilegeList);
+  const sessionColumns: TableColumn<SessionRow>[] = $derived(SESSION_COLUMNS.filter((column) => column.name !== 'privileges' || privilegesKnown)
+    .map(label(SESSION_LABELS)).map((column) =>
+      column.column.name === 'end' ? { ...column, show: (row: SessionRow) => sessionEnd(row) }
+      : column.column.name === 'minutes' ? { ...column, show: (row: SessionRow) => (row.minutes === null ? '' : formatCount(row.minutes)) } : column));
 
   function sessionEnd(row: SessionRow): string {
     if (row.end !== null) return isoTime(row.end, false);
@@ -120,7 +123,9 @@
       note="Security 4648: a process on one host used the credentials of another account, often to reach a target server."
       events={(row) => row.events} open={(row) => explore(explicitTerms(fields, row))} unavailable="" />
     <Section title="Sessions" table={sessions} id="sessions-table" columns={sessionColumns} order={{ column: 'start', desc: false }} noun="sessions"
-      note="Each successful logon with its logoff (4634 or 4647) on the same host and logon ID; a logon ID used again after a reboot starts a new session. The host opens the session's activity: the events on its host that carry its logon ID, from logon to logoff."
+      note={'Each successful logon with its logoff (4634 or 4647) on the same host and logon ID; a logon ID used again after a reboot starts a new session. ' +
+        (privilegesKnown ? 'Special privileges are those 4672 gave the logon. ' : 'This package has no SubjectLogonId or PrivilegeList field, so the special privileges (4672) of a session are not shown. ') +
+        "The host opens the session's activity: the events on its host that carry its logon ID, from logon to logoff."}
       open={activity} opens={(row) => `Show what logon ID ${row.session} did on ${row.host ?? 'its host'}, in place of the search`}
       unavailable="This package has no TargetLogonId field, so logons cannot be paired with their logoffs." />
     <Section title="Remote Desktop" table={rdp} id="rdp-table" columns={rdpColumns} order={{ column: 'host', desc: false }} noun="Remote Desktop events"

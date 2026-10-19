@@ -97,7 +97,7 @@ describe.each(kinds)('sessions, with a %s', (_name, textIds) => {
     expect((await sessions()).map((r) => [r.host, r.account, r.session, r.start, r.end, r.minutes, r.next_logon])).toEqual([
       ['DC01', 'CORP\\alice', '0x1', at('08:00'), at('08:20'), 20, at('12:00')],
       ['DC01', 'CORP\\DC01$', '0x3', at('08:30'), null, null, null],
-      ['DC01', 'CORP\\eve', '0x5', at('08:40'), null, null, at('09:10')],
+      ['DC01', 'CORP\\eve', '0x5', at('08:40'), null, null, at('09:10') - 3000],
       ['dc01', 'corp\\Alice', '0x2', at('09:00'), at('10:00'), 60, null],
       ['DC01', 'CORP\\frank', '0x5', at('09:10'), at('09:30'), 20, null],
       ['WS2', 'CORP\\carol', '0x1', at('11:00'), null, null, null],
@@ -110,13 +110,25 @@ describe.each(kinds)('sessions, with a %s', (_name, textIds) => {
     expect(rows.map((r) => [r.session, r.end])).toEqual([['0x1', at('08:20')], ['0x3', null], ['0x5', null], ['0x2', at('10:00')], ['0x5', at('09:30')]]);
   });
 
-  it('opens a session\'s activity: its logon id on its host, from logon to logoff', async () => {
+  it('opens a session\'s activity: its logon id on its host, from its special privileges or logon to its logoff', async () => {
     const [first, open] = await sessions();
     const activity = sessionActivity(fields, first);
-    expect(activity.t).toEqual([at('08:00'), at('08:20') + 1]);
+    expect(activity.t).toEqual([at('08:00') - 2000, at('08:20') + 1]);
     const where = `(${compile(parse(activity.q), schema)}) AND (${timePredicate(activity.t)})`;
-    expect(await fixture(textIds).uids(where)).toEqual([1, 6]);
-    expect(sessionActivity(fields, open).t[1]).toBe(at('12:00') + 1);
+    expect(await fixture(textIds).uids(where)).toEqual([1, 6, 17]);
+    expect(sessionActivity(fields, open).t).toEqual([at('08:30'), at('12:00') + 1]);
+  });
+
+  it('flags the sessions given special privileges (4672), with the privileges they were given', async () => {
+    expect((await sessions()).map((r) => [r.account, r.session, r.privileges, r.privileged_at])).toEqual([
+      ['CORP\\alice', '0x1', 'SeDebugPrivilege, SeBackupPrivilege', at('08:00') - 2000],
+      ['CORP\\DC01$', '0x3', null, null],
+      ['CORP\\eve', '0x5', null, null],
+      ['corp\\Alice', '0x2', null, null],
+      ['CORP\\frank', '0x5', 'SeTcbPrivilege', at('09:10') - 3000],
+      ['CORP\\carol', '0x1', null, null],
+      ['CORP\\alice', '0x1', null, null],
+    ]);
   });
 
   it('keeps remote logon types only, and hides computer accounts, on request', async () => {
@@ -128,10 +140,11 @@ describe.each(kinds)('sessions, with a %s', (_name, textIds) => {
     expect(people).toHaveLength(6);
   });
 
-  it('ends the activity of a session that never logged off at the next logon with its id', async () => {
+  it('ends the activity of a session that never logged off where the next logon with its id begins', async () => {
     const eve = (await sessions()).find((r) => r.account === 'CORP\\eve') as SessionRow;
     const activity = sessionActivity(fields, eve);
-    expect(activity.t).toEqual([at('08:40'), at('09:10')]);
+    // Frank's logon with eve's id begins with his special privileges, three seconds before the logon itself.
+    expect(activity.t).toEqual([at('08:40'), at('09:10') - 3000]);
     const where = `(${compile(parse(activity.q), schema)}) AND (${timePredicate(activity.t)})`;
     expect(await fixture(textIds).uids(where)).toEqual([14]);
   });

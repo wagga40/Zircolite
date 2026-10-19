@@ -254,6 +254,14 @@ Windows logons under the current filters, for following an account across hosts:
   only** off: the events on that host that carry its logon ID (`TargetLogonId`, `SubjectLogonId`,
   or Sysmon's `LogonId`). The activity runs from logon to logoff, to the next logon with the ID, or
   to the end of the logs while the session is open.
+
+  **Special privileges** lists what Security 4672 gave the session, such as `SeDebugPrivilege`,
+  the mark of an administrator logon; filter the column with `*` to keep privileged sessions only.
+  Windows writes 4672 with the logon or a few seconds before it, so a 4672 counts for a session
+  when it comes at most 5 seconds before its logon and 2 seconds after, on the same host with the
+  same logon ID. The activity of a privileged session starts at its 4672, and a session with no
+  logoff ends where the next logon with its ID begins, 4672 included. The column is left out when
+  the package has no `SubjectLogonId` or `PrivilegeList` field.
 - **Remote Desktop**: authentications (TerminalServices-RemoteConnectionManager 1149),
   LocalSessionManager logons, shell starts, disconnections and reconnections (21, 22, 24, 25), and
   Security session reconnections and disconnections (4778, 4779). Each kind is its own row,
