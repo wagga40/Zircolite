@@ -1,7 +1,8 @@
 import type { Field, Schema } from '../engine/schema';
-import { escapeClause, ident, likeEscape, str } from '../engine/sql';
+import { ident } from '../engine/sql';
 import { fieldTerm } from '../search/edit';
 import { findShortcut } from '../search/shortcuts';
+import type { LocalColumn } from '../ui/localFilters';
 
 export type EntityKindName = 'hosts' | 'users' | 'ips' | 'processes' | 'hashes' | 'domains';
 
@@ -38,17 +39,20 @@ export function entityFields(kind: EntityKind, schema: Schema): Field[] {
   return [...found.values()];
 }
 
-export type EntityOrder = 'events' | 'detections' | 'first' | 'last';
-
-/** Rows the table shows; the rest are reached through the filter. */
+/** Rows the table shows; the rest are reached through the column filters. */
 export const ENTITY_LIMIT = 500;
 
-const ORDER: Record<EntityOrder, string> = {
-  events: 'events DESC',
-  detections: 'detections DESC, events DESC',
-  first: 'first ASC NULLS LAST',
-  last: 'last DESC NULLS LAST',
-};
+/** The table's columns, which its filter cells and sorts name. */
+export const ENTITY_COLUMNS: readonly LocalColumn[] = [
+  { name: 'v', type: 'text' },
+  { name: 'events', type: 'number' },
+  { name: 'detections', type: 'number' },
+  { name: 'first', type: 'time' },
+  { name: 'last', type: 'time' },
+];
+
+/** The order with no column picked, and the ties of any other: the busiest values first. */
+export const ENTITY_ORDER = ['"events" DESC', 'lower("v")', '"v"'];
 
 export interface EntityRow {
   v: string;
@@ -56,28 +60,26 @@ export interface EntityRow {
   detections: number;
   first: number | null;
   last: number | null;
-  /** Values of the kind under the filters, before the limit. */
+  /** Values of the kind under the filters and the column filters, before the limit. */
   total: number;
 }
 
 /**
  * Each value of the kind's fields among the filtered events, grouped ignoring
  * case as the search compares them. An event that holds the value in two
- * fields, or in two spellings, counts once.
+ * fields, or in two spellings, counts once. `filter` is the table's own column
+ * filters over the grouped rows, `order` its ORDER BY.
  */
-export function entitiesSql(fields: Field[], where: string, filter: string, order: EntityOrder, limit = ENTITY_LIMIT): string {
+export function entitiesSql(fields: Field[], where: string, filter = 'TRUE', order = ENTITY_ORDER.join(', '), limit = ENTITY_LIMIT): string {
   const values = fields.map((field) => `CAST(${ident(field.name)} AS VARCHAR)`).join(', ');
-  const literal = str(`%${likeEscape(filter)}%`);
-  const narrow = filter ? ` AND v ILIKE ${literal}${escapeClause(literal)}` : '';
   return (
     `WITH x AS (SELECT _zl_uid, _zl_time, unnest([${values}]) AS v FROM events WHERE ${where}), ` +
-    `y AS (SELECT DISTINCT _zl_uid, _zl_time, v FROM x WHERE v IS NOT NULL${narrow}) ` +
-    'SELECT min(y.v) AS v, count(DISTINCT y._zl_uid)::DOUBLE AS events, ' +
+    'y AS (SELECT DISTINCT _zl_uid, _zl_time, v FROM x WHERE v IS NOT NULL), ' +
+    'g AS (SELECT min(y.v) AS v, count(DISTINCT y._zl_uid)::DOUBLE AS events, ' +
     'count(DISTINCT y._zl_uid) FILTER (WHERE l._zl_uid IS NOT NULL)::DOUBLE AS detections, ' +
-    'epoch_ms(min(y._zl_time))::DOUBLE AS first, epoch_ms(max(y._zl_time))::DOUBLE AS last, ' +
-    '(count(*) OVER ())::DOUBLE AS total ' +
-    'FROM y LEFT JOIN event_levels l ON l._zl_uid = y._zl_uid GROUP BY lower(y.v) ' +
-    `ORDER BY ${ORDER[order]}, min(y.v) LIMIT ${Math.max(1, Math.floor(limit))}`
+    'epoch_ms(min(y._zl_time))::DOUBLE AS first, epoch_ms(max(y._zl_time))::DOUBLE AS last ' +
+    'FROM y LEFT JOIN event_levels l ON l._zl_uid = y._zl_uid GROUP BY lower(y.v)) ' +
+    `SELECT *, (count(*) OVER ())::DOUBLE AS total FROM g WHERE ${filter} ORDER BY ${order} LIMIT ${Math.max(1, Math.floor(limit))}`
   );
 }
 

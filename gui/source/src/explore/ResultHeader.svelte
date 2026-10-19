@@ -3,6 +3,7 @@
   import { cellText, type ColumnState, columnState } from '../search/filters';
   import { view } from '../state/view.svelte';
   import FilterCell from '../ui/FilterCell.svelte';
+  import { cellHint } from '../ui/localFilters';
   import { isoTime } from '../ui/format';
   import { applyCell, applyFilter, LEVEL_CHOICES, levelChoice, levelFilter, nextSort } from './header';
   import { MAX_WIDTH, MIN_WIDTH } from '../state/hash';
@@ -157,7 +158,7 @@
     {@const numeric = field.type !== 'VARCHAR'}
     <div role="columnheader" aria-sort={ariaSort(field)} class:num={numeric} class:moving={moving?.key === field.key} data-field-key={field.key}>
       <div class="name">
-        <button type="button" class="sort"
+        <button type="button" class="sort" aria-label={`Sort by ${field.name}`}
           title={`Sort by ${field.name}${numeric ? '' : `: text sorts by its first ${SORT_PREFIX} characters, ignoring case`}. Drag to move the column.`}
           onclick={() => sortField(field)} onpointerdown={(event) => startMove(event, field)}>{field.name}{arrow(field)}</button>
         <button type="button" class="funnel" class:on={filtered(current)} aria-haspopup="dialog" aria-expanded={menuFor === field.key}
@@ -168,7 +169,7 @@
       </div>
       <div class="filter">
         <FilterCell label={field.name} text={cellText(current, numeric)} locked={locked(current)} apply={(text) => apply(field, text)}
-          onclear={current.kind === 'invalid' ? undefined : () => clear(field)} {onproblem} />
+          onclear={current.kind === 'invalid' ? undefined : () => clear(field)} {onproblem} hint={cellHint(numeric ? 'number' : 'text')} />
       </div>
       <!-- A focusable separator with a value is ARIA's window splitter, an interactive widget the check counts as static. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->

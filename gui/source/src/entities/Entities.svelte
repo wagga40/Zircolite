@@ -10,36 +10,55 @@
   import { formatCount, isoTime } from '../ui/format';
   import { Panel } from '../ui/panel.svelte';
   import { ownScope } from '../ui/scope';
-  import { ENTITY_KINDS, ENTITY_LIMIT, entitiesSql, entityFields, type EntityKind, type EntityKindName, type EntityOrder, type EntityRow, entityTerm } from './entities';
+  import FilterCell from '../ui/FilterCell.svelte';
+  import { applyLocalCell, cellHint, type LocalColumn, localCellText, type LocalSort, localSchema, localWhere, sortClause } from '../ui/localFilters';
+  import { ENTITY_COLUMNS, ENTITY_KINDS, ENTITY_LIMIT, ENTITY_ORDER, entitiesSql, entityFields, type EntityKind, type EntityKindName, type EntityRow, entityTerm } from './entities';
 
   let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
   // svelte-ignore state_referenced_locally
   const db = ownScope(page, 'entities');
 
   let kind = $state<EntityKind>(ENTITY_KINDS[0]);
-  let filter = $state('');
-  let applied = $state('');
-  let order = $state<EntityOrder>('events');
+  // The table's own column filters, in the search grammar over its columns; the page's search is untouched.
+  let filters = $state('');
+  let sort = $state<LocalSort | null>(null);
+  let cellProblem = $state<string | null>(null);
+  const columns = localSchema([...ENTITY_COLUMNS]);
   const fields = $derived(entityFields(kind, schema));
   const list = new Panel<{ kind: EntityKindName; rows: EntityRow[] }>();
-
-  // Typing a filter asks once it pauses, not on every key.
-  $effect(() => {
-    const text = filter.trim();
-    const timer = setTimeout(() => (applied = text), 250);
-    return () => clearTimeout(timer);
-  });
+  const LABELS: Record<string, string> = { events: 'Events', detections: 'With detections', first: 'First seen (UTC)', last: 'Last seen (UTC)' };
+  const label = (column: LocalColumn) => (column.name === 'v' ? kind.label : LABELS[column.name]);
 
   $effect(() => {
     void run.generation;
     const where = query.where;
     const chosen = fields;
-    const text = applied;
-    const by = order;
+    const filter = localWhere(filters, columns);
+    const order = sortClause(sort, ENTITY_ORDER);
     const asked = kind.kind;
     if (chosen.length === 0) return;
-    list.load(async () => ({ kind: asked, rows: await db.rows<EntityRow>(entitiesSql(chosen, where, text, by), { lane: 'list' }) }));
+    list.load(async () => ({ kind: asked, rows: await db.rows<EntityRow>(entitiesSql(chosen, where, filter, order), { lane: 'list' }) }));
   });
+
+  function applyCell(column: LocalColumn, text: string): string | null {
+    const result = applyLocalCell(filters, column, text, columns);
+    if ('problem' in result) return result.problem;
+    filters = result.query;
+    return null;
+  }
+
+  // With no column picked the busiest come first, as a sort on Events, largest first, would put them.
+  const shownSort = $derived(sort ?? { column: 'events', desc: true });
+
+  // A count is most telling from the largest down, a value or a time from the start.
+  function sortBy(column: LocalColumn): void {
+    if (shownSort.column === column.name) sort = { column: column.name, desc: !shownSort.desc };
+    else sort = { column: column.name, desc: column.type === 'number' };
+  }
+
+  function ariaSort(column: LocalColumn): 'ascending' | 'descending' | undefined {
+    return shownSort.column === column.name ? (shownSort.desc ? 'descending' : 'ascending') : undefined;
+  }
 
   // Another kind's values never sit under this kind's header: after a switch the table waits empty.
   const answer = $derived(list.slot.data?.kind === kind.kind ? list.slot.data : null);
@@ -51,7 +70,7 @@
     if (list.slot.stopped) return 'Stopped';
     if (list.slot.failure) return '';
     if (answer === null) return `Counting ${kind.noun}`;
-    if (rows.length === 0) return applied ? `No ${kind.noun} contain "${applied}"` : `No ${kind.noun} among these events`;
+    if (rows.length === 0) return filters ? `No ${kind.noun} pass the column filters` : `No ${kind.noun} among these events`;
     return `${formatCount(total)} ${kind.noun}${filtered ? ' under the current filters' : ''}`;
   });
 
@@ -79,35 +98,27 @@
     <p class="note">This package has no field for {kind.noun} (looked for {kind.fields.join(', ')}).</p>
   {:else}
     <p class="note">Fields: {fields.map((f) => f.name).join(', ')}. Values are grouped ignoring case; an event counts once per value{filtered ? ', under the current filters' : ''}.</p>
-    <div class="controls">
-      <label>Filter values <input type="search" bind:value={filter} spellcheck="false" autocomplete="off" /></label>
-      <label>Sort by
-        <select bind:value={order}>
-          <option value="events">Most events</option>
-          <option value="detections">Most events with detections</option>
-          <option value="first">First seen</option>
-          <option value="last">Last seen</option>
-        </select>
-      </label>
-    </div>
+    {#if cellProblem}<p class="note failure" role="alert">{cellProblem}</p>{/if}
     {#if list.slot.failure}
       <p class="note failure" role="alert">The {kind.noun} could not be listed: {list.slot.failure}. Change the search, or reload the page if this repeats.</p>
     {:else if list.slot.stopped}
       <p class="note" role="status">Stopped.</p>
     {:else}
       {#if total > rows.length}
-        <p class="note">Showing {formatCount(rows.length)} of {formatCount(total)} values. Type in the filter to find the others.</p>
+        <p class="note">Showing {formatCount(rows.length)} of {formatCount(total)} values. Filter a column to find the others.</p>
       {/if}
       <div class="wrap">
         <table id="entities-table" data-kind={kind.kind} data-rows={list.slot.pending || answer === null ? '' : rows.length}
           class:stale={list.slot.pending && answer !== null} aria-busy={list.slot.pending}>
           <thead>
             <tr>
-              <th scope="col">{kind.label}</th>
-              <th scope="col" class="num">Events</th>
-              <th scope="col" class="num">With detections</th>
-              <th scope="col">First seen (UTC)</th>
-              <th scope="col">Last seen (UTC)</th>
+              {#each ENTITY_COLUMNS as column (column.name)}
+                <th scope="col" class:num={column.type === 'number'} aria-sort={ariaSort(column)}>
+                  <button type="button" class="sort" aria-label={`Sort by ${label(column)}`} onclick={() => sortBy(column)}>{label(column)}{ariaSort(column) === 'descending' ? ' ↓' : ariaSort(column) === 'ascending' ? ' ↑' : ''}</button>
+                  <FilterCell label={label(column)} text={localCellText(filters, column)} apply={(text) => applyCell(column, text)}
+                    onclear={() => applyCell(column, '')} onproblem={(problem) => (cellProblem = problem)} hint={cellHint(column.type)} />
+                </th>
+              {/each}
             </tr>
           </thead>
           <tbody>
@@ -120,7 +131,7 @@
                 <td class="time">{row.last === null ? 'No time' : isoTime(row.last, false)}</td>
               </tr>
             {:else}
-              {#if !list.slot.pending}<tr><td colspan="5" class="note">No {kind.noun} {applied ? `contain "${applied}"` : 'among these events'}.</td></tr>{/if}
+              {#if !list.slot.pending}<tr><td colspan="5" class="note">No {kind.noun} {filters ? 'pass the column filters' : 'among these events'}.</td></tr>{/if}
             {/each}
           </tbody>
         </table>
@@ -139,11 +150,11 @@
   .kinds button[aria-pressed='true'] { border-color: var(--signal); font-weight: 600; color: var(--ink); }
   .note { margin: 6px 0; color: var(--ink-2); font-size: var(--t-13); }
   .failure { color: var(--danger); }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; font-size: var(--t-13); }
-  .controls input, .controls select { margin-left: 6px; min-height: 28px; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2px 8px; }
   .wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: var(--t-13); }
-  th { position: sticky; top: 0; background: var(--paper); text-align: left; font-weight: 600; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  th { position: sticky; top: 0; z-index: 1; background: var(--paper); text-align: left; font-weight: 600; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; vertical-align: top; }
+  th .sort { display: block; min-height: 24px; margin-bottom: 4px; padding: 0; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; text-align: inherit; }
+  th.num .sort { margin-left: auto; }
   td { padding: 3px 12px 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); }
   /* Anywhere-wrapping values collapse to a few characters in a narrow table; the wrapper scrolls instead. */
   td:first-child { min-width: 200px; }

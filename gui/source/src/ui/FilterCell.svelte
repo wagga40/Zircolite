@@ -1,7 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { TEXT_HINT } from './localFilters';
 
-  let { label, text, apply, locked = null, onclear, onproblem }: {
+  let { label, text, apply, locked = null, onclear, onproblem, hint = TEXT_HINT }: {
     /** The column's name, for the input's accessible name. */
     label: string;
     /** What the cell shows for the filter in force. */
@@ -13,6 +14,8 @@
     onclear?: () => void;
     /** Hears why typed text was refused, and null once that no longer stands; the table says it where there is room. */
     onproblem?: (problem: string | null) => void;
+    /** What can be typed, for the input's tooltip. */
+    hint?: string;
   } = $props();
 
   let draft = $state('');
@@ -67,7 +70,7 @@
       bind:value={draft}
       aria-label={`Filter ${label}`}
       aria-invalid={problem !== null}
-      title={problem ?? 'Contains this text. =x is exact, * a wildcard, "…" literal, >5 compares, ! leaves out; Enter applies'}
+      title={problem ?? hint}
       placeholder="Filter"
       spellcheck="false"
       autocomplete="off"

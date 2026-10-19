@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Field, Schema } from '../src/engine/schema';
-import { ENTITY_KINDS, entitiesSql, entityFields, entityTerm, type EntityRow } from '../src/entities/entities';
+import { ENTITY_COLUMNS, ENTITY_KINDS, ENTITY_ORDER, entitiesSql, entityFields, entityTerm, type EntityRow } from '../src/entities/entities';
+import { applyLocalCell, type LocalSort, localSchema, localWhere, sortClause } from '../src/ui/localFilters';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import { FIELDS, type Fixture, openFixture, schema, TACTICS } from './fixture';
@@ -18,8 +19,19 @@ let db: Fixture;
 beforeAll(async () => { db = await openFixture(EXTRA); });
 afterAll(() => db.close());
 
-const rows = async (fields: Field[], filter = '', order: 'events' | 'first' = 'events') =>
-  (await db.rows(entitiesSql(fields, 'TRUE', filter, order))) as unknown as EntityRow[];
+const columns = localSchema([...ENTITY_COLUMNS]);
+/** The table's filters after typing in the cells, as Entities applies them. */
+function filters(cells: [string, string][]): string {
+  let text = '';
+  for (const [name, typed] of cells) {
+    const result = applyLocalCell(text, ENTITY_COLUMNS.find((c) => c.name === name)!, typed, columns);
+    if ('problem' in result) throw new Error(result.problem);
+    text = result.query;
+  }
+  return localWhere(text, columns);
+}
+const rows = async (fields: Field[], cells: [string, string][] = [], sort: LocalSort | null = null) =>
+  (await db.rows(entitiesSql(fields, 'TRUE', filters(cells), sortClause(sort, ENTITY_ORDER)))) as unknown as EntityRow[];
 
 describe('entity fields', () => {
   it('uses the text fields of a kind that the package has', () => {
@@ -53,12 +65,22 @@ describe('entities', () => {
   });
 
   it('filters by a part of the value, LIKE characters included literally', async () => {
-    expect((await rows(entityFields(kind('hosts'), schema), 'ws')).map((r) => r.v)).toEqual(['WS02']);
-    expect(await rows(entityFields(kind('hosts'), schema), '%')).toEqual([]);
+    expect((await rows(entityFields(kind('hosts'), schema), [['v', 'ws']])).map((r) => r.v)).toEqual(['WS02']);
+    expect(await rows(entityFields(kind('hosts'), schema), [['v', '%']])).toEqual([]);
   });
 
-  it('sorts by first seen', async () => {
-    expect((await rows(entityFields(kind('hosts'), schema), '', 'first')).map((r) => r.v)).toEqual(['DC01', 'WS02']);
+  it('filters on counts and times, and counts the total after the filters', async () => {
+    const hosts = entityFields(kind('hosts'), schema);
+    expect((await rows(hosts, [['detections', '>=2']])).map((r) => [r.v, r.total])).toEqual([['WS02', 1]]);
+    expect((await rows(hosts, [['first', '>=2021-06-03 06:01']])).map((r) => r.v)).toEqual(['WS02']);
+    expect((await rows(hosts, [['last', '!>=2021-06-03 07:30']])).map((r) => r.v)).toEqual(['WS02']);
+  });
+
+  it('sorts by any column, ties by the busiest', async () => {
+    const hosts = entityFields(kind('hosts'), schema);
+    expect((await rows(hosts, [], { column: 'first', desc: false })).map((r) => r.v)).toEqual(['DC01', 'WS02']);
+    expect((await rows(hosts, [], { column: 'detections', desc: true })).map((r) => r.v)).toEqual(['WS02', 'DC01']);
+    expect((await rows(hosts, [], { column: 'v', desc: true })).map((r) => r.v)).toEqual(['WS02', 'DC01']);
   });
 });
 
@@ -71,8 +93,8 @@ describe('awkward values', () => {
   });
   afterAll(() => awkward.close());
 
-  const hostRows = async (filter = '') =>
-    (await awkward.rows(entitiesSql(entityFields(kind('hosts'), schema), 'TRUE', filter, 'events'))) as unknown as EntityRow[];
+  const hostRows = async (value = '') =>
+    (await awkward.rows(entitiesSql(entityFields(kind('hosts'), schema), 'TRUE', filters(value ? [['v', value]] : [])))) as unknown as EntityRow[];
 
   it('each count is exactly what its term lists', async () => {
     const fields = entityFields(kind('hosts'), schema);

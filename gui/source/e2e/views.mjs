@@ -245,6 +245,30 @@ async function phase4(page, state, steps, expectedStarts) {
   }
   steps.push('entities list exactly their events');
 
+  // Entities' own column filters: a count floor keeps exactly the values at or above it, and the order turns.
+  await route('entities');
+  await page.getByRole('button', { name: 'Hosts', exact: true }).click();
+  const hostTable = page.locator('#entities-table');
+  if ((await hostTable.count()) > 0 && ((await poll(page, () => number(hostTable, 'data-rows'), 'the hosts')) ?? 0) > 1) {
+    const counts = () => page.locator('#entities-table button.value').evaluateAll((buttons) => buttons.map((b) => Number(b.getAttribute('data-events'))));
+    const all = await counts();
+    const floor = all[1];
+    const eventsCell = page.getByLabel('Filter Events', { exact: true });
+    await eventsCell.fill(`>=${floor}`);
+    await eventsCell.press('Enter');
+    const kept = all.filter((count) => count >= floor).length;
+    await poll(page, async () => (await number(hostTable, 'data-rows')) === kept, `the ${kept} hosts with at least ${floor} events`);
+    check((await counts()).every((count) => count >= floor), 'the Events filter kept hosts with fewer events');
+    await page.locator('#entities-table th button.sort', { hasText: 'Events' }).click();
+    await poll(page, async () => {
+      const shown = await counts();
+      return shown.length === kept && shown.every((count, i) => i === 0 || shown[i - 1] <= count);
+    }, 'the hosts in ascending order of events');
+    await eventsCell.fill('');
+    await eventsCell.press('Enter');
+    steps.push('entities filter and sort by their own columns');
+  }
+
   // Processes: the tree counts every process start, and a start opens as its event.
   await route('processes');
   const tree = page.locator('#process-tree');

@@ -189,7 +189,10 @@ list as active are shown apart, never dropped: **revoked** (with the replacement
 
 Hosts, users, IP addresses, processes, hashes and domains among the filtered events, with
 their event counts, detection counts and first and last times. Values are grouped ignoring
-case; up to 500 rows show, and **Filter values** finds the rest.
+case; up to 500 rows show, busiest first. Each column sorts on a click and has a filter cell
+with the [column filter](#explore) syntax, such as `>=10` under Events or `admin` under Users.
+Times are typed in UTC: `>=2021-06-03` or `<2021-06-03 08:00`. These filters narrow the table
+only, never the search, and the count above the table counts what they keep.
 
 | Kind | Fields |
 |------|--------|
