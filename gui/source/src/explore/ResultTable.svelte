@@ -13,7 +13,7 @@
   import { pageTopLayer } from '../ui/layers';
   import { ui } from '../ui/ui.svelte';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
-  import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW, wheelDelta, wheelPosition } from './table';
+  import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, resolveSort, ROW, wheelDelta, wheelPosition } from './table';
 
   let { db, exportDb, schema, manifest, where, columns, slow }: {
     db: Db;
@@ -85,6 +85,7 @@
   // Unrounded wheel position, kept so 1 px trackpad deltas past the height cap are not rounded away.
   let wheelAt: number | null = null;
 
+  const sortKey = $derived(resolveSort(view.sort, schema));
   const viewport = $derived(Math.max(0, height - HEAD));
   const slice = $derived(geometry(total, viewport, scrollTop));
   const positions = $derived(Array.from({ length: slice.count }, (_, i) => slice.first + i));
@@ -109,7 +110,7 @@
     void run.generation;
     // A new list is a new question; a stop belongs to the list it cancelled.
     run.stopped = false;
-    const sql = idsSql(where, view.desc);
+    const sql = idsSql(where, view.desc, sortKey);
     const mine = ++build;
     busy = true;
     failure = null;

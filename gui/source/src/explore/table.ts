@@ -1,4 +1,5 @@
-import type { Field } from '../engine/schema';
+import type { Field, Schema } from '../engine/schema';
+import { LEVEL_SORT } from '../state/hash';
 import { ident } from '../engine/sql';
 
 export const ROW = 28;
@@ -8,14 +9,50 @@ export const PAGE = 200;
 /** Under every browser's limit on an element's height; Firefox's, near 17.9M px, is the lowest. */
 export const HEIGHT_CAP = 8_000_000;
 
+/**
+ * Text sorts by this many leading characters. Sorting on whole values holds
+ * every one of them at once, and long rendered messages fill the engine's
+ * memory long before a million of them are in order.
+ */
+export const SORT_PREFIX = 128;
+
+/** The column a list is ordered by besides time: a field, or each event's highest detection level. */
+export type SortKey = Field | 'level';
+
 /** The ordered result list every page, count and export reads, rebuilt once per filter change. */
-export function idsSql(where: string, desc: boolean): string {
+export function idsSql(where: string, desc: boolean, sort: SortKey | null = null): string {
   const order = desc ? 'DESC' : 'ASC';
   // NULLS LAST in both directions keeps events without a time at the end, listed rather than lost.
+  if (sort === null) {
+    return (
+      `CREATE OR REPLACE TEMP TABLE view_ids AS SELECT (row_number() OVER (ORDER BY _zl_time ${order} NULLS LAST, ` +
+      `_zl_uid ${order}) - 1)::BIGINT AS _zl_pos, _zl_uid FROM events WHERE ${where}`
+    );
+  }
+  // The key is computed below the window, which then holds only it: written inside the ORDER BY,
+  // the window would keep each event's whole value. The filter stays alone with events, where
+  // its bare _zl_uid cannot be ambiguous.
+  const filtered = `SELECT _zl_uid, _zl_time FROM events WHERE ${where}`;
+  const keyed =
+    sort === 'level'
+      ? `SELECT e._zl_uid, e._zl_time, l._zl_lvl AS k FROM (${filtered}) e LEFT JOIN event_levels l ON l._zl_uid = e._zl_uid`
+      : `SELECT _zl_uid, _zl_time, ${sortValue(sort)} AS k FROM events WHERE ${where}`;
   return (
-    `CREATE OR REPLACE TEMP TABLE view_ids AS SELECT (row_number() OVER (ORDER BY _zl_time ${order} NULLS LAST, ` +
-    `_zl_uid ${order}) - 1)::BIGINT AS _zl_pos, _zl_uid FROM events WHERE ${where}`
+    `CREATE OR REPLACE TEMP TABLE view_ids AS SELECT (row_number() OVER (ORDER BY k ${order} NULLS LAST, ` +
+    `_zl_time ASC NULLS LAST, _zl_uid ASC) - 1)::BIGINT AS _zl_pos, _zl_uid FROM (${keyed})`
   );
+}
+
+/** The sort a link asks for; a column the package does not have orders by time, as no sort does. */
+export function resolveSort(sort: string | null, schema: Schema): SortKey | null {
+  if (sort === null) return null;
+  if (sort === LEVEL_SORT) return 'level';
+  return schema.find(sort) ?? null;
+}
+
+function sortValue(field: Field): string {
+  const column = ident(field.name);
+  return field.type === 'VARCHAR' ? `lower(left(${column}, ${SORT_PREFIX}))` : column;
 }
 
 export const COUNT_SQL =
