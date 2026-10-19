@@ -299,9 +299,17 @@ async function phase4(page, state, steps, expectedStarts) {
   steps.push(presetCount > 0 ? 'stacking: the rarest rows list exactly their events' : 'stacking: no preset fits this package');
 
   // A route changes on a hash change, after goto returns: a table looked for before the view is drawn is not there yet.
+  // The tables then fill in one after the other, each pushing those below it down, so a row is clicked only once
+  // every table has answered: a click aimed before the sessions fill in lands on whatever moved under it.
   const logons = async (hash) => {
     await route(hash);
     await page.locator('main.logons').waitFor();
+    await poll(page, async () => {
+      for (const table of await page.locator('main.logons table').all()) {
+        if ((await table.getAttribute('data-rows')) === '') return null;
+      }
+      return true;
+    }, 'every logons table');
   };
 
   // Logons: the first row of each table lists exactly its events, successes and failures together.
