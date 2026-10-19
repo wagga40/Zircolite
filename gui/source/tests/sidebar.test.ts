@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Schema } from '../src/engine/schema';
-import { defaultColumns, moveColumn, placeColumn, shownColumns, toggleColumn } from '../src/explore/columns';
+import { defaultColumns, familyColumns, familyLabel, familyOf, familyProbeSql, moveColumn, placeColumn, shownColumns, toggleColumn } from '../src/explore/columns';
 import { columnValuesSql, filterFields, percent, topValuesSql, valueLabel } from '../src/explore/sidebar';
 import { compile } from '../src/search/compile';
 import { appendTerm } from '../src/search/edit';
@@ -148,5 +148,50 @@ describe('columns', () => {
     expect(placeColumn(['A', 'B', 'C', 'D'], 'B', 4)).toEqual(['A', 'C', 'D', 'B']);
     expect(placeColumn(['A', 'B', 'C', 'D'], 'B', 1)).toEqual(['A', 'B', 'C', 'D']);
     expect(placeColumn(['A', 'B', 'C', 'D'], 'B', 2)).toEqual(['A', 'B', 'C', 'D']);
+  });
+});
+
+describe('event family columns', () => {
+  const SYSMON = 'Microsoft-Windows-Sysmon/Operational';
+  const families = [
+    { channel: 'Security', eventid: '4624', columns: ['Channel', 'EventID', 'Computer', 'TargetUserName'] },
+    { channel: 'Security', eventid: '4688', columns: ['Channel', 'EventID', 'Computer', 'TargetUserName'] },
+    { channel: SYSMON, eventid: '1', columns: ['Channel', 'EventID', 'Computer', 'level', 'CommandLine', 'Image', `it's "odd"`] },
+    { channel: 'Windows PowerShell', eventid: '1', columns: ['Channel', 'EventID', 'Computer', 'Image'] },
+  ];
+
+  it.each<[string, string | null]>([
+    ['EventID:4624', 'Security 4624'],
+    ['x eventid:"4688" y', 'Security 4688'],
+    ['EventID:1', null],
+    [`EventID:1 Channel:"${SYSMON}"`, `${SYSMON} 1`],
+    ['EventID:1 channel:"windows powershell"', 'Windows PowerShell 1'],
+    ['-EventID:4624', null],
+    ['EventID:46*', null],
+    ['EventID:4624 OR x', null],
+    ['EventID:4624 EventID:4688', null],
+    ['EventID:9999', null],
+    ['Image:"open', null],
+  ])('reads %j as %j', (query, expected) => {
+    const family = familyOf(query, families);
+    expect(family ? `${family.channel} ${family.eventid}` : null).toBe(expected);
+  });
+
+  it('offers the family\'s telling columns, host first, without the columns every event has', () => {
+    expect(familyColumns(families[2], schema).map((f) => f.name)).toEqual(['Computer', 'Image', 'CommandLine', `it's "odd"`]);
+    expect(familyColumns(families[0], schema).map((f) => f.name)).toEqual(['Computer', 'TargetUserName']);
+  });
+
+  it('names a family briefly', () => {
+    expect(familyLabel({ channel: SYSMON, eventid: '1' })).toBe('Sysmon/Operational 1');
+    expect(familyLabel({ channel: null, eventid: '7' })).toBe('event 7');
+  });
+
+  it('asks the result list which families it holds', async () => {
+    await db.rows(`CREATE OR REPLACE TEMP TABLE view_ids AS SELECT row_number() OVER () AS _zl_pos, _zl_uid FROM events WHERE "Computer" = 'DC01'`);
+    expect(await db.rows(familyProbeSql(schema) as string)).toHaveLength(2);
+    await db.rows(`CREATE OR REPLACE TEMP TABLE view_ids AS SELECT row_number() OVER () AS _zl_pos, _zl_uid FROM events WHERE "EventID" = 4624`);
+    expect(await db.rows(familyProbeSql(schema) as string)).toEqual([{ c: 'Security', i: '4624' }]);
+    expect(familyProbeSql(new Schema([], []))).toBeNull();
   });
 });

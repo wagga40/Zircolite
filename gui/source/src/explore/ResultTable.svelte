@@ -16,7 +16,7 @@
   import ColumnMenu from '../ui/ColumnMenu.svelte';
   import { asciiLower } from '../engine/sql';
   import { clampWidth } from '../state/hash';
-  import { moveColumn, placeColumn, toggleColumn } from './columns';
+  import { familyColumns, familyLabel, familyOf, familyProbeSql, moveColumn, placeColumn, toggleColumn } from './columns';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
   import ColumnValues from './ColumnValues.svelte';
   import { applyFilter } from './header';
@@ -225,7 +225,15 @@
     })();
   });
 
-  // A failed page is asked for again when the visible pages change, once per change; scrolling within them does not retry.
+  // The one kind of event the results hold, read from the search or, failing that, asked of a small result list.
+  const FAMILY_PROBE_LIMIT = 200_000;
+  const named = $derived(familyOf(view.q, manifest.families));
+  let probed = $state<Manifest['families'][number] | null>(null);
+  const family = $derived(named ?? probed);
+  const familySet = $derived(family ? familyColumns(family, schema) : []);
+  const familyShown = $derived(familySet.length === columns.length && familySet.every((field, i) => columns[i] === field));
+
+    // A failed page is asked for again when the visible pages change, once per change; scrolling within them does not retry.
   const visiblePages = $derived(slice.count === 0 ? '' : `${Math.floor(slice.first / PAGE)}-${Math.floor((slice.first + slice.count - 1) / PAGE)}`);
   $effect(() => {
     void visiblePages;
@@ -282,7 +290,23 @@
     );
   });
 
-  // Past the height cap one wheel notch would jump thousands of rows, so the scroll is stepped by rows.
+  // Asked after the first page, on its own lane, and only of lists small enough that it costs little.
+  $effect(() => {
+    probed = null;
+    const sql = familyProbeSql(schema);
+    if (sql === null || busy || named !== null || current === 0 || current !== build || total === 0 || total > FAMILY_PROBE_LIMIT) return;
+    const mine = current;
+    db.rows<{ c: string | null; i: string | null }>(sql, { cache: false, lane: 'family' }).then(
+      (rows) => {
+        if (mine !== current || rows.length !== 1) return;
+        probed = manifest.families.find((f) => f.channel === rows[0].c && f.eventid === rows[0].i) ?? null;
+      },
+      // The offer is a convenience: a probe that fails or is stopped offers nothing.
+      () => {},
+    );
+  });
+
+    // Past the height cap one wheel notch would jump thousands of rows, so the scroll is stepped by rows.
   $effect(() => {
     const target = scroller;
     if (!target) return;
@@ -420,6 +444,12 @@
     {/if}
     {#if busy}<button type="button" onclick={() => stopAll(db)}>Stop</button>{/if}
     <button type="button" class="toggle" aria-pressed={view.d} onclick={() => (view.d = !view.d)}>Detections only</button>
+    {#if family && familySet.length > 0 && !familyShown}
+      <button type="button" onclick={() => (view.cols = familySet.map((field) => field.name))} title={familySet.map((field) => field.name).join(', ')}>Columns for {familyLabel(family)}</button>
+    {/if}
+    {#if view.cols !== null}
+      <button type="button" onclick={() => { view.cols = null; view.widths = {}; }}>Default columns</button>
+    {/if}
     <span class="grow"></span>
     {#if exporting}
       <span class="progress" aria-live="polite">Exporting {formatCount(exporting.done)} of {formatCount(exporting.total)}</span>
