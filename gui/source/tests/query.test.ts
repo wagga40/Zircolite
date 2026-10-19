@@ -22,6 +22,20 @@ describe('QueryState', () => {
     expect(query.whereWithoutTime).not.toContain('make_timestamp');
   });
 
+  it('filters by another search with the same time range and Detections only', () => {
+    const query = new QueryState(schema, 6);
+    view.q = 'EventID:4624 Computer:x';
+    view.t = [1, 2];
+    view.d = true;
+    const where = query.whereFor('EventID:4624');
+    expect(where).toContain('"EventID" = 4624');
+    expect(where).not.toContain('Computer');
+    expect(where).toContain('make_timestamp(1000)');
+    expect(where).toContain('FROM hits');
+    expect(query.whereFor('Comptuer:x')).toContain('FALSE');
+    expect(query.whereFor('')).not.toContain('EventID');
+  });
+
   it('matches nothing for a search that does not compile, never everything', () => {
     const query = new QueryState(schema, 6);
     view.q = 'Comptuer:x';

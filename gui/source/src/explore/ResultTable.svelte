@@ -12,16 +12,24 @@
   import { tick } from 'svelte';
   import { pageTopLayer } from '../ui/layers';
   import { ui } from '../ui/ui.svelte';
+  import { columnState, withoutColumn } from '../search/filters';
+  import ColumnMenu from '../ui/ColumnMenu.svelte';
+  import { moveColumn, toggleColumn } from './columns';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
+  import ColumnValues from './ColumnValues.svelte';
+  import { applyFilter } from './header';
+  import ResultHeader from './ResultHeader.svelte';
   import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, resolveSort, ROW, wheelDelta, wheelPosition } from './table';
 
-  let { db, exportDb, schema, manifest, where, columns, slow }: {
+  let { db, exportDb, schema, manifest, where, whereFor, columns, slow }: {
     db: Db;
     /** Outlives the view, so an export finishes and downloads after the person moves to another view; Stop still ends it. */
     exportDb: Db;
     schema: Schema;
     manifest: Manifest;
     where: string;
+    /** The filters with another search in place of the committed one. */
+    whereFor: (q: string) => string;
     columns: Field[];
     /** Said in place of "Searching" when the search is known to take long. */
     slow: string | null;
@@ -47,6 +55,9 @@
   let exporting = $state<{ done: number; total: number } | null>(null);
   let exportNote = $state<string | null>(null);
   let menuOpen = $state(false);
+  // The column whose filter and sort menu is open, and the funnel it opened from.
+  let columnMenu = $state<{ field: Field; anchor: HTMLElement } | null>(null);
+  let cellProblem = $state<string | null>(null);
   let menu = $state<HTMLDetailsElement>();
   let cancelButton = $state<HTMLButtonElement>();
   let csvButton = $state<HTMLButtonElement>();
@@ -61,6 +72,48 @@
   $effect(() => {
     if (menuOpen && (view.uid !== null || ui.fieldsOpen)) closeMenu();
   });
+
+  function closeColumnMenu(): void {
+    const opened = columnMenu;
+    columnMenu = null;
+    // Focus goes back to the funnel only from inside the menu; a press elsewhere keeps its own target.
+    const at = document.activeElement;
+    if (opened && (!at || at === document.body || at.closest('[data-column-menu]'))) {
+      void tick().then(() => document.querySelector<HTMLElement>(`[data-column-funnel="${CSS.escape(opened.field.key)}"]`)?.focus());
+    }
+  }
+
+  // An event opening beside the table, or a column going away, takes the menu with it.
+  $effect(() => {
+    if (!columnMenu) return;
+    const key = columnMenu.field.key;
+    if (view.uid !== null || ui.fieldsOpen || !columns.some((field) => field.key === key)) columnMenu = null;
+  });
+
+  function columnNames(): string[] {
+    return view.cols ?? columns.map((field) => field.name);
+  }
+
+  function moveField(field: Field, delta: -1 | 1): void {
+    view.cols = moveColumn(columnNames(), field.name, delta);
+  }
+
+  function hideField(field: Field): void {
+    if (sortKey === field) view.sort = null;
+    view.cols = toggleColumn(columnNames(), field.name);
+  }
+
+  /** What a column's values are counted under: every filter but the column's own, so several can be picked. */
+  function valuesWhere(field: Field): string {
+    return columnState(view.q, field.name).kind === 'invalid' ? 'FALSE' : whereFor(withoutColumn(view.q, field.name));
+  }
+
+  function applyColumn(field: Field, filter: Parameters<typeof applyFilter>[2]): string | null {
+    const result = applyFilter(view.q, field.name, filter, schema);
+    if ('problem' in result) return result.problem;
+    view.q = result.query;
+    return null;
+  }
 
   $effect(() => {
     if (!menuOpen) return;
@@ -263,6 +316,7 @@
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event)) return;
     if ((event.target as Element | null)?.closest?.('dialog')) return;
     if (event.key !== 'j' && event.key !== 'k') return;
+    if ((event.target as Element | null)?.closest?.('[data-column-menu]')) return;
     // The row mark shows and Enter opens a row only while the grid has focus, and the grid sits past
     // one button per field. The open event keeps its focus, so stepping is read out where the person is.
     const at = document.activeElement;
@@ -365,13 +419,17 @@
   </div>
   {#if exportNote}<p class="note" role="status">{exportNote}</p>{/if}
   {#if failure}<p class="note failure" role="alert">The results could not be read: {failure}. Change the search, or reload the page if this repeats.</p>{/if}
+  {#if cellProblem}<p class="note failure" role="alert">{cellProblem}</p>{/if}
 
   <div
     id="result-grid"
     class="scroller"
     bind:this={scroller}
     bind:clientHeight={height}
-    onscroll={() => (scrollTop = scroller?.scrollTop ?? 0)}
+    onscroll={() => {
+      scrollTop = scroller?.scrollTop ?? 0;
+      if (columnMenu) columnMenu = null;
+    }}
     role="grid"
     tabindex="0"
     aria-label="Events"
@@ -381,13 +439,8 @@
     aria-activedescendant={total > 0 && active >= slice.first && active < slice.first + slice.count ? `row-${active}` : undefined}
     onkeydown={ongridkey}
   >
-    <div class="row head" role="row" aria-rowindex={1} style:grid-template-columns={template} style:min-width={`${minWidth}px`}>
-      <div role="columnheader" aria-sort={view.desc ? 'descending' : 'ascending'}>
-        <button type="button" class="sort" onclick={() => (view.desc = !view.desc)}>Time (UTC) {view.desc ? '↓' : '↑'}</button>
-      </div>
-      <div role="columnheader">Level</div>
-      {#each columns as field (field.key)}<div role="columnheader" class:num={field.type !== 'VARCHAR'} title={field.name}>{field.name}</div>{/each}
-    </div>
+    <ResultHeader {columns} {schema} {sortKey} {template} {minWidth} menuFor={columnMenu?.field.key ?? null}
+      onmenu={(field, anchor) => (columnMenu = columnMenu?.field === field ? null : { field, anchor })} onproblem={(problem) => (cellProblem = problem)} />
     <div class="rows-space" style:height={`${slice.height}px`} style:min-width={`${minWidth}px`}>
       <div class="rows" style:transform={`translateY(${slice.top}px)`}>
         {#each positions as position (position)}
@@ -423,9 +476,26 @@
       </div>
     </div>
     {#if !busy && total === 0 && !failure}
-      <p class="empty">No events match. Remove a filter or change the search.</p>
+      <p class="empty" style:top={`${HEAD + 24}px`}>No events match. Remove a filter or change the search.</p>
     {/if}
   </div>
+  {#if columnMenu}
+    {@const field = columnMenu.field}
+    {@const at = columns.indexOf(field)}
+    <ColumnMenu title={field.name} numeric={field.type !== 'VARCHAR'} anchor={columnMenu.anchor} current={columnState(view.q, field.name)}
+      sort={sortKey === field ? (view.desc ? 'descending' : 'ascending') : null}
+      onsort={(desc) => { view.sort = field.name; view.desc = desc; }}
+      onapply={(filter) => applyColumn(field, filter)} onclose={closeColumnMenu}>
+      {#snippet values(apply: (filter: Parameters<typeof applyFilter>[2]) => void)}
+        <ColumnValues {db} {field} where={valuesWhere(field)} current={columnState(view.q, field.name)} onapply={apply} />
+      {/snippet}
+      {#snippet column()}
+        <button type="button" disabled={at <= 0} onclick={() => moveField(field, -1)}>Move left</button>
+        <button type="button" disabled={at < 0 || at >= columns.length - 1} onclick={() => moveField(field, 1)}>Move right</button>
+        <button type="button" onclick={() => { hideField(field); closeColumnMenu(); }}>Hide column</button>
+      {/snippet}
+    </ColumnMenu>
+  {/if}
 </div>
 
 <style>
@@ -449,9 +519,6 @@
   .row:hover { background: color-mix(in srgb, var(--signal) 6%, transparent); }
   .row.selected { background: color-mix(in srgb, var(--signal) 15%, transparent); }
   .scroller:focus-visible .row.active { box-shadow: inset 2px 0 0 var(--signal); }
-  .head { position: sticky; top: 0; z-index: 2; height: 32px; background: var(--panel); cursor: default; border-bottom: 1px solid var(--rule); }
-  .head > div { font: 600 var(--t-12) / 32px var(--sans); color: var(--ink-2); }
-  .sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
   .rows-space { position: relative; }
   .rows { position: absolute; inset: 0 0 auto 0; transition: opacity var(--motion); }
   /* Rows of the previous filter stay until the new list is ready. */
@@ -460,7 +527,7 @@
   .row > .level { display: flex; align-items: center; gap: 6px; font-family: var(--sans); }
   .level i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; }
   .loading { color: var(--ink-2); }
-  .empty { position: absolute; top: 56px; left: 16px; margin: 0; color: var(--ink-2); }
+  .empty { position: absolute; left: 16px; margin: 0; color: var(--ink-2); }
   .exports { display: inline-flex; gap: 8px; }
   .export-menu { display: none; position: relative; }
   .export-menu summary { min-height: 28px; padding: 3px 10px; border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; list-style: none; }

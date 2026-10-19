@@ -40,6 +40,21 @@ export class QueryState {
 
   slow = $derived.by(() => slowSearchNote(this.compiled.tree, this.events, this.onIndex));
 
+  /**
+   * The filters with another search in place of the committed one: a column
+   * menu counts values under every filter but its own column's.
+   */
+  whereFor(q: string): string {
+    let sql: string | null = null;
+    try {
+      sql = q ? compile(parse(q), this.schema, { textIndex: this.onIndex }) : null;
+    } catch (problem) {
+      if (!(problem instanceof SearchError)) throw problem;
+      sql = 'FALSE';
+    }
+    return combineWhere([sql, timePredicate(view.t), view.d ? DETECTIONS_PREDICATE : null]);
+  }
+
   constructor(
     readonly schema: Schema,
     readonly events: number,

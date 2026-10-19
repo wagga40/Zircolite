@@ -3,8 +3,8 @@ import { LEVEL_SORT } from '../state/hash';
 import { ident } from '../engine/sql';
 
 export const ROW = 28;
-/** The sticky header row, which sits inside the scroller above the rows. */
-export const HEAD = 32;
+/** The sticky header, column names over the filter row, which sits inside the scroller above the rows. */
+export const HEAD = 62;
 export const PAGE = 200;
 /** Under every browser's limit on an element's height; Firefox's, near 17.9M px, is the lowest. */
 export const HEIGHT_CAP = 8_000_000;
