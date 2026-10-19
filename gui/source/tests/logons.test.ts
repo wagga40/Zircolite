@@ -36,13 +36,15 @@ describe.each(kinds)('logons, with a %s', (_name, textIds) => {
       ['DC01', 'CORP\\bob', '3 Network', '10.0.0.9', null, 0, 1, 'no such user', 0],
       ['DC01', 'CORP\\alice', '2 Interactive', null, null, 1, 0, null, 1],
       ['DC01', 'CORP\\DC01$', '3 Network', '::1', null, 1, 0, null, 1],
+      ['DC01', 'CORP\\eve', '3 Network', '10.0.0.8', null, 1, 0, null, 1],
+      ['DC01', 'CORP\\frank', '3 Network', '10.0.0.8', null, 1, 0, null, 1],
       ['WS2', 'CORP\\carol', '10 RemoteInteractive', '10.0.0.7', null, 1, 0, null, 1],
     ]);
   });
 
   it('leaves out other channels, logoffs and other events', async () => {
     const rows = await logons();
-    expect(rows.reduce((sum, r) => sum + r.successes + r.failures, 0)).toBe(7);
+    expect(rows.reduce((sum, r) => sum + r.successes + r.failures, 0)).toBe(9);
   });
 
   it('pivots each row to exactly its logons and failures', async () => {
@@ -92,18 +94,20 @@ describe.each(kinds)('sessions, with a %s', (_name, textIds) => {
   const sessions = async (where = 'TRUE') => (await fixture(textIds).rows(sessionsSql(fields, where, {}) as string)) as unknown as SessionRow[];
 
   it('pairs each logon with its logoff, never the logoff of a later logon that reused its id', async () => {
-    expect((await sessions()).map((r) => [r.host, r.account, r.session, r.start, r.end, r.minutes])).toEqual([
-      ['DC01', 'CORP\\alice', '0x1', at('08:00'), at('08:20'), 20],
-      ['DC01', 'CORP\\DC01$', '0x3', at('08:30'), null, null],
-      ['dc01', 'corp\\Alice', '0x2', at('09:00'), at('10:00'), 60],
-      ['WS2', 'CORP\\carol', '0x1', at('11:00'), null, null],
-      ['DC01', 'CORP\\alice', '0x1', at('12:00'), null, null],
+    expect((await sessions()).map((r) => [r.host, r.account, r.session, r.start, r.end, r.minutes, r.next_logon])).toEqual([
+      ['DC01', 'CORP\\alice', '0x1', at('08:00'), at('08:20'), 20, at('12:00')],
+      ['DC01', 'CORP\\DC01$', '0x3', at('08:30'), null, null, null],
+      ['DC01', 'CORP\\eve', '0x5', at('08:40'), null, null, at('09:10')],
+      ['dc01', 'corp\\Alice', '0x2', at('09:00'), at('10:00'), 60, null],
+      ['DC01', 'CORP\\frank', '0x5', at('09:10'), at('09:30'), 20, null],
+      ['WS2', 'CORP\\carol', '0x1', at('11:00'), null, null, null],
+      ['DC01', 'CORP\\alice', '0x1', at('12:00'), null, null, null],
     ]);
   });
 
   it('filters the logons, never the logoffs that close them', async () => {
     const rows = await sessions(compile(parse('LogonType:3'), schema));
-    expect(rows.map((r) => [r.session, r.end])).toEqual([['0x1', at('08:20')], ['0x3', null], ['0x2', at('10:00')]]);
+    expect(rows.map((r) => [r.session, r.end])).toEqual([['0x1', at('08:20')], ['0x3', null], ['0x5', null], ['0x2', at('10:00')], ['0x5', at('09:30')]]);
   });
 
   it('opens a session\'s activity: its logon id on its host, from logon to logoff', async () => {
@@ -113,6 +117,23 @@ describe.each(kinds)('sessions, with a %s', (_name, textIds) => {
     const where = `(${compile(parse(activity.q), schema)}) AND (${timePredicate(activity.t)})`;
     expect(await fixture(textIds).uids(where)).toEqual([1, 6]);
     expect(sessionActivity(fields, open).t[1]).toBe(at('12:00') + 1);
+  });
+
+  it('keeps remote logon types only, and hides computer accounts, on request', async () => {
+    const remote = (await fixture(textIds).rows(sessionsSql(fields, 'TRUE', { remoteOnly: true }) as string)) as unknown as SessionRow[];
+    expect(remote.map((r) => r.type_name)).not.toContain('2 Interactive');
+    expect(remote.map((r) => r.type_name)).toContain('10 RemoteInteractive');
+    const people = (await fixture(textIds).rows(sessionsSql(fields, 'TRUE', { hideMachines: true }) as string)) as unknown as SessionRow[];
+    expect(people.map((r) => r.account)).not.toContain('CORP\\DC01$');
+    expect(people).toHaveLength(6);
+  });
+
+  it('ends the activity of a session that never logged off at the next logon with its id', async () => {
+    const eve = (await sessions()).find((r) => r.account === 'CORP\\eve') as SessionRow;
+    const activity = sessionActivity(fields, eve);
+    expect(activity.t).toEqual([at('08:40'), at('09:10')]);
+    const where = `(${compile(parse(activity.q), schema)}) AND (${timePredicate(activity.t)})`;
+    expect(await fixture(textIds).uids(where)).toEqual([14]);
   });
 });
 

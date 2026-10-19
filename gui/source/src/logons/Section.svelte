@@ -6,7 +6,7 @@
   import { LOGON_LIMIT } from './logons';
   import type { LogonTable } from './table.svelte';
 
-  let { title, note, table, id, columns, order, events, open, opens, noun }: {
+  let { title, note, table, id, columns, order, events, open, opens, noun, unavailable }: {
     title: string;
     note: string;
     table: LogonTable<Row>;
@@ -19,6 +19,8 @@
     /** What opening a row shows, for its button's title. */
     opens?: (row: Row) => string;
     noun: string;
+    /** Why the package cannot answer this table, said in its place. */
+    unavailable: string;
   } = $props();
 
   const rows = $derived(table.answer?.rows ?? []);
@@ -28,7 +30,9 @@
 <section aria-labelledby={`${id}-title`}>
   <h2 id={`${id}-title`}>{title}</h2>
   <p class="note">{note}</p>
-  {#if table.list.slot.failure}
+  {#if table.unavailable}
+    <p class="note">{unavailable}</p>
+  {:else if table.list.slot.failure}
     <p class="note failure" role="alert">The {noun} could not be listed: {table.list.slot.failure}. Change the search, or reload the page if this repeats.</p>
   {:else if table.list.slot.stopped}
     <p class="note" role="status">Stopped. <button type="button" onclick={runAgain}>Run again</button></p>

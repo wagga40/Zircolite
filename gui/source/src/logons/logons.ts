@@ -148,18 +148,24 @@ export const LOGON_COLUMNS: LocalColumn[] = [
 /** Failures first: a run of them is what a responder looks for before anything else. */
 export const LOGON_ORDER = ['"failures" DESC', '"successes" DESC', 'lower("host")', 'lower("account")', 'lower("type_name")', 'lower("ip")'];
 
+/** The toggles' conditions, over a logon's type and account; each needs its field, and the view says when one is missing. */
+function narrowing(f: LogonFields['field'], options: LogonOptions, type: string, user: string): string {
+  const remote = options.remoteOnly && f.LogonType ? ` AND ${type} IN ('3', '10')` : '';
+  const machines = options.hideMachines && f.TargetUserName ? ` AND coalesce(${user}, '') NOT LIKE '%$'` : '';
+  return remote + machines;
+}
+
 /** Successful (4624) and failed (4625) logons, grouped by target host, account, logon type and source. */
 export function logonsSql(fields: LogonFields, where: string, options: LogonOptions): string | null {
   const f = fields.field;
   if (!f.EventID || !f.Computer) return null;
-  const remote = options.remoteOnly && f.LogonType ? ` AND trim(${text(f.LogonType)}) IN ('3', '10')` : '';
-  const machines = options.hideMachines && f.TargetUserName ? ` AND coalesce(${text(f.TargetUserName)}, '') NOT LIKE '%$'` : '';
+  const narrow = narrowing(f, options, `trim(${text(f.LogonType)})`, text(f.TargetUserName));
   const reason = `coalesce(nullif(lower(${text(f.SubStatus)}), '0x0'), lower(${text(f.Status)}))`;
   return (
     `WITH x AS (SELECT _zl_time, trim(CAST(${ident(f.EventID.name)} AS VARCHAR)) AS id, ${text(f.Computer)} AS host, ${text(f.TargetDomainName)} AS domain, ` +
     `${text(f.TargetUserName)} AS "user", trim(${text(f.LogonType)}) AS type, ${text(f.IpAddress)} AS ip, ${text(f.WorkstationName)} AS workstation, ` +
     `${text(f.TargetLogonId)} AS session, ${reason} AS reason FROM events ` +
-    `WHERE (${where}) AND ${channelIs(f.Channel, SECURITY)} AND ${eventIs(f.EventID, [4624, 4625])}${remote}${machines}), ` +
+    `WHERE (${where}) AND ${channelIs(f.Channel, SECURITY)} AND ${eventIs(f.EventID, [4624, 4625])}${narrow}), ` +
     'g AS (SELECT min(host) AS host, min(domain) AS domain, min("user") AS "user", ' +
     `${account('min(domain)', 'min("user")')} AS account, min(type) AS type, ${named('min(type)', LOGON_TYPES)} AS type_name, ` +
     'min(ip) AS ip, min(workstation) AS workstation, ' +
@@ -323,9 +329,11 @@ export interface SessionRow {
   ip: string | null;
   session: string;
   start: number;
-  /** The logoff, or null while the session was still open when the logs end. */
+  /** The logoff, or null when none came before the next logon with the id or the end of the logs. */
   end: number | null;
   minutes: number | null;
+  /** The next logon on the host with the same id: a session without a logoff ended by then at the latest. */
+  next_logon: number | null;
   /** The package's last event time: where an open session's activity is looked for up to. */
   horizon: number;
   total: number;
@@ -345,7 +353,7 @@ export const SESSION_ORDER = ['"start" ASC', 'lower("host")', 'lower("session")'
  * id belongs to that one. The page's filters choose the logons; logoffs are
  * read from every event, since a 4647 has no logon type or source to match.
  */
-export function sessionsSql(fields: LogonFields, where: string, options: TableOptions): string | null {
+export function sessionsSql(fields: LogonFields, where: string, options: LogonOptions): string | null {
   const f = fields.field;
   if (!f.EventID || !f.Computer || !f.TargetLogonId) return null;
   const security = channelIs(f.Channel, SECURITY);
@@ -362,19 +370,26 @@ export function sessionsSql(fields: LogonFields, where: string, options: TableOp
     'ASOF LEFT JOIN off ON logon.hk = off.hk AND logon.sk = off.sk AND logon.t <= off.t), ' +
     `g AS (SELECT host, domain, "user", ${account('domain', '"user"')} AS account, type, ${named('type', LOGON_TYPES)} AS type_name, ip, session, ` +
     'epoch_ms(t)::DOUBLE AS start, epoch_ms(stop)::DOUBLE AS "end", round(epoch_ms(stop - t) / 60000, 1)::DOUBLE AS minutes, ' +
+    'epoch_ms(next)::DOUBLE AS next_logon, ' +
     '(SELECT epoch_ms(max(_zl_time)) FROM events)::DOUBLE AS horizon ' +
-    `FROM paired WHERE _zl_uid IN (SELECT _zl_uid FROM events WHERE ${where})) ` +
+    // Narrowed after the pairing: a hidden logon still ends the session before it.
+    `FROM paired WHERE _zl_uid IN (SELECT _zl_uid FROM events WHERE ${where})${narrowing(f, options, 'type', '"user"')}) ` +
     tail(options, SESSION_ORDER)
   );
 }
 
-/** A session's activity: events on its host that carry its logon id, from its logon to its logoff or the end of the logs. */
+/**
+ * A session's activity: events on its host that carry its logon id, from its
+ * logon to its logoff. Without a logoff it runs to the next logon with the
+ * same id, which belongs to that session, or to the end of the logs.
+ */
 export function sessionActivity(fields: LogonFields, row: SessionRow): { q: string; t: [number, number] } {
   const f = fields.field;
   const ids = [f.TargetLogonId, f.SubjectLogonId, f.LogonId]
     .filter((field, i, all): field is Field => field !== undefined && all.findIndex((other) => other?.key === field.key) === i)
     .map((field) => fieldTerm(field.name, row.session));
   const anyId = ids.length === 1 ? ids[0] : `(${ids.join(' OR ')})`;
-  // The range is half-open, and the logoff itself belongs to the session.
-  return { q: terms(term(f.Computer, row.host), anyId), t: [row.start, (row.end ?? row.horizon) + 1] };
+  // The range is half-open: the logoff and the last event of the logs belong to the session, the next logon does not.
+  const end = row.end !== null ? row.end + 1 : (row.next_logon ?? row.horizon + 1);
+  return { q: terms(term(f.Computer, row.host), anyId), t: [row.start, end] };
 }

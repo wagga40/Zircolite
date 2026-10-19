@@ -25,7 +25,8 @@ type Event = Partial<Record<string, string | number>> & { uid: number; time: str
 /**
  * Logons on DC01 and WS2: alice logs on twice and fails once, bob fails as an
  * unknown user, the machine account logs on, carol comes in over RDP, a logon
- * id is reused after a reboot, and an Application event shares id 4624.
+ * id is reused after a reboot, another is reused after a logon that never
+ * logged off, and an Application event shares id 4624.
  */
 export const LOGON_EVENTS: Event[] = [
   { uid: 1, time: '2021-06-03 08:00:00', channel: SECURITY, id: 4624, Computer: 'DC01', TargetDomainName: 'CORP', TargetUserName: 'alice', LogonType: 3, IpAddress: '10.0.0.5', WorkstationName: 'WS1', TargetLogonId: '0x1' },
@@ -41,6 +42,10 @@ export const LOGON_EVENTS: Event[] = [
   { uid: 11, time: '2021-06-03 11:30:00', channel: SECURITY, id: 4778, Computer: 'WS2', AccountName: 'carol', AccountDomain: 'CORP', ClientName: 'LAPTOP', ClientAddress: '10.0.0.7' },
   { uid: 12, time: '2021-06-03 12:00:00', channel: 'Application', id: 4624, Computer: 'DC01' },
   { uid: 13, time: '2021-06-03 12:00:00', channel: SECURITY, id: 4624, Computer: 'DC01', TargetDomainName: 'CORP', TargetUserName: 'alice', LogonType: 2, TargetLogonId: '0x1' },
+  // eve never logs off; her logon id comes back for frank, whose logoff must not close eve's session.
+  { uid: 14, time: '2021-06-03 08:40:00', channel: SECURITY, id: 4624, Computer: 'DC01', TargetDomainName: 'CORP', TargetUserName: 'eve', LogonType: 3, IpAddress: '10.0.0.8', TargetLogonId: '0x5' },
+  { uid: 15, time: '2021-06-03 09:10:00', channel: SECURITY, id: 4624, Computer: 'DC01', TargetDomainName: 'CORP', TargetUserName: 'frank', LogonType: 3, IpAddress: '10.0.0.8', TargetLogonId: '0x5' },
+  { uid: 16, time: '2021-06-03 09:30:00', channel: SECURITY, id: 4634, Computer: 'DC01', TargetDomainName: 'CORP', TargetUserName: 'frank', LogonType: 3, TargetLogonId: '0x5' },
 ];
 
 const literal = (value: string | number | null | undefined) =>

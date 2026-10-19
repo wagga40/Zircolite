@@ -315,8 +315,9 @@ async function phase4(page, state, steps, expectedStarts) {
     steps.push(`logons: the first row of ${what} lists exactly its events`);
   }
 
-  // Sessions: a session's activity opens with its logon id and its time range, and holds at least the logon itself.
-  await route('logons');
+  // Sessions: a session's activity opens with its logon id and its time range, holds at least the logon itself,
+  // and replaces the search that found the session: that search would cut the activity down to the logons.
+  await route(`logons?q=${encodeURIComponent('EventID:4624')}&d=1`);
   const sessionTable = page.locator('#sessions-table');
   if ((await sessionTable.count()) > 0 && await poll(page, () => number(sessionTable, 'data-rows'), 'the sessions')) {
     const logonId = await sessionTable.locator('tbody tr').first().locator('td').nth(4).textContent();
@@ -324,6 +325,7 @@ async function phase4(page, state, steps, expectedStarts) {
     const listed = await reopened(page, state);
     const hash = decodeURIComponent(new URL(page.url()).hash);
     check(hash.includes(logonId) && hash.includes('t='), `a session's activity opened as ${hash}`);
+    check(!hash.includes('EventID:4624') && !hash.includes('d=1'), `a session's activity kept the search that found it: ${hash}`);
     check(listed.count >= 1, 'a session\'s activity lists not even its logon');
     steps.push('logons: a session opens its activity');
     await route('explore?q=');

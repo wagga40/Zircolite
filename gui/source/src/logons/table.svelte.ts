@@ -8,8 +8,10 @@ export class LogonTable<Row> {
   sort = $state<LocalSort | null>(null);
   readonly list = new Panel<{ asked: string; rows: Row[] }>();
   readonly schema;
-  /** The query the rows on screen must answer; the empty text when the package cannot be asked it. */
+  /** The query the rows on screen must answer. */
   asked = $state('');
+  /** The package lacks the fields this table needs, so it is never asked. */
+  unavailable = $state(false);
 
   constructor(columns: LocalColumn[]) {
     this.schema = localSchema(columns);
@@ -21,6 +23,7 @@ export class LogonTable<Row> {
 
   load(db: Db, lane: string, sql: string | null): void {
     this.asked = sql ?? '';
+    this.unavailable = sql === null;
     if (sql === null) return;
     this.list.load(async () => ({ asked: sql, rows: await db.rows<Row>(sql, { lane }) }));
   }
