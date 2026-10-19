@@ -108,7 +108,7 @@ export function quoteValue(value: string): string {
 const PLAIN_FIELD = /^[A-Za-z0-9_.@-]+$/;
 
 /** A field name as the parser must read it back: quoted when it would otherwise parse as something else. */
-function fieldToken(field: string): string {
+export function fieldToken(field: string): string {
   const plain = PLAIN_FIELD.test(field) && !field.startsWith('-') && field !== 'OR' && field !== 'AND';
   return plain && !findShortcut(field) ? field : quoteValue(field);
 }
