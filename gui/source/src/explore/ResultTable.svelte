@@ -9,7 +9,7 @@
   import { download } from '../ui/download';
   import { formatCount, isoTime, levelName } from '../ui/format';
   import { typing } from '../ui/keys';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { pageTopLayer } from '../ui/layers';
   import { ui } from '../ui/ui.svelte';
   import { columnState, withoutColumn } from '../search/filters';
@@ -83,11 +83,19 @@
     }
   }
 
-  // An event opening beside the table, or a column going away, takes the menu with it.
+  // An event opening or changing beside the table, or the Fields sheet opening, takes the menu with it; a menu
+  // opened beside an event already open stays.
+  $effect(() => {
+    void view.uid;
+    void ui.fieldsOpen;
+    untrack(() => (columnMenu = null));
+  });
+
+  // So does its column going away.
   $effect(() => {
     if (!columnMenu) return;
     const key = columnMenu.field.key;
-    if (view.uid !== null || ui.fieldsOpen || !columns.some((field) => field.key === key)) columnMenu = null;
+    if (!columns.some((field) => field.key === key)) columnMenu = null;
   });
 
   function columnNames(): string[] {

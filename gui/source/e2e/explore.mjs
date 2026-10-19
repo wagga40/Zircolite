@@ -317,6 +317,17 @@ async function scenario(page, steps) {
   await drawer.waitFor({ state: 'detached' });
   steps.push('one Escape closes one layer');
 
+  // A column menu opens beside an open event and sits over it: one Escape closes the menu, the next the event.
+  await openDrawer();
+  await page.locator('[data-column-funnel]').first().click();
+  await page.locator('[data-column-menu]').waitFor();
+  await page.keyboard.press('Escape');
+  await page.locator('[data-column-menu]').waitFor({ state: 'detached' });
+  await drawerStayed('one Escape closed both the column menu and the event view');
+  await page.keyboard.press('Escape');
+  await drawer.waitFor({ state: 'detached' });
+  steps.push('one Escape closes the column menu over an open event');
+
   await page.locator('#result-grid').focus();
   await page.keyboard.press('End');
   const last = page.locator(`#result-grid [role=row][aria-rowindex="${expected + 1}"]`);
