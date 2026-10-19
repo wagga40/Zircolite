@@ -281,6 +281,17 @@ is the latest earlier start of the parent PID on the same host (`ParentProcessId
 `ProcessId` in event 4688). Links are made across every start in the package, so a filter
 never changes who started what.
 
+The **Activity** column counts what Sysmon recorded under each process's `ProcessGuid`, in every
+event of the package:
+- network connections (event 3);
+- DNS queries (22);
+- files created (11);
+- registry changes (12 to 14).
+
+Selecting a process adds a button per kind it has, which opens exactly those events in Explore,
+in place of the search. The event view shows the same counts, under **Process activity**, for
+any Sysmon event with a `ProcessGuid`.
+
 ### SQL
 
 A console for one query at a time over the package's tables; see

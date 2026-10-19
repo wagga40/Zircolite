@@ -1,6 +1,13 @@
+import type { Activity } from './activity';
+
 /** One process start as processes.ts selects it; Sysmon and Security name the same facts differently. */
 export interface RawProcess {
   _zl_uid: number;
+  /** Activity counts; null throughout when the package lacks the fields to count them. */
+  network: number | null;
+  dns: number | null;
+  files: number | null;
+  registry: number | null;
   _zl_t: number | null;
   sysmon: boolean;
   host: string | null;
@@ -37,6 +44,8 @@ export interface Process {
   user: string | null;
   lvl: number | null;
   hits: number;
+  /** What the process did, by its ProcessGuid; null when the package cannot tell. */
+  activity: Activity | null;
   /** An ancestor shown for context, outside the filters. */
   context: boolean;
   parent: Process | null;
@@ -78,6 +87,9 @@ export function toProcess(raw: RawProcess): Process {
     user: security ? (runsAs(raw.target) ?? raw.subject ?? raw.user) : (raw.user ?? raw.subject),
     lvl: raw.lvl,
     hits: raw.hits,
+    activity: raw.network === null || raw.dns === null || raw.files === null || raw.registry === null
+      ? null
+      : { network: raw.network, dns: raw.dns, files: raw.files, registry: raw.registry },
     context: raw.context,
     parent: null,
     children: [],

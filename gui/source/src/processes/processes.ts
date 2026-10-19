@@ -1,5 +1,6 @@
 import type { Schema } from '../engine/schema';
 import { ident, str } from '../engine/sql';
+import { ACTIVITY, activityCte } from './activity';
 
 /** Starts the tree reads at once, earliest first; the summary says when there are more. */
 export const PROCESS_LIMIT = 20_000;
@@ -52,7 +53,16 @@ function projection(schema: Schema): string {
     ...values,
     'l._zl_lvl::INTEGER AS lvl',
     '(SELECT count(*) FROM hits h WHERE h._zl_uid = e._zl_uid)::DOUBLE AS hits',
+    ...ACTIVITY.map(({ key }) => (activityCte(schema) ? `coalesce(a.${key}, 0)::DOUBLE AS ${key}` : `NULL::DOUBLE AS ${key}`)),
   ].join(', ');
+}
+
+/** The tree's activity CTE, after the others, and its join; nothing without the fields. */
+function activity(schema: Schema): { cte: string; join: string } {
+  const cte = activityCte(schema);
+  const guid = schema.find('ProcessGuid');
+  if (!cte || !guid) return { cte: '', join: '' };
+  return { cte: `, ${cte}`, join: ` LEFT JOIN _zl_act a ON a.g = lower(CAST(e.${ident(guid.name)} AS VARCHAR))` };
 }
 
 /** A field as text, or NULL where the package lacks it. */
@@ -111,10 +121,11 @@ export function processCountSql(schema: Schema, where: string): string | null {
 export function processRowsSql(schema: Schema, where: string, limit = PROCESS_LIMIT): string | null {
   const creation = creationPredicate(schema);
   if (!creation) return null;
+  const act = activity(schema);
   return (
-    `WITH ${parents(schema, creation)}, m AS (${starts(creation, where, limit)}) ` +
+    `WITH ${parents(schema, creation)}${act.cte}, m AS (${starts(creation, where, limit)}) ` +
     `SELECT ${projection(schema)}, k._zl_parent, FALSE AS context FROM events e JOIN m ON m._zl_uid = e._zl_uid ` +
-    'LEFT JOIN _zl_link k ON k._zl_uid = e._zl_uid LEFT JOIN event_levels l ON l._zl_uid = e._zl_uid ' +
+    `LEFT JOIN _zl_link k ON k._zl_uid = e._zl_uid LEFT JOIN event_levels l ON l._zl_uid = e._zl_uid${act.join} ` +
     'ORDER BY e._zl_time NULLS LAST, e._zl_uid'
   );
 }
@@ -128,16 +139,17 @@ export function processRowsSql(schema: Schema, where: string, limit = PROCESS_LI
 export function ancestorsSql(schema: Schema, where: string, limit = PROCESS_LIMIT, ancestors = ANCESTOR_LIMIT): string | null {
   const creation = creationPredicate(schema);
   if (!creation) return null;
+  const act = activity(schema);
   return (
-    `WITH RECURSIVE ${parents(schema, creation)}, m AS MATERIALIZED (${starts(creation, where, limit)}), ` +
+    `WITH RECURSIVE ${parents(schema, creation)}${act.cte}, m AS MATERIALIZED (${starts(creation, where, limit)}), ` +
     '_zl_up(_zl_uid, _zl_depth) AS (SELECT k._zl_parent, 1 FROM _zl_link k JOIN m ON m._zl_uid = k._zl_uid ' +
     `UNION SELECT k._zl_parent, u._zl_depth + 1 FROM _zl_link k JOIN _zl_up u ON k._zl_uid = u._zl_uid WHERE u._zl_depth < ${ANCESTOR_DEPTH}), ` +
-    'a AS (SELECT _zl_uid, min(_zl_depth) AS _zl_depth FROM _zl_up WHERE _zl_uid NOT IN (SELECT _zl_uid FROM m) GROUP BY _zl_uid ' +
+    'up AS (SELECT _zl_uid, min(_zl_depth) AS _zl_depth FROM _zl_up WHERE _zl_uid NOT IN (SELECT _zl_uid FROM m) GROUP BY _zl_uid ' +
     // One row past the limit tells the tree it stopped there.
     `ORDER BY _zl_depth, _zl_uid LIMIT ${Math.max(1, Math.floor(ancestors)) + 1}) ` +
-    `SELECT ${projection(schema)}, k._zl_parent, TRUE AS context FROM events e JOIN a ON a._zl_uid = e._zl_uid ` +
-    'LEFT JOIN _zl_link k ON k._zl_uid = e._zl_uid LEFT JOIN event_levels l ON l._zl_uid = e._zl_uid ' +
-    'ORDER BY a._zl_depth, e._zl_uid'
+    `SELECT ${projection(schema)}, k._zl_parent, TRUE AS context FROM events e JOIN up ON up._zl_uid = e._zl_uid ` +
+    `LEFT JOIN _zl_link k ON k._zl_uid = e._zl_uid LEFT JOIN event_levels l ON l._zl_uid = e._zl_uid${act.join} ` +
+    'ORDER BY up._zl_depth, e._zl_uid'
   );
 }
 

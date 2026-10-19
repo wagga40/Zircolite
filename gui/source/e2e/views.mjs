@@ -331,6 +331,22 @@ async function phase4(page, state, steps, expectedStarts) {
     await route('explore?q=');
   }
 
+  // Process activity: a Sysmon event's process lists exactly the events each of its counts counts.
+  await route(`explore?q=${encodeURIComponent('Channel:"Microsoft-Windows-Sysmon/Operational" EventID:3 ProcessGuid:*')}`);
+  const withActivity = await reopened(page, state);
+  if (withActivity.count > 0) {
+    await page.locator('#result-grid').focus();
+    await page.keyboard.press('Enter');
+    const drawer = page.getByRole('complementary', { name: 'Event details' });
+    const counted = drawer.locator('.activity button:not([disabled])').first();
+    await counted.waitFor();
+    await clickAndCount(counted, 'a process\'s activity');
+    await page.keyboard.press('Escape');
+    steps.push('process activity lists exactly its events');
+  } else {
+    steps.push('process activity: no Sysmon network event with a ProcessGuid');
+  }
+
   // Processes: the tree counts every process start, and a start opens as its event.
   await route('processes');
   const tree = page.locator('#process-tree');
