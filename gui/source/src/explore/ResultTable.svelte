@@ -14,12 +14,14 @@
   import { ui } from '../ui/ui.svelte';
   import { columnState, withoutColumn } from '../search/filters';
   import ColumnMenu from '../ui/ColumnMenu.svelte';
-  import { moveColumn, toggleColumn } from './columns';
+  import { asciiLower } from '../engine/sql';
+  import { clampWidth } from '../state/hash';
+  import { moveColumn, placeColumn, toggleColumn } from './columns';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
   import ColumnValues from './ColumnValues.svelte';
   import { applyFilter } from './header';
   import ResultHeader from './ResultHeader.svelte';
-  import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, resolveSort, ROW, wheelDelta, wheelPosition } from './table';
+  import { columnTracks, COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, resolveSort, ROW, tableMinWidth, wheelDelta, wheelPosition, widthOf } from './table';
 
   let { db, exportDb, schema, manifest, where, whereFor, columns, slow }: {
     db: Db;
@@ -36,9 +38,6 @@
   } = $props();
 
   const CACHED_PAGES = 40;
-  const TIME_WIDTH = 224;
-  const LEVEL_WIDTH = 112;
-  const COLUMN_WIDTH = 160;
 
   let scroller = $state<HTMLDivElement>();
   let height = $state(0);
@@ -98,6 +97,28 @@
     view.cols = moveColumn(columnNames(), field.name, delta);
   }
 
+  function placeField(field: Field, gap: number): void {
+    view.cols = placeColumn(columnNames(), field.name, gap);
+  }
+
+  /** Keeps a column's width in the link, or forgets it with null; the shown columns become the user's own list. */
+  function keepWidth(field: Field, width: number | null): void {
+    const names = columnNames();
+    const next = Object.fromEntries(Object.entries(view.widths).filter(([name]) => asciiLower(name) !== field.key));
+    if (width !== null) next[names.find((name) => asciiLower(name) === field.key) ?? field.name] = clampWidth(width);
+    if (view.cols === null) view.cols = names;
+    view.widths = next;
+  }
+
+  function resize(field: Field, width: number | null, phase: 'live' | 'done' | 'cancel'): void {
+    if (phase === 'live' && width !== null) {
+      liveWidth = { key: field.key, width: clampWidth(width) };
+      return;
+    }
+    liveWidth = null;
+    if (phase === 'done') keepWidth(field, width);
+  }
+
   function hideField(field: Field): void {
     if (sortKey === field) view.sort = null;
     view.cols = toggleColumn(columnNames(), field.name);
@@ -143,8 +164,10 @@
   const slice = $derived(geometry(total, viewport, scrollTop));
   const positions = $derived(Array.from({ length: slice.count }, (_, i) => slice.first + i));
   const signature = $derived(columns.map((field) => field.key).join('\u0000'));
-  const template = $derived(`${TIME_WIDTH}px ${LEVEL_WIDTH}px ${columns.map(() => `minmax(${COLUMN_WIDTH}px, 1fr)`).join(' ')}`);
-  const minWidth = $derived(TIME_WIDTH + LEVEL_WIDTH + columns.length * COLUMN_WIDTH);
+  // A width being dragged: only the grid's tracks change while it moves, and the link once it is let go.
+  let liveWidth = $state<{ key: string; width: number } | null>(null);
+  const template = $derived(columnTracks(columns, view.widths, liveWidth));
+  const minWidth = $derived(tableMinWidth(columns, view.widths, liveWidth));
 
   function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -438,8 +461,9 @@
     aria-busy={busy}
     aria-activedescendant={total > 0 && active >= slice.first && active < slice.first + slice.count ? `row-${active}` : undefined}
     onkeydown={ongridkey}
+    style:--cols={template}
   >
-    <ResultHeader {columns} {schema} {sortKey} {template} {minWidth} menuFor={columnMenu?.field.key ?? null}
+    <ResultHeader {columns} {schema} {sortKey} {minWidth} menuFor={columnMenu?.field.key ?? null} onresize={resize} onplace={placeField}
       onmenu={(field, anchor) => (columnMenu = columnMenu?.field === field ? null : { field, anchor })} onproblem={(problem) => (cellProblem = problem)} />
     <div class="rows-space" style:height={`${slice.height}px`} style:min-width={`${minWidth}px`}>
       <div class="rows" style:transform={`translateY(${slice.top}px)`}>
@@ -457,7 +481,6 @@
             role="row"
             aria-rowindex={position + 2}
             aria-selected={row !== undefined && row._zl_uid === view.uid}
-            style:grid-template-columns={template}
             onclick={() => open(position)}
           >
             {#if row}
@@ -493,6 +516,7 @@
         <button type="button" disabled={at <= 0} onclick={() => moveField(field, -1)}>Move left</button>
         <button type="button" disabled={at < 0 || at >= columns.length - 1} onclick={() => moveField(field, 1)}>Move right</button>
         <button type="button" onclick={() => { hideField(field); closeColumnMenu(); }}>Hide column</button>
+        {#if widthOf(view.widths, field) !== null}<button type="button" onclick={() => keepWidth(field, null)}>Reset width</button>{/if}
       {/snippet}
     </ColumnMenu>
   {/if}
@@ -513,7 +537,8 @@
   .note { margin: 6px 16px; font-size: var(--t-13); color: var(--ink-2); }
   .failure { color: var(--danger); }
   .scroller { position: relative; flex: 1; min-height: 0; overflow: auto; outline-offset: -2px; }
-  .row { display: grid; height: 28px; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); cursor: pointer; }
+  /* One --cols on the grid sizes every row, so dragging a width rewrites one style, not one per row. */
+  .row { display: grid; grid-template-columns: var(--cols); height: 28px; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); cursor: pointer; }
   .row > div { padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 var(--t-13) / 28px var(--mono); }
   .row .num { text-align: right; }
   .row:hover { background: color-mix(in srgb, var(--signal) 6%, transparent); }

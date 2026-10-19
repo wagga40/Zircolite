@@ -1,6 +1,6 @@
 import type { Field, Schema } from '../engine/schema';
 import { LEVEL_SORT } from '../state/hash';
-import { ident } from '../engine/sql';
+import { asciiLower, ident } from '../engine/sql';
 
 export const ROW = 28;
 /** The sticky header, column names over the filter row, which sits inside the scroller above the rows. */
@@ -53,6 +53,35 @@ export function resolveSort(sort: string | null, schema: Schema): SortKey | null
 function sortValue(field: Field): string {
   const column = ident(field.name);
   return field.type === 'VARCHAR' ? `lower(left(${column}, ${SORT_PREFIX}))` : column;
+}
+
+export const TIME_WIDTH = 224;
+export const LEVEL_WIDTH = 112;
+/** A column without a width of its own shares the room left, never narrower than this. */
+export const COLUMN_WIDTH = 160;
+
+/** A column's width from the link, whatever the case of the name it was kept under. */
+export function widthOf(widths: Record<string, number>, field: Field): number | null {
+  const key = Object.keys(widths).find((name) => asciiLower(name) === field.key);
+  return key === undefined ? null : widths[key];
+}
+
+/** The grid's column tracks; `live` is a width being dragged, shown before it is kept. */
+export function columnTracks(columns: Field[], widths: Record<string, number>, live: { key: string; width: number } | null = null): string {
+  const tracks = columns.map((field) => {
+    const width = live?.key === field.key ? live.width : widthOf(widths, field);
+    return width === null ? `minmax(${COLUMN_WIDTH}px, 1fr)` : `${width}px`;
+  });
+  return [`${TIME_WIDTH}px`, `${LEVEL_WIDTH}px`, ...tracks].join(' ');
+}
+
+export function tableMinWidth(columns: Field[], widths: Record<string, number>, live: { key: string; width: number } | null = null): number {
+  return columns.reduce((sum, field) => sum + ((live?.key === field.key ? live.width : widthOf(widths, field)) ?? COLUMN_WIDTH), TIME_WIDTH + LEVEL_WIDTH);
+}
+
+/** Where a dragged column lands: the gap before the first column whose middle is right of the pointer. */
+export function dropGap(centers: number[], x: number): number {
+  return centers.filter((center) => center < x).length;
 }
 
 export const COUNT_SQL =

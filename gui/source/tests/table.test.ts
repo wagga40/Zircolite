@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Field } from '../src/engine/schema';
 import { SNAPSHOT_SQL } from '../src/explore/export';
-import { COUNT_SQL, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, resolveSort, ROW, SORT_PREFIX, wheelDelta, wheelPosition, wheelScroll } from '../src/explore/table';
+import { columnTracks, COUNT_SQL, dropGap, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, resolveSort, ROW, SORT_PREFIX, tableMinWidth, wheelDelta, wheelPosition, wheelScroll, widthOf } from '../src/explore/table';
 import { type Fixture, openFixture, schema } from './fixture';
 
 let db: Fixture;
@@ -189,5 +189,31 @@ describe('wheel details', () => {
   it('starts again from the real position after another kind of scroll', () => {
     const next = wheelPosition(1000.4, 5000, 0, 1_868_682, 560);
     expect(next).toBe(5000);
+  });
+});
+
+describe('column layout', () => {
+  const columns = [field('Image'), field('Computer'), field('EventID')];
+
+  it('gives a sized column its width and the others a share of the room', () => {
+    expect(columnTracks(columns, { image: 320 })).toBe('224px 112px 320px minmax(160px, 1fr) minmax(160px, 1fr)');
+    expect(tableMinWidth(columns, { image: 320 })).toBe(224 + 112 + 320 + 160 + 160);
+  });
+
+  it('shows a width being dragged before it is kept', () => {
+    expect(columnTracks(columns, { Image: 320 }, { key: 'computer', width: 90 })).toBe('224px 112px 320px 90px minmax(160px, 1fr)');
+  });
+
+  it('finds a width whatever the case of the name in the link', () => {
+    expect(widthOf({ IMAGE: 300 }, field('Image'))).toBe(300);
+    expect(widthOf({}, field('Image'))).toBeNull();
+  });
+
+  it('drops a dragged column into the gap nearest the pointer', () => {
+    const centers = [100, 300, 500];
+    expect(dropGap(centers, 0)).toBe(0);
+    expect(dropGap(centers, 150)).toBe(1);
+    expect(dropGap(centers, 450)).toBe(2);
+    expect(dropGap(centers, 900)).toBe(3);
   });
 });
