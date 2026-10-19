@@ -35,6 +35,8 @@ export interface Process {
   t: number | null;
   host: string | null;
   guid: string | null;
+  /** ProcessGuid as the start wrote it: the activity counts match it so, spaces and all, and so must their searches. */
+  rawGuid: string | null;
   parentUid: number | null;
   pid: string | null;
   ppid: string | null;
@@ -78,6 +80,7 @@ export function toProcess(raw: RawProcess): Process {
     t: raw._zl_t,
     host: raw.host,
     guid: raw.guid?.trim().toLowerCase() || null,
+    rawGuid: raw.guid,
     parentUid: raw._zl_parent,
     pid: pidText(security ? raw.newpid : raw.pid),
     ppid: pidText(security ? raw.pid : raw.ppid),

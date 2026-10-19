@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Field, Schema } from '../src/engine/schema';
 import { ACTIVITY, type Activity, activitySql, activitySummary, activityTerms } from '../src/processes/activity';
 import { processRowsSql } from '../src/processes/processes';
+import { type RawProcess, toProcess } from '../src/processes/tree';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import { FIELDS, type Fixture, openFixture, TACTICS } from './fixture';
@@ -21,6 +22,8 @@ beforeAll(async () => {
       event(10, SYSMON, 3, '{aaaa-1}'), event(11, SYSMON, 3, '{AAAA-1}'), event(12, SYSMON, 22, '{AAAA-1}'), event(13, SYSMON, 11, '{AAAA-1}'),
       event(14, SYSMON, 13, '{AAAA-1}'), event(15, SYSMON, 12, '{AAAA-1}'), event(16, SYSMON, 3, '{BBBB-2}'), event(17, 'Security', 3, '{AAAA-1}'),
       event(18, 'Linux-Sysmon/Operational', 11, '{AAAA-1}'),
+      // A start whose guid carries a trailing space, as do the events it made.
+      event(20, SYSMON, 1, '{CCCC-3} '), event(21, SYSMON, 3, '{CCCC-3} '), event(22, SYSMON, 3, '{cccc-3} '),
     ].join(', ')}`,
   ]);
 });
@@ -43,6 +46,16 @@ describe('a process\'s activity', () => {
     const rows = await db.rows(processRowsSql(schema, 'TRUE') as string);
     const cmd = rows.find((row) => row._zl_uid === 3);
     expect(cmd).toMatchObject({ network: 2, dns: 1, files: 2, registry: 2 });
+  });
+
+  it('opens from the tree exactly the events the tree counts, whatever spaces the guid carries', async () => {
+    const rows = (await db.rows(processRowsSql(schema, 'TRUE') as string)) as unknown as RawProcess[];
+    const padded = toProcess(rows.find((row) => row._zl_uid === 20) as RawProcess);
+    expect(padded.activity).toMatchObject({ network: 2 });
+    for (const { key } of ACTIVITY) {
+      const listed = await db.uids(compile(parse(activityTerms(schema, padded.rawGuid as string, key) as string), schema));
+      expect(listed.length, key).toBe(padded.activity?.[key]);
+    }
   });
 
   it('is not asked of a package without ProcessGuid', () => {

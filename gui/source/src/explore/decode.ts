@@ -72,12 +72,15 @@ function hexBytes(text: string): Uint8Array {
   return Uint8Array.from(text.match(/../g) ?? [], (pair) => parseInt(pair, 16));
 }
 
-/** Bytes as text: UTF-16LE when every other byte is mostly zero, as Windows writes ASCII text, UTF-8 otherwise. */
-function bytesText(bytes: Uint8Array): string {
+/** Whether bytes look like UTF-16LE: every other byte mostly zero, as Windows writes ASCII text. */
+function wide(bytes: Uint8Array): boolean {
   let zeros = 0;
   for (let i = 1; i < bytes.length; i += 2) if (bytes[i] === 0) zeros++;
-  const wide = bytes.length >= 4 && bytes.length % 2 === 0 && zeros >= bytes.length / 2 * 0.3;
-  return new TextDecoder(wide ? 'utf-16le' : 'utf-8').decode(bytes);
+  return bytes.length >= 4 && bytes.length % 2 === 0 && zeros >= bytes.length / 2 * 0.3;
+}
+
+function bytesText(bytes: Uint8Array): string {
+  return new TextDecoder(wide(bytes) ? 'utf-16le' : 'utf-8').decode(bytes);
 }
 
 /** Whether decoded text reads as text: almost no control characters or undecodable bytes. */
@@ -97,16 +100,23 @@ interface Budget {
   spent: boolean;
 }
 
-async function unpack(bytes: Uint8Array, format: 'gzip' | 'deflate-raw', budget: Budget): Promise<Uint8Array | null> {
+interface Unpacked {
+  bytes: Uint8Array;
+  /** The payload broke off, or turned to bytes that do not unpack, after these. */
+  cut: boolean;
+}
+
+async function unpack(bytes: Uint8Array, format: 'gzip' | 'deflate-raw', budget: Budget): Promise<Unpacked | null> {
   const limit = Math.min(UNPACKED_LIMIT, budget.unpacked);
   if (limit <= 0) {
     budget.spent = true;
     return null;
   }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  let cut = false;
   try {
     const reader = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream(format)).getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -117,20 +127,22 @@ async function unpack(bytes: Uint8Array, format: 'gzip' | 'deflate-raw', budget:
         break;
       }
     }
-    if (size > limit && limit < UNPACKED_LIMIT) budget.spent = true;
-    budget.unpacked -= Math.min(size, limit);
-    const out = new Uint8Array(Math.min(size, limit));
-    let at = 0;
-    for (const chunk of chunks) {
-      const room = out.length - at;
-      if (room <= 0) break;
-      out.set(chunk.subarray(0, room), at);
-      at += Math.min(chunk.length, room);
-    }
-    return out;
   } catch {
-    return null;
+    // A script split across events, or cut by the log, still unpacks up to where it stops.
+    cut = true;
   }
+  if (size === 0) return null;
+  if (size > limit && limit < UNPACKED_LIMIT) budget.spent = true;
+  budget.unpacked -= Math.min(size, limit);
+  const out = new Uint8Array(Math.min(size, limit));
+  let at = 0;
+  for (const chunk of chunks) {
+    const room = out.length - at;
+    if (room <= 0) break;
+    out.set(chunk.subarray(0, room), at);
+    at += Math.min(chunk.length, room);
+  }
+  return { bytes: out, cut };
 }
 
 function kept(label: string, text: string): Decoded {
@@ -140,17 +152,18 @@ function kept(label: string, text: string): Decoded {
 async function decodeBase64(source: string, budget: Budget): Promise<Decoded | null> {
   const bytes = base64Bytes(source);
   if (!bytes) return null;
-  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    const unpacked = await unpack(bytes, 'gzip', budget);
-    const text = unpacked && bytesText(unpacked);
-    return text && readable(text) ? kept('Base64, gzip', text) : null;
-  }
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return unpacked('Base64, gzip', await unpack(bytes, 'gzip', budget));
   const text = bytesText(bytes);
   if (readable(text)) return kept('Base64', text);
   // Raw deflate carries no signature: it is tried only on bytes that are not text themselves.
-  const unpacked = await unpack(bytes, 'deflate-raw', budget);
-  const inflated = unpacked && bytesText(unpacked);
-  return inflated && readable(inflated) ? kept('Base64, deflate', inflated) : null;
+  return unpacked('Base64, deflate', await unpack(bytes, 'deflate-raw', budget));
+}
+
+function unpacked(label: string, result: Unpacked | null): Decoded | null {
+  // A cut payload can end inside a character: what TextDecoder makes of the last bytes is not held against it.
+  const text = result && bytesText(result.bytes).replace(/\uFFFD+$/, '');
+  if (!result || !text || !readable(text)) return null;
+  return kept(result.cut ? `${label}, cut short` : label, text);
 }
 
 function decodeUrl(value: string): string {
@@ -166,8 +179,10 @@ function decodeUrl(value: string): string {
 async function decode(part: EncodedPart, budget: Budget): Promise<Decoded | null> {
   switch (part.kind) {
     case 'powershell': {
+      // Other tools take -e as well (gpg, mysql, schtasks /ec): almost any token is valid UTF-16LE, so the
+      // bytes must look like it before they are read as a command.
       const bytes = base64Bytes(part.source);
-      const text = bytes && new TextDecoder('utf-16le').decode(bytes);
+      const text = bytes && wide(bytes) && new TextDecoder('utf-16le').decode(bytes);
       return text && readable(text) ? kept('PowerShell -EncodedCommand', text) : null;
     }
     case 'base64':

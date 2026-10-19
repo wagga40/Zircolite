@@ -96,7 +96,10 @@ A value holding encoded text gets a **Decode** button, which lists what it decod
 - hex.
 
 A decoding is offered only when it reads as text, and it shows as plain text, never as a page;
-the first 64 KiB are kept. Decoded text can be decoded again, two levels deep, for Base64 inside
+the first 64 KiB are kept. An encoded command must decode to UTF-16 text, as PowerShell writes it,
+so another tool's `-e` argument (`gpg -e`, `schtasks /ec`) is not read as one. A packed payload
+that breaks off, or ends in bytes that do not unpack, shows what it unpacked to up to there,
+marked **cut short**. Decoded text can be decoded again, two levels deep, for Base64 inside
 Base64.
 
 Logs come from the attacker's host, so each value is bounded: at most 16 decodings, 4 MiB of

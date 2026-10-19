@@ -138,7 +138,7 @@
   }
 
   function activityOf(process: Process, key: keyof Activity): void {
-    const terms = process.guid ? activityTerms(schema, process.guid, key) : null;
+    const terms = process.guid && process.rawGuid ? activityTerms(schema, process.rawGuid, key) : null;
     if (!terms) return;
     view.q = terms;
     view.t = null;

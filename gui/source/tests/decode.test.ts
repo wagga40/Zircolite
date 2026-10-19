@@ -48,6 +48,34 @@ describe('decoding', () => {
     expect((await decodings('48656c6c6f20576f726c642121212121'))[0].text).toBe('Hello World!!!!!');
   });
 
+  it.each([
+    'schtasks /create /tn Updater /tr C:\\u.exe /sc onevent /ec Application /mo "*[System[EventID=1000]]"',
+    'gpg -e RecipientKeyId01 file.txt',
+    'mysql -e SELECTuserFROMmysql',
+  ])('never reads another tool\'s -e argument as an encoded command: %j', async (value) => {
+    expect((await decodings(value)).map((d) => d.label)).not.toContain('PowerShell -EncodedCommand');
+  });
+
+  it('still reads a short encoded command', async () => {
+    expect((await decodings('powershell -enc ' + base64('whoami', 'utf16le')))[0]).toMatchObject({ label: 'PowerShell -EncodedCommand', text: 'whoami' });
+  });
+
+  it('keeps what a cut packed payload unpacked to, and says it was cut', async () => {
+    const long = Array.from({ length: 4000 }, (_, i) => `Write-Output "line ${i} of the dropped script"`).join('\n');
+    for (const [pack, label] of [[gzipSync, 'Base64, gzip, cut short'], [deflateRawSync, 'Base64, deflate, cut short']] as const) {
+      const packed = pack(Buffer.from(long));
+      const [first] = await decodings(packed.subarray(0, Math.floor(packed.length * 0.7)).toString('base64'));
+      expect(first?.label).toBe(label);
+      expect(first.text.length).toBeGreaterThan(1000);
+      expect(long.startsWith(first.text)).toBe(true);
+    }
+  });
+
+  it('keeps a packed payload followed by bytes that do not unpack', async () => {
+    const packed = Buffer.concat([gzipSync(Buffer.from(SCRIPT)), Buffer.from([1, 2, 3, 4, 5, 6])]);
+    expect((await decodings(packed.toString('base64')))[0]?.text).toBe(SCRIPT);
+  });
+
   it('offers nothing for bytes that are not text', async () => {
     const random = Buffer.from(Array.from({ length: 48 }, (_, i) => (i * 97 + 13) % 256)).toString('base64');
     expect(await decodings(random)).toEqual([]);
