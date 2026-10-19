@@ -23,7 +23,7 @@ import os
 import re
 import sys
 import tempfile
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field
 from datetime import timedelta, timezone, tzinfo
@@ -50,6 +50,7 @@ SEPARATOR = " ¦ "
 # What one part holds in memory before writing a sorted run: per worker, so small
 PART_BUDGET = 16 * 1024 * 1024
 MERGE_FAN_IN = 64
+PROGRESS_LINES = 16_384
 
 _NO_POSITION = 0xFFFFFFFF
 _KEY_LENGTH = 1 + 16 + 8 + 1 + 32
@@ -707,18 +708,30 @@ def _kept(group: list[bytes]) -> list[bytes]:
     return max(by_source.values(), key=len)
 
 
+def _counted(lines: Iterator[bytes], total: int, progress: Callable[[int, int], None]) -> Iterator[bytes]:
+    for done, line in enumerate(lines, 1):
+        if not done % PROGRESS_LINES:
+            progress(done, total)
+        yield line
+    progress(total, total)
+
+
 def build_timeline(spool: TimelineSpool, parts: list[TimelinePartRecord], destination: str, *,
-                   keep_duplicates: bool = False) -> TimelineStats:
+                   keep_duplicates: bool = False,
+                   progress: Callable[[int, int], None] | None = None) -> TimelineStats:
     """Sort every part's lines, drop the copies and write the timeline.
 
     The file is written beside the destination and moved over it once
     complete, so a failure leaves neither a partial timeline nor a damaged
-    earlier one. ``-`` writes to stdout.
+    earlier one. ``-`` writes to stdout. ``progress`` gets the lines merged
+    so far and the lines of every part.
     """
     if timeline_format(destination) != spool.fmt:
         raise TimelineError(f"{destination}: the extension must be one of {', '.join(TIMELINE_FORMATS)}, "
                             f"and the parts were written as {spool.fmt}")
     lines = merge_runs([run for part in parts for run in part.runs], spool.directory)
+    if progress is not None:
+        lines = _counted(lines, sum(part.rows for part in parts), progress)
 
     stats = TimelineStats()
     header = csv_header(spool.headers) if spool.fmt == "csv" else b""

@@ -8,6 +8,7 @@ workloads. Generation and result comparison are outside the timed region.
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import gzip
 import hashlib
@@ -15,16 +16,20 @@ import importlib.metadata
 import json
 import os
 import platform
+import shutil
 import sqlite3
 import statistics
 import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from contextlib import suppress
 from copy import deepcopy
+from itertools import dropwhile
 from pathlib import Path
 
+import duckdb
 import orjson
 import psutil
 
@@ -44,6 +49,12 @@ VARIANTS = {
     "cython-literal": ["--flatten-backend", "cython", "--rule-prefilter", "literal"],
     "current": [],
     "disk": ["--working-db", "disk"],
+}
+EXPORTS = ("json", "csv", "ndjson", "timesketch", "navigator", "summary",
+           "timeline-jsonl", "timeline-csv", "package")
+EXPORT_TEMPLATES = {
+    "ndjson": "exportNDJSON.tmpl", "timesketch": "exportForTimesketch.tmpl",
+    "navigator": "exportForAttackNavigator.tmpl", "summary": "exportSummaryCSV.tmpl",
 }
 
 
@@ -135,7 +146,87 @@ def source_fingerprint(root):
     return digest.hexdigest()
 
 
-def run_sampled(command, log, *, cwd=ROOT, temp_dir=None):
+def package_fingerprint(path):
+    """Compare decoded schemas, rows (including links), and stable metadata."""
+    with (zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory() as directory,
+          duckdb.connect(config={"threads": 1, "memory_limit": "2GB",
+                                 "autoinstall_known_extensions": False,
+                                 "autoload_known_extensions": False}) as connection):
+        if archive.testzip() is not None:
+            raise RuntimeError("Package ZIP checksum failure")
+        raw = archive.read("data/manifest.js")
+        manifest = orjson.loads(raw[len(b"__zircolite.manifest("):-3])
+        tables = {}
+        for item in manifest["files"]:
+            decoded = Path(directory) / "payload"
+            payload_hash = hashlib.sha256()
+            size = 0
+            with decoded.open("wb") as handle:
+                for index, name in enumerate(item["chunks"]):
+                    content = archive.read(name)
+                    args = orjson.loads(b"[" + content[len(b"__zircolite.chunk("):-3] + b"]")
+                    if args[:2] != [item["name"], index]:
+                        raise RuntimeError(f"Package chunk identity failure: {name}")
+                    block = base64.b64decode(args[2], validate=True)
+                    payload_hash.update(block)
+                    size += len(block)
+                    handle.write(block)
+            if payload_hash.hexdigest() != item["sha256"] or size != item["bytes"]:
+                raise RuntimeError(f"Package payload checksum failure: {item['name']}")
+            if item["kind"] not in ("data", "index"):
+                continue
+            cursor = connection.execute("SELECT * FROM read_parquet(?)", [str(decoded)])
+            schema = [(column[0], str(column[1])) for column in cursor.description]
+            count, digest_sum = 0, 0
+            while rows := cursor.fetchmany(512):
+                for row in rows:
+                    digest = hashlib.sha256(orjson.dumps(row)).digest()
+                    digest_sum = (digest_sum + int.from_bytes(digest, "big")) % (1 << 256)
+                    count += 1
+            tables[item["name"]] = {"schema": schema, "rows": count, "digest": f"{digest_sum:064x}"}
+        manifest.pop("created", None)
+        # Parquet encoding and chunk boundaries can change without changing data.
+        manifest["files"] = [{"name": item["name"], "kind": item["kind"]}
+                             if item["kind"] in ("data", "index") else item for item in manifest["files"]]
+        canonical = {"manifest": manifest, "tables": tables}
+        return manifest["totals"]["events"], hashlib.sha256(
+            orjson.dumps(canonical, option=orjson.OPT_SORT_KEYS)).hexdigest()
+
+
+def export_fingerprint(kind, path, *, detections_only=False):
+    """Validate exports outside timing; ignore row order and detection row IDs.
+
+    Package UIDs and links are retained; physical Parquet encoding and creation
+    timestamps are excluded from comparison.
+    """
+    if kind == "json":
+        return fingerprint(path)
+    if kind == "package":
+        return package_fingerprint(path)
+    elif kind in ("csv", "summary", "timeline-csv"):
+        with path.open(encoding="utf-8", newline="") as handle:
+            # A worker may expose additional empty columns in a CSV union.
+            rows = [{k: v for k, v in row.items() if v != ""}
+                    for row in csv.DictReader(dropwhile(lambda line: not line.strip(), handle),
+                                              delimiter=";" if kind == "csv" else ",")]
+    elif kind == "navigator":
+        layer = orjson.loads(path.read_bytes())
+        layer["techniques"] = sorted(layer["techniques"],
+                                     key=lambda item: orjson.dumps(item, option=orjson.OPT_SORT_KEYS))
+        rows = [layer]
+    else:
+        rows = [orjson.loads(line) for line in path.read_bytes().splitlines() if line.strip()]
+    count, digest_sum = 0, 0
+    ignored = {"row_id", "rule_count"} if kind == "csv" and detections_only else {"row_id"}
+    for row in rows:
+        canonical = {k: v for k, v in row.items() if k not in ignored}
+        digest = hashlib.sha256(orjson.dumps(canonical, option=orjson.OPT_SORT_KEYS)).digest()
+        digest_sum = (digest_sum + int.from_bytes(digest, "big")) % (1 << 256)
+        count += 1
+    return count, f"{digest_sum:064x}"
+
+
+def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, env=None):
     """Run a command to completion, sampling the RSS of its whole process tree.
 
     Returns (exit code, wall seconds, peak RSS bytes, RSS scope, peak bytes
@@ -147,7 +238,7 @@ def run_sampled(command, log, *, cwd=ROOT, temp_dir=None):
     tree_access = True
     start = time.perf_counter()
     with log.open("wb") as transcript, subprocess.Popen(  # noqa: S603
-        command, cwd=cwd, stdout=transcript, stderr=subprocess.STDOUT
+        command, cwd=cwd, env=env, stdout=transcript, stderr=subprocess.STDOUT
     ) as child:
         process = psutil.Process(child.pid)
         while child.poll() is None:
@@ -179,11 +270,19 @@ def run_sampled(command, log, *, cwd=ROOT, temp_dir=None):
     return code, elapsed, peak, "process-tree" if tree_access else "parent-only", disk_peak
 
 
-def measure(command, output, log, *, temp_dir=None, performance_path=None):
-    code, elapsed, peak, rss_scope, disk_peak = run_sampled(command, log, temp_dir=temp_dir)
+def measure(command, output, log, *, temp_dir=None, performance_path=None,
+            export="json", artifact=None, env=None):
+    code, elapsed, peak, rss_scope, disk_peak = run_sampled(command, log, temp_dir=temp_dir, env=env)
     if code:
         raise RuntimeError(f"CLI exited {code}: {log.read_text(errors='replace')[-4000:]}")
-    count, digest = fingerprint(output)
+    count, digest = export_fingerprint("csv" if export == "csv" else "json", output, detections_only=True)
+    if export == "package":
+        packages = list(artifact.glob("zircolite-package-*.zip"))
+        if len(packages) != 1:
+            raise RuntimeError(f"Expected one package, found {len(packages)}")
+        artifact = packages[0]
+    artifact = artifact or output
+    export_count, export_digest = export_fingerprint(export, artifact)
     # Quiet mode suppresses worker presentation, but failure summaries still
     # identify broken rules and incomplete ingestion.
     transcript = log.read_text(errors="replace")
@@ -195,6 +294,9 @@ def measure(command, output, log, *, temp_dir=None, performance_path=None):
     return {"seconds": elapsed, "peak_rss_mib": peak / 1024**2,
             "visible_temp_peak_mib": disk_peak / 1024**2,
             "matches": count, "fingerprint": digest,
+            "export_records": export_count, "export_fingerprint": export_digest,
+            "output_bytes": artifact.stat().st_size,
+            "detection_bytes": output.stat().st_size,
             "rss_scope": rss_scope, "performance": metrics}
 
 
@@ -208,6 +310,10 @@ def main():
     parser.add_argument("--files", type=int, default=4)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--passes", type=int, default=3)
+    parser.add_argument("--warmup", type=int, default=0, help="Untimed passes per combination before measurement")
+    parser.add_argument("--exports", nargs="+", choices=EXPORTS, default=["json"])
+    parser.add_argument("--cache", choices=("warm", "cold", "off"), default="warm",
+                        help="Isolated rule/viewer caches: reuse, clear each run, or disable")
     parser.add_argument("--modes", nargs="+", choices=("auto", "sequential", "thread", "process"), default=["sequential", "thread", "process"])
     parser.add_argument("--variants", nargs="+", choices=tuple(VARIANTS), default=["reference", "current"])
     parser.add_argument("--baseline-root", type=Path, help="Preserved checkout for the baseline variant")
@@ -221,6 +327,8 @@ def main():
         parser.error("--events requires --ruleset")
     if args.sqlite_cache_mib < 1:
         parser.error("--sqlite-cache-mib must be positive")
+    if args.warmup < 0:
+        parser.error("--warmup must be non-negative")
     if "baseline" in args.variants and (args.baseline_root is None or not (args.baseline_root / "zircolite.py").is_file()):
         parser.error("baseline requires --baseline-root with zircolite.py")
     with tempfile.TemporaryDirectory(prefix="zircolite-benchmark-") as directory:
@@ -239,21 +347,50 @@ def main():
                 rules.write_bytes(orjson.dumps(generated))
             if args.ruleset:
                 rules = args.ruleset.resolve()
-        combinations = [(variant, mode) for variant in args.variants for mode in args.modes]
-        def result_key(variant, mode):
-            return mode if args.variants == ["current"] else f"{variant}/{mode}"
-        results = {result_key(variant, mode): [] for variant, mode in combinations}
-        expected = None
+        combinations = [(variant, mode, export) for variant in args.variants
+                        for mode in args.modes for export in args.exports]
+        def result_key(variant, mode, export):
+            key = mode if args.variants == ["current"] else f"{variant}/{mode}"
+            return key if args.exports == ["json"] else f"{key}/{export}"
+        results: dict[str, list] = {result_key(*combo): [] for combo in combinations}
+        expected: dict[str, tuple[int, str]] = {}
+        expected_exports: dict[tuple[str, str], tuple[int, str]] = {}
         # Interleave modes to reduce bias from run order and warmed filesystem caches.
-        for repeat in range(args.passes):
+        for repeat in range(-args.warmup, args.passes):
             offset = repeat % len(combinations)
-            for variant, mode in combinations[offset:] + combinations[:offset]:
-                output, log = temp / "output.json", temp / "console.txt"
+            for variant, mode, export in combinations[offset:] + combinations[:offset]:
+                destination = temp / "outputs"
+                shutil.rmtree(destination, ignore_errors=True)
+                destination.mkdir()
+                output = destination / ("detections.csv" if export == "csv" else "detections.json")
+                log = temp / "console.txt"
                 cli_root = args.baseline_root.resolve() if variant == "baseline" else ROOT
                 prefix = [sys.executable, str(cli_root / "zircolite.py")]
                 command = [*prefix, "-e", str(events),
                            "-r", str(rules), "-c", str(args.config.resolve()), "-o", str(output),
                            "--logfile", str(temp / "run.log"), "--quiet"]
+                artifact = output
+                if export == "csv":
+                    command.append("--csv")
+                elif export in EXPORT_TEMPLATES:
+                    artifact = destination / "export.txt"
+                    command.extend(["-t", str(cli_root / "templates" / EXPORT_TEMPLATES[export]),
+                                    "-T", str(artifact)])
+                elif export.startswith("timeline-"):
+                    artifact = destination / ("timeline." + export.removeprefix("timeline-"))
+                    command.extend(["--timeline", str(artifact)])
+                elif export == "package":
+                    artifact = destination
+                    command.extend(["--package", "--package-dir", str(destination)])
+                cache = temp / "cache" / variant
+                if args.cache == "cold":
+                    shutil.rmtree(cache, ignore_errors=True)
+                env = os.environ.copy()
+                env.pop("ZIRCOLITE_ANALYSIS_CACHE", None)
+                env.pop("ZIRCOLITE_NO_CACHE", None)
+                env["ZIRCOLITE_CACHE_DIR"] = str(cache)
+                if args.cache == "off":
+                    env["ZIRCOLITE_NO_CACHE"] = "1"
                 if mode != "auto":
                     command.append("--no-auto-mode")
                 baseline_cli = cli_root / "zircolite" / "cli.py"
@@ -275,16 +412,22 @@ def main():
                     command.extend(["--executor", mode, "--parallel-workers", str(args.workers)])
                 if args.scenario == "transforms" and not args.events:
                     command.append("--all-transforms")
-                run = measure(command, output, log, temp_dir=working, performance_path=metrics_path)
+                run = measure(command, output, log, temp_dir=working, performance_path=metrics_path,
+                              export=export, artifact=artifact, env=env)
                 if args.scenario in ("evtx-derived", "linux") and not args.events and not run["matches"]:
                     raise RuntimeError("Known-positive generated corpus produced no detections")
                 identity = run["matches"], run["fingerprint"]
-                if expected is not None and identity != expected:
-                    raise RuntimeError(f"Detection mismatch in {variant}/{mode}: {identity} != {expected}")
-                expected = identity
-                key = result_key(variant, mode)
-                results[key].append(run)
-                print(f"{key:24} {run['seconds']:.3f}s  {run['peak_rss_mib']:.1f} MiB  {run['matches']} matches", flush=True)
+                family = "csv" if export == "csv" else "json"
+                if identity != expected.setdefault(family, identity):
+                    raise RuntimeError(f"Detection mismatch in {variant}/{mode}/{export}")
+                export_identity = run["export_records"], run["export_fingerprint"]
+                if export_identity != expected_exports.setdefault((mode, export), export_identity):
+                    raise RuntimeError(f"Export mismatch in {variant}/{mode}/{export}")
+                key = result_key(variant, mode, export)
+                if repeat >= 0:
+                    results[key].append(run)
+                label = "warmup " if repeat < 0 else ""
+                print(f"{label}{key:24} {run['seconds']:.3f}s  {run['peak_rss_mib']:.1f} MiB  {run['matches']} matches", flush=True)
                 if any(working.iterdir()):
                     raise RuntimeError(f"Working database leaked after {key}")
         report = {"python": sys.version, "platform": platform.platform(), "cpus": os.cpu_count(),
@@ -292,7 +435,7 @@ def main():
                   "sqlite": sqlite3.sqlite_version, "scenario": "external" if args.events else args.scenario,
                   "workers": args.workers, "results": results,
                   "event_count_requested": args.event_count, "files_requested": args.files,
-                  "modes": args.modes,
+                  "modes": args.modes, "exports": args.exports, "warmup": args.warmup, "cache": args.cache,
                   "source_sha256": source_fingerprint(ROOT),
                   "baseline_sha256": source_fingerprint(args.baseline_root) if args.baseline_root else None,
                   "rule_count_requested": args.rule_count,

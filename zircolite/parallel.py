@@ -13,7 +13,6 @@ This module provides memory-aware parallel file processing capabilities:
 import logging
 import multiprocessing
 import os
-import queue
 import signal
 import struct
 import sys
@@ -40,11 +39,12 @@ from rich.progress import (
 
 from .console import console, literal
 from .detector import EVTX_MAGIC
+from .progress import WorkerBoard, show_board, worker_progress
 from .shutdown import is_shutdown_requested
 from .utils import estimate_input_size
 
-# Refresh interval for draining rule-progress queue (matches Live refresh_per_second=10)
-_RULE_PROGRESS_POLL_SECONDS = 0.1
+# How often the workers' board is read (matches Live refresh_per_second=10)
+_BOARD_POLL_SECONDS = 0.1
 
 # Max length for file name in per-file progress bar (truncate with ellipsis)
 _FILE_PROGRESS_NAME_MAX_LEN = 40
@@ -53,11 +53,15 @@ PROCESS_MIN_TOTAL_MIB = 32
 
 
 def _truncate_filename(name: str) -> str:
-    """Truncate file name for progress bar description if needed."""
+    """Shorten a file name for a progress row, cutting from the middle.
+
+    Rotated logs share long prefixes and differ near the end, so both ends stay.
+    """
     max_len = _FILE_PROGRESS_NAME_MAX_LEN
     if len(name) <= max_len:
         return name
-    return name[: max_len - 1] + "…"
+    tail = (max_len - 1) // 2
+    return name[: max_len - 1 - tail] + "…" + name[-tail:]
 
 
 def _file_size(path: Path) -> int:
@@ -540,7 +544,7 @@ class MemoryAwareParallelProcessor:
         desc: str = "Processing",
         disable_progress: bool = False,
         on_result: Callable[[Any], None] | None = None,
-        rule_progress_queue: queue.Queue | None = None,
+        board: WorkerBoard | None = None,
         initializer=None,
         initargs: tuple = (),
         cancel_event=None,
@@ -555,10 +559,10 @@ class MemoryAwareParallelProcessor:
             disable_progress: Suppress Rich progress bar.
             on_result: Called with each non-None result as it arrives
                        (useful for incremental writes to disk).
-            rule_progress_queue: If set, workers put (worker_id, file_name, rules_done, total_rules)
-                                 here; this method adds one progress task per file (description =
-                                 truncated file_name), updates it, and removes it when the file
-                                 finishes to free console space.
+            board: Where workers report the step each file is in, a slot per
+                   worker, naming files by their position in ``file_list``.
+                   Each busy worker gets a row under the main bar, and the
+                   events they have read count in it before their files finish.
 
         Returns:
             ``(results_list, stats)``
@@ -568,6 +572,11 @@ class MemoryAwareParallelProcessor:
 
         start_time = time.time()
         self.stats = ParallelStats()
+        # The board names a file by its place in the list as given, before sorting.
+        shown = [_truncate_filename(Path(path).name) for path in file_list]
+        names = [literal(name) for name in shown]
+        position = {str(path): index for index, path in enumerate(file_list)}
+        finished: set[int] = set()
         # Reset calibration state so a reused processor instance does not
         # inherit estimates from a previous run
         self._calibrated_memory_per_file_mb = None
@@ -609,18 +618,7 @@ class MemoryAwareParallelProcessor:
             disable=disable_progress,
         )
 
-        # Per-file rule progress: filename and rules X/Y only (no events/workers)
-        progress_files = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40),
-            MofNCompleteColumn(),
-            TextColumn("•"),
-            TimeElapsedColumn(),
-            console=console,
-            transient=True,
-            disable=disable_progress,
-        )
+        progress_files = worker_progress(name_width=max(map(len, shown)), disable=disable_progress)
 
         def run_parallel_loop() -> None:
             nonlocal first_file_calibrated, inflight_bytes
@@ -630,7 +628,7 @@ class MemoryAwareParallelProcessor:
                 events=0,
                 workers=num_workers,
             )
-            worker_file_task_ids: dict[int, Any] = {}
+            file_tasks: dict[int, Any] = {}
 
             pool = (ProcessPoolExecutor(max_workers=num_workers,
                         mp_context=multiprocessing.get_context("spawn"),
@@ -670,46 +668,18 @@ class MemoryAwareParallelProcessor:
                         file_queue.clear()
                         if cancel_event is not None:
                             cancel_event.set()
-                    if rule_progress_queue is not None:
-                        while True:
-                            try:
-                                w_id, file_name, rules_done, total_rules = (
-                                    rule_progress_queue.get_nowait()
-                                )
-                                if total_rules <= 0:
-                                    continue
-                                if w_id not in worker_file_task_ids:
-                                    worker_file_task_ids[w_id] = (
-                                        progress_files.add_task(
-                                            _truncate_filename(str(file_name)),
-                                            total=total_rules,
-                                            completed=0,
-                                        )
-                                    )
-                                progress_files.update(
-                                    worker_file_task_ids[w_id],
-                                    completed=rules_done,
-                                    total=total_rules,
-                                )
-                                if rules_done >= total_rules:
-                                    task_id_to_remove = worker_file_task_ids.get(w_id)
-                                    if task_id_to_remove is not None:
-                                        try:
-                                            progress_files.remove_task(
-                                                task_id_to_remove
-                                            )
-                                        finally:
-                                            del worker_file_task_ids[w_id]
-                            except queue.Empty:
-                                break
+                    if board is not None:
+                        live = show_board(progress_files, file_tasks, board, names, finished)
+                        progress_main.update(task_id, events=self.stats.total_events + live)
                     done, _ = wait(
                         active_futures,
                         return_when=FIRST_COMPLETED,
-                        timeout=_RULE_PROGRESS_POLL_SECONDS,
+                        timeout=_BOARD_POLL_SECONDS,
                     )
 
                     for future in done:
                         file_path = active_futures.pop(future)
+                        finished.add(position.get(str(file_path), -1))
 
                         try:
                             event_count, result = future.result()
@@ -769,7 +739,7 @@ class MemoryAwareParallelProcessor:
                     if not active_futures and file_queue and not is_shutdown_requested():
                         submit(file_queue.popleft())
 
-        if rule_progress_queue is not None:
+        if board is not None and not disable_progress:
             with Live(
                 Group(progress_main, progress_files),
                 console=console,

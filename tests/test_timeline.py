@@ -472,6 +472,18 @@ class TestSorting:
 
 
 class TestFiles:
+    def test_progress_counts_the_lines_merged(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("zircolite.timeline.PROGRESS_LINES", 2)
+        spool = make_spool(tmp_path, "minimal", fmt="jsonl")
+        matches = [event(record=n, time=f"2024-01-01T00:00:{n:02d}.0000000Z") for n in range(5)]
+        seen = []
+
+        stats, _ = write(tmp_path, spool, result(WHOAMI, *matches), parts=1,
+                         progress=lambda done, total: seen.append((done, total)))
+
+        assert stats.rows == 5
+        assert seen == [(2, 5), (4, 5), (5, 5)]
+
     def test_a_run_without_detections_writes_the_header_alone(self, tmp_path):
         spool = make_spool(tmp_path, "minimal", fmt="csv")
 

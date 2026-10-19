@@ -150,6 +150,9 @@ pdm run python tools/throughput-benchmark.py --scenario sparse --event-count 500
 
 # Before/after: a preserved checkout against the working tree
 pdm run python tools/throughput-benchmark.py --events /path/to/logs --ruleset rules/rules_windows_merged.json --variants baseline current --baseline-root /path/to/old-checkout
+
+# Compare exports with one warmup and five measured, interleaved passes
+pdm run python tools/throughput-benchmark.py --events /path/to/logs --ruleset rules/rules_windows_merged.json --variants baseline current --baseline-root /path/to/old-checkout --modes sequential --exports json csv ndjson timesketch navigator summary timeline-jsonl timeline-csv package --cache warm --warmup 1 --passes 5
 ```
 
 - `--variants`: `reference` (Python flattening, literal filter off), `current` (defaults),
@@ -163,6 +166,18 @@ pdm run python tools/throughput-benchmark.py --events /path/to/logs --ruleset ru
   literal filtering never engages.
 - A `.db` file exported with `--dbfile` can be passed as `--events` to measure the
   rule phase alone.
+- `--exports` selects output modes (default: `json`). Reports include export bytes,
+  record counts and normalized content fingerprints, checked across variants and
+  repeats for each executor. CSV detections are compared separately from JSON;
+  template and timeline runs also check their underlying JSON detections. Packages
+  verify ZIP and embedded payload checksums, then compare every decoded Parquet schema
+  and row, including event IDs, links and full-text values, plus manifest metadata.
+  Creation time, physical Parquet encoding and row order are excluded. Validation runs
+  outside the timed region, alongside JSON detection parity.
+- `--warmup` excludes initial passes from reported measurements (default: `0`).
+  `--cache warm` reuses isolated rule-analysis and viewer-asset caches per variant; use a warmup to
+  populate it before measurement. `--cache cold` clears it before every run;
+  `--cache off` disables it. These settings do not clear operating-system file caches.
 
 The report lands in a new file in the system temporary directory unless `--report`
 names one. RSS is sampled every 20 ms; where child processes cannot be inspected the

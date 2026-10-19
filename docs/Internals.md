@@ -108,6 +108,11 @@ flattener decides which value lands in the column.
 
 ## Rule execution
 
+**Ruleset input.** JSON rulesets are decoded once. Sigma YAML is parsed once with
+the safe C loader (or the Python safe loader when LibYAML is unavailable), then
+passed to `SigmaCollection.from_dicts`. All files still merge before filters and
+cross-file references are resolved; pipeline application order is unchanged.
+
 **Analysis cache.** Normalising, planning and scanning the statements of a 4,500-rule
 ruleset takes about two seconds, which every process worker would pay again. The
 command line keeps the results in the user's cache directory (`~/Library/Caches/Zircolite`,
@@ -207,7 +212,48 @@ backup API either way.
 
 **Timers.** Nested stage timers pause their parent, so index and output time does not also
 count as ingestion or detection. Worker stage times are summed apart from wall time, and RSS
-is sampled in a background thread.
+is sampled in a background thread. Detection JSON/CSV writes, template rendering,
+timeline final output and package generation belong to `output`; `finalization`
+covers cleanup. These boundaries differ from older reports, which included direct
+detection writes in `detection` and final exports in `finalization`.
+
+**Exports.** Unmodified shipped NDJSON, Splunk, ELK, Zinc and Timesketch templates
+print one JSON object per match, and `exports.py` renders them without Jinja. On the
+command line they are rendered where the matches are: an `ExportPart` joins the result
+sinks of each working database, beside the timeline's (`_execute_with_parts`, and the
+worker for parallel runs), and writes the rows to `tmp-zircolite-exports-*` beside the
+first export. The main process then copies the parts into each destination, in the order
+the databases finished, which is the order the detections output lists them. Like the
+timeline's, a part keeps its first error, and a failed part fails the export (exit `1`)
+after the detections are written. No match list is kept for these templates.
+
+Rows are serialized once with orjson, keys sorted, metadata cached per rule. `<`, `>`,
+`&` and `'` are escaped as Jinja's `tojson` escapes them; other non-ASCII text is written
+as UTF-8 rather than `\u` escapes, and object key order and insignificant whitespace can
+differ, none of which changes what a JSON reader decodes. Library callers render from
+their results in one go; that output is staged before writing, so a rendering error
+leaves an existing destination intact. New destinations use a sibling temporary file and
+rename; existing destinations and append operations are written in place, preserving hard
+links, permissions and named pipes.
+
+Templates are recognized by a content fingerprint, not their filename. Custom or
+modified templates retain Jinja rendering and full matches. Shipped Summary CSV
+and ATT&CK Navigator templates need only rule summaries. Every shipped template is
+captured before processing, so an edit during the run cannot change what was decided
+for it. CSV spools sanitize event cells and rule metadata once, before their final write.
+
+**Progress.** Every step before and after the rule loop reports `(step, done, total)` to
+a `Reporter` (`progress.py`). In the main process that is `Steps`, one transient line
+with a bar and an estimate once the step knows its size: reading (records against the EVTX
+chunk headers' count, or the offset of the file on disk, gzip, bzip2 and 7-Zip included;
+a member read from inside a zip has no such offset, so it shows a spinner), index
+building, `--dbfile` saving and `-D` loading (SQLite backup steps), the package spool
+(rows), the literal index (rows), then the timeline merge (rows), row exports and the
+package zip (bytes) and duckdb's own estimate while it writes Parquet. A parallel worker
+writes the same reports into its slot of a `WorkerBoard`, a few integers per worker in
+shared memory for process workers; the main process reads it ten times a second and
+draws a row per busy worker under the main bar, whose event count includes what the
+workers have read so far.
 
 ## Package pipeline
 
@@ -232,8 +278,15 @@ only the standard library and orjson. Each working database is one **part**.
 
 - **Events.** `PartWriter.export_events` copies `logs` right after ingestion (where
   `--dbfile` saves) and before the first rule, which adds columns, indexes and statistics
-  the package must not carry. Rows go out in `row_id` order as gzip NDJSON, a new file every
-  100,000 rows, each with `_zl_part`, `_zl_rid`, `_zl_time` (microseconds, parsed as
+  the package must not carry. Rows go out in `row_id` order as NDJSON, a new file every
+  100,000 rows or 64 MiB, without splitting a record, written in 1 MiB blocks. On Python
+  3.14 and later every file is zstd level 1 (`compression.zstd`): a 64 MiB file of events
+  shrinks some thirty times in a few hundredths of a second, and duckdb reads it as fast as
+  plain text. Before 3.14, a free-space check before each file leaves a 6 GiB reserve plus
+  one file per concurrent writer (larger for an oversized record); below that threshold,
+  or if free space cannot be measured, the file uses gzip level 1. A part can contain
+  plain and compressed files alike. Each record has
+  `_zl_part`, `_zl_rid`, `_zl_time` (microseconds, parsed as
   `--after`/`--before` parse it) and `_zl_spelling` where needed. The same pass records each
   column's types and non-null count, the columns of each `(Channel, EventID)` family and the
   time range, so stage two never scans for them.
@@ -253,13 +306,20 @@ its detections, then reports the error, writes no package and exits `1`.
 ### Stage 2: Parquet
 
 `PackageBuilder.build_data`, in the main process, first checks that the parts hold exactly
-the events ingested. It then runs an in-memory duckdb (2 GB limit, one thread, insertion
-order kept, spill directory in the package's temporary directory, extension autoloading
-off); `check_duckdb` refused a duckdb without JSON and Parquet built in before ingestion.
+the events ingested. It then runs an in-memory duckdb with up to four threads and a memory
+limit of half the available RAM (2 to 32 GB) when at least two CPUs and 4 GiB of available
+RAM are detected; otherwise it uses one thread and a 2 GB limit. Insertion order is kept,
+so what does not fit under the limit spills to the package's temporary directory, and a
+spill costs more than threads gain: 1.9 million events of 386 columns took 31 s under a
+3 GB limit, spilling 5.5 GiB, and 13 s under 12 GB. Extension autoloading is off. The
+memory setting limits DuckDB's buffer manager, not total process RSS. `check_duckdb`
+refused a duckdb without JSON and Parquet built in before ingestion.
 
-- **Events.** `read_json` over the spool, in part order, through
-  `COPY … (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 20000)`. One thread and 20,000-row
-  groups keep the writer near 1.6 GB at 386 columns, where 100,000-row groups need 6 to 7 GB.
+- **Events.** `read_json` detects each spool file's compression and reads in part order,
+  through `COPY … (FORMAT parquet, COMPRESSION zstd)`. The requested row-group size is
+  `max(2048, min(20000, 1000 * (4000000 // (1000 * C))))`, where `C` includes the four
+  internal event columns. This reduces writer buffers for wide schemas; every table
+  writer receives the same per-build value. DuckDB rounds to its vector boundaries.
 - **Types.** Integers only → `BIGINT`, reals only → `DOUBLE`, anything else `VARCHAR`, so no
   integer above 2⁵³ goes through a double.
 - **Names.** A column takes the spelling of the lowest-numbered part that has it, except the
@@ -287,7 +347,9 @@ failed inputs, the warnings, and every file with its size, SHA-256 and chunks.
 
 A page opened from `file://` may run the scripts beside it but not fetch files, so every
 binary becomes scripts: each 3 MiB chunk is `__zircolite.chunk("<name>", <seq>, "<base64>")`,
-streamed into the zip, and the manifest is `__zircolite.manifest({…})`.
+streamed into the zip, and the manifest is `__zircolite.manifest({…})`. The data chunks are
+deflated at level 1: Parquet is compressed already, so deflate only wins back base64's
+overhead, and level 1 does that within 3 % of level 6 in three quarters of the time.
 
 ```
 index.html  app.js  app.css  README.txt  THIRD_PARTY_NOTICES.txt
@@ -300,6 +362,15 @@ data/manifest.js  data/{events,rules,hits,alerts,alert_events,text}.parquet.NNNN
 `data_format` the viewer reads, which must equal `PACKAGE_FORMAT` in `package.py`. The zip
 is written in a temporary directory inside the destination and moved into place with
 `os.replace`.
+
+The command line caches a ZIP of the static viewer files, wrapped engine and README in
+`package-assets/` under the normal cache directory. Its content key covers the descriptor,
+assets, wrapping format, chunk size and ZIP compression level (6). Before reuse, the copied
+archive's exact member list, sizes and decoded bytes are checked against the current
+assets. Only then are fresh data and a fresh manifest appended. Cache failures fall back
+to ordinary assembly; publication is atomic and retains two versions. No event data or
+manifest enters this cache. `ZIRCOLITE_CACHE_DIR` and `ZIRCOLITE_NO_CACHE` control both
+caches. Library callers opt in with `PackageBuilder(..., cache_directory=path)`.
 
 ### The viewer
 
@@ -329,7 +400,7 @@ build, and the only part of `gui/` that ships.
 process. `timeline.py` holds both halves ([diagram](Usage.md#timeline)).
 
 - **Parts.** A `TimelinePart` joins the result sinks of one working database, beside the
-  package's (`_execute_with_timeline` in `processing.py`, and the worker for parallel runs).
+  package's (`_execute_with_parts` in `processing.py`, and the worker for parallel runs).
   It turns each match into a line: a fixed-width key, a tab, the source file as JSON, a tab,
   the finished row as JSON. Like `PartWriter.sink`, it keeps its first error and raises it
   at `finish`, so a failing part never stops the rules. A failed part fails the timeline
@@ -391,8 +462,11 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `sqlscan.py` | Quote-aware rule-SQL reader, and the OR-chain depth repair |
 | `run_config.py` | `SETTINGS`: one row per option, with YAML key, default and merge rule |
 | `templates.py` | `TemplateEngine` (Jinja2 output) |
+| `exports.py` | Shipped row exports rendered without Jinja: result-sink parts and their final copy |
+| `progress.py` | Step reporting: the main process's progress line and the parallel workers' board |
 | `package_spool.py` | Stage one of `--package`: spools each working database's events, hits and alerts |
 | `package.py` | Stage two of `--package`: Parquet tables, the manifest and the viewer zip |
+| `package_cache.py` | Verified compressed viewer assets reused between package exports |
 | `timeline.py` | `--timeline`: rows rendered per working database, then sorted, deduplicated and written |
 | `formats.py` | Input format registry: flag, YAML value, extension, encoding, reader |
 | `extractor.py` | `EvtxExtractor`: log line or XML element → event dict |

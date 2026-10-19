@@ -18,6 +18,7 @@ import string
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -88,6 +89,7 @@ from zircolite.assets import (
 from zircolite.config import RULE_LEVELS
 from zircolite.console import literal, send_console_to_stderr
 from zircolite.correlations import TIMESTAMP_FORMATS
+from zircolite.exports import ExportError, ExportSpool, write_spooled
 
 # Input format registry
 from zircolite.formats import ALIAS_EXTENSIONS, DEFAULT_EXTENSION, EXTENSION_FALLBACKS
@@ -106,6 +108,7 @@ from zircolite.processing import (
     process_perfile_streaming,
     process_unified_streaming,
 )
+from zircolite.progress import Steps
 from zircolite.rule_selection import STATUSES, tag_problem
 from zircolite.run_config import DEFAULTS, EARLY_DESTS, flatten_groups
 from zircolite.shutdown import (
@@ -431,6 +434,10 @@ def discover_files(
             # at; the caller re-discovers with the detected format's suffixes.
             if not log_list:
                 log_list = candidates
+        # Directory order is the filesystem's: sorted on APFS and NTFS, hashed
+        # on ext4. A unified database numbers events in the order files are
+        # read, so the same directory must give the same run everywhere.
+        log_list.sort()
     elif log_path.is_file():
         log_list = [log_path]
     else:
@@ -750,9 +757,13 @@ def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
     destination = Path(args.package_dir) if args.package_dir else Path(".")
     ctx.logger.info("[+] Building the package")
     try:
-        target = package.PackageBuilder(spool, logger=ctx.logger).build(
-            viewer=package.find_viewer(), parts=ctx.package_parts, rulesets=ctx.rulesets, run=run,
-            failed_sources=failed, expected_events=ctx.total_events, destination=destination)
+        from .analysis_cache import default_directory
+
+        with Steps() as steps:
+            target = package.PackageBuilder(spool, logger=ctx.logger, cache_directory=default_directory()).build(
+                viewer=package.find_viewer(), parts=ctx.package_parts, rulesets=ctx.rulesets, run=run,
+                failed_sources=failed, expected_events=ctx.total_events, destination=destination,
+                progress=steps)
     except (PackageError, OSError) as exc:
         ctx.logger.error(f"[red]    [-] Cannot create the package: {literal(exc)}[/]")
         return False
@@ -866,6 +877,39 @@ def _prepare_timeline(args: argparse.Namespace, rulesets: list[Any], presentatio
     )
 
 
+def _prepare_exports(kinds: set[str], outputs: list[str], time_field: str, logger: logging.Logger) -> ExportSpool:
+    """Open the spool beside the first row export, so the final copy stays on its disk.
+
+    A destination whose directory takes no new files, such as ``/dev/stdout``,
+    falls back to the system temporary directory.
+    """
+    directory = None
+    for base in (Path(outputs[0]).resolve().parent if outputs else None, None):
+        try:
+            directory = Path(tempfile.mkdtemp(prefix="tmp-zircolite-exports-", dir=base)).resolve()
+            break
+        except OSError as exc:
+            error = exc
+    if directory is None:
+        quit_on_error(f"[red]    [-] Cannot write the template exports: {literal(error)}[/]", logger)
+    return ExportSpool(directory=str(directory), kinds=tuple(sorted(kinds)), time_field=time_field or "")
+
+
+def _spooled_exports(ctx: ProcessingContext) -> Callable[[str, str, bool], None]:
+    """Writes a row export from the parts the rules filled, in the order they were filled."""
+    def write(kind: str, output: str, append: bool) -> None:
+        if ctx.export_errors:
+            raise ExportError("; ".join(ctx.export_errors[:3]))
+        if ctx.export_spool is None or kind not in ctx.export_spool.kinds:
+            # The template was not a row export when the run started: its
+            # rows were never written, and an empty file would pass for none.
+            raise ExportError(f"the {kind} rows were not collected during this run")
+        with Steps() as steps:
+            write_spooled(output, [record.files[kind] for record in ctx.export_parts if kind in record.files],
+                          append, lambda done, total: steps("Writing", done, total, item=Path(output).name))
+    return write
+
+
 def _write_timeline(ctx: ProcessingContext, args: argparse.Namespace) -> TimelineStats | None:
     """Sort the spooled parts into the timeline. None if it was not written."""
     spool = ctx.timeline_spool
@@ -876,7 +920,9 @@ def _write_timeline(ctx: ProcessingContext, args: argparse.Namespace) -> Timelin
             ctx.logger.error(f"[red]    [-] Cannot write the timeline: {literal(error)}[/]")
         return None
     try:
-        stats = build_timeline(spool, ctx.timeline_parts, args.timeline, keep_duplicates=args.keep_duplicates)
+        with Steps() as steps:
+            stats = build_timeline(spool, ctx.timeline_parts, args.timeline, keep_duplicates=args.keep_duplicates,
+                                   progress=lambda done, total: steps("Writing the timeline", done, total))
     except (TimelineError, OSError, ValueError) as exc:
         ctx.logger.error(f"[red]    [-] Cannot write the timeline: {literal(exc)}[/]")
         return None
@@ -899,8 +945,10 @@ def handle_templating(
             time_field=ctx.time_field,
             append=getattr(args, 'template_append', False),
         )
-        template_generator = TemplateEngine(tmpl_config, logger=ctx.logger)
-        succeeded = template_generator.run(results)
+        template_generator = TemplateEngine(tmpl_config, logger=ctx.logger,
+                                            sources=getattr(ctx, "template_sources", None))
+        succeeded = template_generator.run(
+            results, spooled=_spooled_exports(ctx) if ctx.export_spool is not None else None)
 
 
     if ctx.package:
@@ -1306,7 +1354,7 @@ def _run_processing(
     check_output_paths(_timeline_outputs(args), file_list, "Timeline")
     ctx.time_field = args.timefield
     # Auto-detection may have chosen the time field after the spools were opened.
-    for spool in (ctx.package_spool, ctx.timeline_spool):
+    for spool in (ctx.package_spool, ctx.timeline_spool, ctx.export_spool):
         if spool is not None:
             spool.time_field = ctx.time_field
 
@@ -1850,6 +1898,15 @@ def _main(memory_tracker, start_time) -> None:
     if args.csv:
         ready_for_templating = False
 
+    template_sources = {}
+    retain_results = False
+    row_exports: dict[str, str] = {}
+    if ready_for_templating:
+        templates = TemplateEngine(TemplateConfig(template=args.template or []), logger=logger)
+        retain_results = templates.needs_matches()
+        template_sources = templates.sources
+        row_exports = templates.row_exports()
+
     if args.dbfile and Path(args.dbfile).exists():
         print_error_panel(
             "Database File Exists",
@@ -1885,6 +1942,12 @@ def _main(memory_tracker, start_time) -> None:
     package_spool = _prepare_package(args, rulesets_manager.rulesets, logger) if args.package else None
     timeline_spool = (_prepare_timeline(args, rulesets_manager.rulesets, *timeline_choice, logger)
                       if timeline_choice else None)
+    export_spool = None
+    if row_exports:
+        # Opened last, so an earlier refusal leaves no spool behind.
+        outputs = [output for spec, output_spec in zip(args.template or [], args.templateOutput or [], strict=False)
+                   if spec[0] in row_exports for output in output_spec]
+        export_spool = _prepare_exports(set(row_exports.values()), outputs, args.timefield, logger)
 
     # Handle event filter configuration
     active_event_filter = None
@@ -1922,7 +1985,8 @@ def _main(memory_tracker, start_time) -> None:
         remove_index=flatten_groups(getattr(args, 'remove_index', None)),
         auto_index_top_n=getattr(args, 'auto_index', 0),
         strict_evtx=getattr(args, 'strict', False),
-        retain_results=ready_for_templating,
+        retain_results=retain_results,
+        template_sources=template_sources,
         working_db=args.working_db,
         working_db_dir=args.working_db_dir,
         sqlite_cache_mib=args.sqlite_cache_mib,
@@ -1930,6 +1994,7 @@ def _main(memory_tracker, start_time) -> None:
         rule_prefilter=args.rule_prefilter,
         package_spool=package_spool,
         timeline_spool=timeline_spool,
+        export_spool=export_spool,
     )
 
     zircolite_core = None
@@ -1951,11 +2016,8 @@ def _main(memory_tracker, start_time) -> None:
 
         # Written after a first Ctrl+C too, from the rows found, like the detections output
         if timeline_spool is not None:
-            finalization_start = time.perf_counter()
-            try:
+            with ctx.parent_metrics.stage("output"):
                 timeline_stats = _write_timeline(ctx, args)
-            finally:
-                finalization_seconds += time.perf_counter() - finalization_start
 
         if not is_shutdown_requested():
             # Print rule profiling report if requested
@@ -1965,11 +2027,8 @@ def _main(memory_tracker, start_time) -> None:
                 print_profiling_report(zircolite_core.get_profiling_report())
 
             # Handle templating and package generation
-            finalization_start = time.perf_counter()
-            try:
+            with ctx.parent_metrics.stage("output"):
                 templating_ok = handle_templating(ctx, all_results, args)
-            finally:
-                finalization_seconds += time.perf_counter() - finalization_start
     except OutputPathConflict as exc:
         processing_failed = True
         print_error_panel("Invalid Output Path", literal(exc), "Write the output to a separate file.")
@@ -1992,6 +2051,8 @@ def _main(memory_tracker, start_time) -> None:
             shutil.rmtree(package_spool.directory, ignore_errors=True)
         if timeline_spool is not None:
             shutil.rmtree(timeline_spool.directory, ignore_errors=True)
+        if export_spool is not None:
+            shutil.rmtree(export_spool.directory, ignore_errors=True)
         finalization_seconds += time.perf_counter() - finalization_start
         memory_tracker.stop()
         timeline_failed = timeline_spool is not None and timeline_stats is None

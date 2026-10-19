@@ -616,6 +616,38 @@ class TestZircoliteCoreDatabase:
         assert len(results) == 1
         zircore.close()
 
+    def test_saving_and_loading_report_pages_copied(self, field_mappings_file, tmp_path, test_logger):
+        class Recorder:
+            def __init__(self):
+                self.calls = []
+
+            def __call__(self, phase, done=0, total=0, **_):
+                self.calls.append((phase, done, total))
+
+            def clear(self):
+                pass
+
+        source = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        source.execute_query("CREATE TABLE test (id INTEGER, value TEXT)")
+        source.db_connection.executemany("INSERT INTO test VALUES (?, ?)", [(n, "x" * 2000) for n in range(2000)])
+        source.db_connection.commit()
+        source.progress = saved = Recorder()
+        db_file = str(tmp_path / "saved.db")
+        source.save_db_to_disk(db_file)
+        source.close()
+
+        target = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        target.progress = loaded = Recorder()
+        target.load_db_in_memory(db_file)
+        try:
+            for recorder, phase in ((saved, "saving"), (loaded, "loading")):
+                assert len(recorder.calls) > 1, "a large copy is reported in steps"
+                assert {call[0] for call in recorder.calls} == {phase}
+                assert recorder.calls[-1][1] == recorder.calls[-1][2] > 0
+            assert target.db_connection.execute("SELECT count(*) FROM test").fetchone()[0] == 2000
+        finally:
+            target.close()
+
     def test_load_db_in_memory(self, field_mappings_file, tmp_path, test_logger):
         """Test loading database from disk to memory."""
         # Create on-disk database

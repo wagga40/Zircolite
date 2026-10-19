@@ -5,15 +5,19 @@ This module contains:
 - TemplateEngine: Jinja2 template rendering for output generation
 """
 
+import hashlib
 import logging
+import os
+from collections.abc import Callable
 from typing import Any
 
-import orjson
 from jinja2 import Environment
 
 from .attack import extract_attack_tactics, extract_attack_techniques
 from .config import TemplateConfig
 from .console import literal
+from .exports import ROW_EXPORTS, export_rows, flat_json, write_export
+from .progress import Steps
 
 _LEVEL_ORDER = {'unknown': -1, 'informational': 0, 'low': 1, 'medium': 2, 'high': 3, 'critical': 4}
 _LEVEL_COLOR = {
@@ -23,6 +27,24 @@ _LEVEL_COLOR = {
     'low': '#66ff66',
     'informational': '#aaffaa',
 }
+
+# Content, not filenames: a customized or shadowed template must still run
+# through Jinja with full matches. A changed shipped template safely falls back
+# until its exporter (zircolite/exports.py) and this fingerprint are updated together.
+_BUILTIN_TEMPLATES = {
+    "e5573b8994c4e0a5194b6a88dd8d2841737ce2fd09fa409a570d25ebb2e40212": "ndjson",
+    "42695f66f3ae4b6c9bf5f50d142858640e8249972fe6794bea7ff6f808829879": "splunk",
+    "cc54c06961c0ab4843a07c8ea954374c9fd1f0d8984e9e5f9fc1878ef8a5ae3a": "splunk-id",
+    "7c599de902ae202905f0b5a47d73ca02ed5cc4d0219f88984736ea236d65ede2": "elk",
+    "1b8116b58b49905be68271bc3cc4bd7e24a14ce720c044ed3713b8376c1e6837": "zinc",
+    "ca58fbde92581cf6175f6fced597b7e53d5c10b49ed23ca05f1ecf93720dc7c4": "timesketch",
+    "d5711e794b09c9d7ffd7fcedb486fbb53a834ba5c2457f70e14c449521233679": "navigator",
+    "e0d63184d3f4f14502382aa1a219534366e0f18bbe69dee9e9c39e8c27556811": "summary",
+}
+
+
+def _builtin_template(source: str) -> str | None:
+    return _BUILTIN_TEMPLATES.get(hashlib.sha256(source.encode("utf-8")).hexdigest())
 
 
 def _count_label(count: int, singular: str) -> str:
@@ -116,18 +138,6 @@ def csv_field(value: Any) -> str:
     return '"' + text.replace('"', '""') + '"'
 
 
-def flat_json(value: Any) -> Any:
-    """A nested value as JSON text, for targets that want one scalar per field.
-
-    Elasticsearch maps every key of a nested object as a field of its own, so a
-    correlation alert's evidence would add one field per event column and soon
-    exceed the index's field limit; a flat table shows each value as text.
-    """
-    if isinstance(value, (dict, list)):
-        return orjson.dumps(value).decode()
-    return value
-
-
 def _make_jinja2_env() -> Environment:
     """Create a Jinja2 Environment with Zircolite-specific filters.
 
@@ -156,7 +166,8 @@ class TemplateEngine:
         self,
         template_config: TemplateConfig | None = None,
         *,
-        logger: logging.Logger | None = None
+        logger: logging.Logger | None = None,
+        sources: dict[str, str] | None = None,
     ):
         """
         Initialize TemplateEngine.
@@ -172,6 +183,40 @@ class TemplateEngine:
         self.template_output = cfg.template_output
         self.time_field = cfg.time_field
         self.append = cfg.append
+        self.sources = dict(sources or {})
+
+    def _source(self, filename: str) -> str:
+        if filename in self.sources:
+            return self.sources[filename]
+        with open(filename, encoding="utf-8") as handle:
+            return handle.read()
+
+    def needs_matches(self) -> bool:
+        """Capture the shipped templates before deciding whether the CLI can drop matches.
+
+        Summary templates need rule summaries only, and the CLI renders row
+        exports as the rules run (``row_exports``); only a custom template
+        needs every match kept. Rendering uses these same contents, so a file
+        edited during ingestion cannot ask for discarded matches.
+        """
+        needs_matches = False
+        for spec in self.template:
+            try:
+                source = self._source(spec[0])
+            except (OSError, UnicodeError):
+                # Preserve the normal rendering error/reporting path.
+                needs_matches = True
+                continue
+            if _builtin_template(source) is None:
+                needs_matches = True
+            else:
+                self.sources[spec[0]] = source
+        return needs_matches
+
+    def row_exports(self) -> dict[str, str]:
+        """The captured shipped row exports, template file to kind."""
+        kinds = {name: _builtin_template(source) for name, source in self.sources.items()}
+        return {name: kind for name, kind in kinds.items() if kind in ROW_EXPORTS}
 
     def generate_from_template(
         self,
@@ -179,20 +224,34 @@ class TemplateEngine:
         output_filename: str,
         data: list[dict[str, Any]],
         append: bool | None = None,
+        *,
+        spooled: Callable[[str, str, bool], None] | None = None,
     ) -> bool:
         """Use Jinja2 to output data in a specific format. True when written.
 
         If ``append`` is ``None``, the engine-wide ``self.append`` setting is
         used. Pass ``True``/``False`` explicitly to override per-call.
+        ``spooled(kind, output, append)`` writes a shipped row export that
+        was rendered as the rules ran, instead of rendering ``data``.
         """
         try:
-            with open(template_file, encoding='utf-8') as tmpl:
-                template = _make_jinja2_env().from_string(tmpl.read())
+            source = self._source(template_file)
+            kind = _builtin_template(source)
+            should_append = self.append if append is None else append
+            if kind in ROW_EXPORTS and spooled is not None:
+                spooled(kind, output_filename, should_append)
+                return True
+            with Steps() as steps:
+                steps("Writing", item=os.path.basename(output_filename))
+                if kind in ROW_EXPORTS:
+                    write_export(output_filename, export_rows(kind, data, self.time_field), should_append)
+                    return True
+                template = _make_jinja2_env().from_string(source)
 
-            # Render before opening the output file so a render failure does
-            # not leave a truncated/empty file behind
-            rendered = template.render(data=data, timeField=self.time_field)
-            mode = 'a' if (self.append if append is None else append) else 'w'
+                # Render before opening the output file so a render failure does
+                # not leave a truncated/empty file behind
+                rendered = template.render(data=data, timeField=self.time_field)
+            mode = 'a' if should_append else 'w'
             with open(output_filename, mode, encoding='utf-8') as tpl:
                 tpl.write(rendered)
             return True
@@ -204,7 +263,8 @@ class TemplateEngine:
             )
             return False
 
-    def run(self, data: list[dict[str, Any]]) -> bool:
+    def run(self, data: list[dict[str, Any]], *,
+            spooled: Callable[[str, str, bool], None] | None = None) -> bool:
         """Run template generation for all configured templates. True if all wrote."""
         succeeded = True
         for template_spec, output_spec in zip(
@@ -215,7 +275,7 @@ class TemplateEngine:
                 f'[+] Applying template "{literal(template_spec[0])}", {mode_label} to : {literal(output_spec[0])}'
             )
             if not self.generate_from_template(
-                template_spec[0], output_spec[0], data
+                template_spec[0], output_spec[0], data, spooled=spooled
             ):
                 succeeded = False
         return succeeded

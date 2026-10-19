@@ -11,7 +11,10 @@ import base64
 import hashlib
 import logging
 import os
+import threading
 import zipfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -20,12 +23,14 @@ from typing import Any
 
 import duckdb
 import orjson
+import psutil
 
 from .assets import bundled_asset
 from .attack import TACTIC_ORDER, extract_attack_tactics, extract_attack_techniques
 from .config import RULE_LEVELS
 from .config_loader import DEFAULT_AFTER, DEFAULT_BEFORE, DEFAULT_LIMIT
 from .correlations import is_correlation_plan_rule
+from .package_cache import prepare_archive
 from .package_spool import (
     UID_PART_SHIFT,
     PackageError,
@@ -34,14 +39,13 @@ from .package_spool import (
     ascii_lower,
     rule_key,
 )
+from .progress import Reporter
 from .utils import random_suffix
 
 PACKAGE_FORMAT = 1
 DATA_TABLES = ("events", "rules", "hits", "alerts", "alert_events")
 REQUIRED_EXTENSIONS = ("json", "parquet")
-# The Parquet writer holds a row group of every column per thread: at 386 EVTX
-# columns, 20k rows on one thread stays near 1.6 GB, where 100k rows needs
-# 6-7 GB and spills to disk for minutes below that.
+# Wide schemas need smaller row groups to bound per-thread writer buffers.
 ROW_GROUP_SIZE = 20_000
 DUCKDB_SETTINGS: dict[str, Any] = {
     "autoinstall_known_extensions": False,
@@ -56,6 +60,9 @@ EVENTS_PARQUET_LIMIT = 1 << 30
 TEXT_PARQUET_LIMIT = 1 << 30
 UID_FACTOR = 1 << UID_PART_SHIFT
 CHUNK_BYTES = 3 * 1024 * 1024  # a multiple of 3: base64 pads only the last chunk
+# Parquet is compressed already, so deflate only wins back base64's overhead;
+# level 1 does that about as well as 6, in three quarters of the time.
+DATA_ZIP_LEVEL = 1
 README_TEXT = """Zircolite package
 =================
 
@@ -194,10 +201,65 @@ def _empty(spec: dict[str, str]) -> str:
     return f"SELECT {columns} WHERE false"
 
 
-def _copy(connection: duckdb.DuckDBPyConnection, query: str, target: Path) -> Path:
+def row_group_size(column_count: int) -> int:
+    """At most about four million values per row group, within DuckDB's row minimum."""
+    return max(2048, min(ROW_GROUP_SIZE, 1000 * (4_000_000 // (1000 * max(1, column_count)))))
+
+
+def _duckdb_settings() -> dict[str, Any]:
+    """Threads and memory for stage two, sized by what is free once the workers are gone.
+
+    Keeping insertion order, duckdb spills to disk what does not fit under
+    memory_limit, and a spill costs more than threads gain: 1.9 million events
+    of 386 columns took 31 s under 3 GB, spilling 5.5 GiB, and 13 s under 12 GB.
+    """
+    settings = dict(DUCKDB_SETTINGS)
+    try:
+        available = psutil.virtual_memory().available
+    except (OSError, psutil.Error):
+        return settings
+    cpus = os.cpu_count() or 1
+    if cpus >= 2 and available >= (4 << 30):
+        settings.update(threads=min(4, cpus), memory_limit=f"{min(32, (available // 2) >> 30)}GB")
+    return settings
+
+
+@contextmanager
+def _watched(connection: duckdb.DuckDBPyConnection, report: Reporter | None, label: str) -> Iterator[None]:
+    """Report how far duckdb is through the statements run inside, from a second thread.
+
+    ``query_progress`` answers -1 until duckdb has an estimate, so the step
+    shows without a bar until then.
+    """
+    if report is None:
+        yield
+        return
+    report(label)
+    stop = threading.Event()
+
+    def poll() -> None:
+        while not stop.wait(0.2):
+            try:
+                value = connection.query_progress()
+            except duckdb.Error:
+                return
+            if value >= 0:
+                report(label, int(value * 10), 1000)
+
+    watcher = threading.Thread(target=poll, name="zircolite-package-progress", daemon=True)
+    watcher.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        watcher.join()
+
+
+def _copy(connection: duckdb.DuckDBPyConnection, query: str, target: Path,
+          group_size: int = ROW_GROUP_SIZE) -> Path:
     connection.execute(
         f"COPY ({query}) TO {sql_string(str(target))} "
-        f"(FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE {ROW_GROUP_SIZE})")
+        f"(FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE {group_size})")
     return target
 
 
@@ -210,11 +272,12 @@ def _strings(value: Any) -> list[str]:
 
 
 def write_events(connection: duckdb.DuckDBPyConnection, work: Path,
-                 parts: list[PartRecord], columns: list[Column]) -> Path:
+                 parts: list[PartRecord], columns: list[Column], *,
+                 group_size: int = ROW_GROUP_SIZE) -> Path:
     target = work / "events.parquet"
     files = [path for record in parts for path in record.event_files]
     if not files:
-        return _copy(connection, _empty(EVENT_COLUMNS), target)
+        return _copy(connection, _empty(EVENT_COLUMNS), target, group_size)
     spec = {**EVENT_SPOOL_COLUMNS, **{column.key: column.sql_type for column in columns}}
     longest = max(record.longest_line for record in parts)
     projection = ", ".join([
@@ -224,12 +287,13 @@ def write_events(connection: duckdb.DuckDBPyConnection, work: Path,
         "_zl_spelling",
         *(f"{sql_identifier(column.key)} AS {sql_identifier(column.name)}" for column in columns),
     ])
-    source = (f"read_json({_paths(files)}, format = 'newline_delimited', compression = 'gzip', "
+    source = (f"read_json({_paths(files)}, format = 'newline_delimited', compression = 'auto_detect', "
               f"columns = {_struct(spec)}, maximum_object_size = {max(16 << 20, longest + 1)})")
-    return _copy(connection, f"SELECT {projection} FROM {source}", target)  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
+    return _copy(connection, f"SELECT {projection} FROM {source}", target, group_size)  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
 
 
-def write_text(connection: duckdb.DuckDBPyConnection, work: Path, events: Path, columns: list[Column]) -> Path:
+def write_text(connection: duckdb.DuckDBPyConnection, work: Path, events: Path, columns: list[Column], *,
+               group_size: int = ROW_GROUP_SIZE) -> Path:
     """Each event's values, lowercased and joined by chr(31), for the viewer's full-text search.
 
     Read in the browser, one column of text answers a bare-word search about
@@ -241,7 +305,7 @@ def write_text(connection: duckdb.DuckDBPyConnection, work: Path, events: Path, 
     values = ", ".join(f"CAST({sql_identifier(column.name)} AS VARCHAR)" for column in columns)
     text = f"lower(concat_ws(chr(31), {values}))" if values else "''"
     query = f"SELECT _zl_uid, {text} AS _zl_text FROM read_parquet({sql_string(str(events))})"  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
-    return _copy(connection, query, target)
+    return _copy(connection, query, target, group_size)
 
 
 def rule_rows(parts: list[PartRecord], rulesets: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -280,43 +344,46 @@ def rule_rows(parts: list[PartRecord], rulesets: list[dict[str, Any]]) -> list[d
     return rows
 
 
-def write_rules(connection: duckdb.DuckDBPyConnection, work: Path, rows: list[dict[str, Any]]) -> Path:
+def write_rules(connection: duckdb.DuckDBPyConnection, work: Path, rows: list[dict[str, Any]], *,
+                group_size: int = ROW_GROUP_SIZE) -> Path:
     target = work / "rules.parquet"
     if not rows:
-        return _copy(connection, _empty(RULE_COLUMNS), target)
+        return _copy(connection, _empty(RULE_COLUMNS), target, group_size)
     source = work / "rules.ndjson"
     source.write_bytes(b"".join(orjson.dumps(row) + b"\n" for row in rows))
     names = ", ".join(sql_identifier(name) for name in RULE_COLUMNS)
     query = f"SELECT {names} FROM read_json({sql_string(str(source))}, format = 'newline_delimited', columns = {_struct(RULE_COLUMNS)})"  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
-    return _copy(connection, query, target)
+    return _copy(connection, query, target, group_size)
 
 
-def write_hits(connection: duckdb.DuckDBPyConnection, work: Path, parts: list[PartRecord]) -> Path:
+def write_hits(connection: duckdb.DuckDBPyConnection, work: Path, parts: list[PartRecord], *,
+               group_size: int = ROW_GROUP_SIZE) -> Path:
     target = work / "hits.parquet"
     files = [record.hits_file for record in parts if record.hits_file]
     if not files:
-        return _copy(connection, _empty(HIT_COLUMNS), target)
+        return _copy(connection, _empty(HIT_COLUMNS), target, group_size)
     source = (f"read_csv({_paths(files)}, header = false, delim = ',', auto_detect = false, "
               f"columns = {_struct(HIT_SPOOL_COLUMNS)})")
     # A correlation's evidence and the rule's own match can name one event twice.
     query = f"SELECT DISTINCT rule_idx, CAST(part AS BIGINT) * {UID_FACTOR} + rid AS _zl_uid FROM {source} ORDER BY rule_idx, _zl_uid"  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
-    return _copy(connection, query, target)
+    return _copy(connection, query, target, group_size)
 
 
-def write_alerts(connection: duckdb.DuckDBPyConnection, work: Path, parts: list[PartRecord]) -> dict[str, Path]:
+def write_alerts(connection: duckdb.DuckDBPyConnection, work: Path, parts: list[PartRecord], *,
+                 group_size: int = ROW_GROUP_SIZE) -> dict[str, Path]:
     alerts, links = work / "alerts.parquet", work / "alert_events.parquet"
     files = [record.alerts_file for record in parts if record.alerts_file]
     if not files:
-        return {"alerts": _copy(connection, _empty(ALERT_COLUMNS), alerts),
-                "alert_events": _copy(connection, _empty(ALERT_EVENT_COLUMNS), links)}
+        return {"alerts": _copy(connection, _empty(ALERT_COLUMNS), alerts, group_size),
+                "alert_events": _copy(connection, _empty(ALERT_EVENT_COLUMNS), links, group_size)}
     spool_query = f"CREATE TEMP TABLE alert_spool AS SELECT CAST(row_number() OVER (ORDER BY part, seq) - 1 AS INTEGER) AS alert_idx, * FROM read_json({_paths(files)}, format = 'newline_delimited', columns = {_struct(ALERT_SPOOL_COLUMNS)})"  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
     connection.execute(spool_query)
     _copy(connection, "SELECT alert_idx, rule_idx, part AS _zl_part, alert_id, group_keys, "
                       "make_timestamp(occurrence_us) AS occurrence_time, make_timestamp(window_start_us) AS window_start, "
                       "make_timestamp(window_end_us) AS window_end, metric_name, metric_value, event_count, "
-                      "child_alert_ids FROM alert_spool ORDER BY alert_idx", alerts)
+                      "child_alert_ids FROM alert_spool ORDER BY alert_idx", alerts, group_size)
     link_query = f"SELECT alert_idx, CAST(part AS BIGINT) * {UID_FACTOR} + rid AS _zl_uid, CAST(ord AS INTEGER) AS ord FROM (SELECT alert_idx, part, unnest(rids) AS rid, generate_subscripts(rids, 1) AS ord FROM alert_spool) ORDER BY alert_idx, ord"  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
-    _copy(connection, link_query, links)
+    _copy(connection, link_query, links, group_size)
     return {"alerts": alerts, "alert_events": links}
 
 
@@ -444,8 +511,15 @@ def find_viewer() -> Viewer:
     return Viewer(descriptor.parent, str(meta.get("version", "")), copy, wrap)
 
 
-def _wrap(archive: zipfile.ZipFile, source: Path, name: str, folder: str, kind: str) -> dict[str, Any]:
+def _wrap(archive: zipfile.ZipFile, source: Path, name: str, folder: str, kind: str,
+          wrote: Callable[[int], None] | None = None) -> dict[str, Any]:
     """Write ``source`` into the archive as ``__zircolite.chunk`` scripts."""
+    return _write_wrapped(source, name, folder, kind, archive.writestr, wrote)
+
+
+def _write_wrapped(source: Path, name: str, folder: str, kind: str,
+                   write: Callable[[str, bytes], None], wrote: Callable[[int], None] | None = None) -> dict[str, Any]:
+    """``wrote`` is told the size of each chunk once it is written."""
     digest = hashlib.sha256()
     chunks: list[str] = []
     size = 0
@@ -453,13 +527,13 @@ def _wrap(archive: zipfile.ZipFile, source: Path, name: str, folder: str, kind: 
     with open(source, "rb") as handle:
         while block := handle.read(CHUNK_BYTES):
             entry = f"{folder}/{name}.{len(chunks):04d}.js"
-            with archive.open(entry, "w") as out:
-                out.write(b"__zircolite.chunk(" + label + b"," + str(len(chunks)).encode() + b',"')
-                out.write(base64.b64encode(block))
-                out.write(b'");\n')
+            write(entry, b"__zircolite.chunk(" + label + b"," + str(len(chunks)).encode() + b',"'
+                  + base64.b64encode(block) + b'");\n')
             chunks.append(entry)
             digest.update(block)
             size += len(block)
+            if wrote is not None:
+                wrote(len(block))
     return {"name": name, "kind": kind, "bytes": size, "sha256": digest.hexdigest(), "chunks": chunks}
 
 
@@ -470,24 +544,37 @@ def _fresh_name(directory: Path) -> Path:
             return candidate
 
 
-def write_package(viewer: Viewer, data: PackageData, destination: Path, work: Path) -> Path:
+def write_package(viewer: Viewer, data: PackageData, destination: Path, work: Path, *,
+                  cache_directory: Path | None = None, progress: Reporter | None = None) -> Path:
     """Write the zip beside the spool, then move it into place under a fresh name.
 
     The spool lives in the destination directory, so the move is a rename: a
     failed write leaves no half package where the user looks for one.
     """
     temporary = work / "package.zip"
-    files: list[dict[str, Any]] = []
-    with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-        for name in viewer.copy:
-            archive.write(viewer.directory / name, name)
-        for name in viewer.wrap:
-            files.append(_wrap(archive, viewer.directory / name, name, "assets", "engine"))
-        for table in DATA_TABLES:
-            files.append(_wrap(archive, data.tables[table], f"{table}.parquet", "data", "data"))
-        if "text" in data.tables:
-            files.append(_wrap(archive, data.tables["text"], "text.parquet", "data", "index"))
-        archive.writestr("README.txt", README_TEXT)
+    entries = {name: (viewer.directory / name).read_bytes() for name in viewer.copy}
+    files = [_write_wrapped(viewer.directory / name, name, "assets", "engine", entries.__setitem__)
+             for name in viewer.wrap]
+    entries["README.txt"] = README_TEXT.encode()
+    descriptor = viewer.directory / "viewer.json"
+    context = orjson.dumps([PACKAGE_FORMAT, CHUNK_BYTES, viewer.version, viewer.copy, viewer.wrap])
+    if descriptor.is_file():
+        context += descriptor.read_bytes()
+    prepare_archive(temporary, entries, context=context, cache_directory=cache_directory)
+    del entries
+    wrapped = [(table, "data") for table in DATA_TABLES] + ([("text", "index")] if "text" in data.tables else [])
+    total = sum(data.tables[table].stat().st_size for table, _ in wrapped)
+    done = 0
+
+    def wrote(size: int) -> None:
+        nonlocal done
+        done += size
+        if progress is not None:
+            progress("Writing the package", done, total)
+
+    with zipfile.ZipFile(temporary, "a", compression=zipfile.ZIP_DEFLATED, compresslevel=DATA_ZIP_LEVEL) as archive:
+        for table, kind in wrapped:
+            files.append(_wrap(archive, data.tables[table], f"{table}.parquet", "data", kind, wrote))
         manifest = orjson.dumps({**data.manifest, "viewer": viewer.version, "files": files})
         archive.writestr("data/manifest.js", b"__zircolite.manifest(" + manifest + b");\n")
     target = _fresh_name(destination)
@@ -498,13 +585,15 @@ def write_package(viewer: Viewer, data: PackageData, destination: Path, work: Pa
 class PackageBuilder:
     """Turns the spooled parts of a run into Parquet tables and a manifest."""
 
-    def __init__(self, spool: PackageSpool, *, logger: logging.Logger | None = None) -> None:
+    def __init__(self, spool: PackageSpool, *, logger: logging.Logger | None = None,
+                 cache_directory: Path | None = None) -> None:
         self.spool = spool
+        self.cache_directory = cache_directory
         self.logger = logger or logging.getLogger(__name__)
         self.work = Path(spool.directory) / "build"
 
     def build_data(self, *, parts: list[PartRecord], rulesets: list[dict[str, Any]], run: RunInfo,
-                   failed_sources: list[str], expected_events: int) -> PackageData:
+                   failed_sources: list[str], expected_events: int, progress: Reporter | None = None) -> PackageData:
         """``expected_events`` is what the run ingested: a package holds every event or is not written."""
         parts = sorted(parts, key=lambda record: record.part)
         for previous, record in pairwise(parts):
@@ -515,20 +604,28 @@ class PackageBuilder:
             raise PackageError(f"the spooled parts hold {spooled:,} events where the run ingested {expected_events:,}")
         self.work.mkdir(parents=True, exist_ok=True)
         columns = merge_columns(parts, self.spool.time_field)
-        connection = duckdb.connect(":memory:", config={**DUCKDB_SETTINGS, "temp_directory": str(self.work / "duckdb")})
+        group_size = row_group_size(len(columns) + len(EVENT_COLUMNS))
+        connection = duckdb.connect(":memory:", config={**_duckdb_settings(), "temp_directory": str(self.work / "duckdb")})
         try:
-            tables = {
-                "events": write_events(connection, self.work, parts, columns),
-                "rules": write_rules(connection, self.work, rule_rows(parts, rulesets)),
-                "hits": write_hits(connection, self.work, parts),
-                **write_alerts(connection, self.work, parts),
-            }
+            if progress is not None:
+                connection.execute("SET enable_progress_bar = true")
+                connection.execute("SET enable_progress_bar_print = false")
+            with _watched(connection, progress, "Writing the events"):
+                events = write_events(connection, self.work, parts, columns, group_size=group_size)
+            with _watched(connection, progress, "Writing the detections"):
+                tables = {
+                    "events": events,
+                    "rules": write_rules(connection, self.work, rule_rows(parts, rulesets), group_size=group_size),
+                    "hits": write_hits(connection, self.work, parts, group_size=group_size),
+                    **write_alerts(connection, self.work, parts, group_size=group_size),
+                }
             size = tables["events"].stat().st_size
             if size > EVENTS_PARQUET_LIMIT:
                 raise PackageError(
                     f"the events take {size / 2**20:,.0f} MiB, more than the {EVENTS_PARQUET_LIMIT // 2**20:,} MiB "
                     "a browser can hold; narrow the run with --after/--before or -s")
-            text = write_text(connection, self.work, tables["events"], columns)
+            with _watched(connection, progress, "Writing the full-text index"):
+                text = write_text(connection, self.work, tables["events"], columns, group_size=group_size)
             totals = {name: _count(connection, "SELECT count(*) FROM read_parquet(?)", tables[name])
                       for name in ("events", "hits", "alerts")}
             # Counted like the run summary, which collapses a rule's variants into one.
@@ -554,7 +651,10 @@ class PackageBuilder:
         return PackageData(tables=tables, manifest=manifest)
 
     def build(self, *, viewer: Viewer, parts: list[PartRecord], rulesets: list[dict[str, Any]], run: RunInfo,
-              failed_sources: list[str], expected_events: int, destination: Path) -> Path:
+              failed_sources: list[str], expected_events: int, destination: Path,
+              progress: Reporter | None = None) -> Path:
+        """``progress`` is told each step: duckdb's estimate while it writes Parquet, then the zip's bytes."""
         data = self.build_data(parts=parts, rulesets=rulesets, run=run, failed_sources=failed_sources,
-                               expected_events=expected_events)
-        return write_package(viewer, data, destination, self.work)
+                               expected_events=expected_events, progress=progress)
+        return write_package(viewer, data, destination, self.work, cache_directory=self.cache_directory,
+                             progress=progress)

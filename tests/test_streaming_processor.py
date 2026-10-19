@@ -6,6 +6,7 @@ import csv
 import gzip
 import io
 import json
+import os
 import re
 import sqlite3
 import subprocess
@@ -1992,6 +1993,66 @@ class TestStreamingKeepflatAndProgress:
         assert count == 3
         assert len(calls) >= 1
         assert 3 in calls
+
+
+class TestReadProgress:
+    """read_progress follows each reader through its file, for the progress line."""
+
+    def stream(self, field_mappings_file, test_logger, args, path, input_type, batch_size=2):
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file, args_config=args,
+            processing_config=ProcessingConfig(batch_size=batch_size, disable_progress=True), logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        seen = []
+        try:
+            count = processor.process_file_streaming(
+                conn, str(path), input_type=input_type, json_array=False,
+                progress_callback=lambda _: seen.append(processor.read_progress()))
+        finally:
+            conn.close()
+        return count, seen, processor.read_progress()
+
+    @pytest.mark.parametrize("compress", [None, "gz"])
+    def test_lines_are_measured_against_the_file_on_disk(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path, compress
+    ):
+        # Random padding, so the compressed file is still many reads long.
+        text = "".join(json.dumps({"EventID": n, "Padding": os.urandom(1000).hex()}) + "\n"
+                       for n in range(400)).encode()
+        path = tmp_path / ("events.json" + (".gz" if compress else ""))
+        path.write_bytes(gzip.compress(text) if compress else text)
+
+        count, seen, after = self.stream(field_mappings_file, test_logger, default_args_config, path, "json", 50)
+
+        size = path.stat().st_size
+        assert count == 400
+        assert all(total == size and 0 <= done <= size for done, total in seen)
+        assert seen[0][0] < size, "progress moves before the end of the file"
+        assert seen[-1] == (size, size)
+        assert after == (0, 0), "nothing is being read once the file is done"
+
+    def test_evtx_counts_records_against_the_chunk_headers(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        from zircolite.parallel import evtx_record_count
+
+        path = Path(__file__).parent / "fixtures" / "sample_bitsadmin.evtx"
+        count, seen, _ = self.stream(field_mappings_file, test_logger, default_args_config, path, "evtx", 1)
+
+        records = evtx_record_count(path)
+        assert count and records
+        assert all(total == records for _, total in seen)
+        assert seen[-1] == (records, records)
+
+    def test_an_unmeasurable_stream_reports_nothing(self, field_mappings_file, test_logger, default_args_config):
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file, args_config=default_args_config,
+            processing_config=ProcessingConfig(disable_progress=True), logger=test_logger,
+        )
+        processor._track_input(io.BytesIO(b"{}"))
+        assert processor.read_progress() == (0, 0)
 
 
 class TestStreamingInsertBatchRollback:

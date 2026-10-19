@@ -410,6 +410,18 @@ def test_text_equality_completes_an_or_bound(declaration):
                 assert Counter(conn.execute(rewritten)) == Counter(conn.execute(query))
 
 
+def test_building_the_index_reports_rows_scanned():
+    with closing(sqlite3.connect(":memory:")) as conn:
+        conn.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, text TEXT)")
+        conn.executemany("INSERT INTO logs(text) VALUES (?)", [("needle",)] + [("quiet",)] * 599)
+        seen = []
+        query = "SELECT * FROM logs WHERE text LIKE '%needle%'"
+        with closing(LiteralPrefilter(conn, [{"rule": [query]}],
+                                      progress=lambda done, total: seen.append((done, total)))) as prefilter:
+            assert prefilter.rewrite(query) != query
+        assert seen == [(256, 600), (512, 600), (600, 600)]
+
+
 @pytest.mark.parametrize("declaration,value,literal", [
     ("NUMERIC", "001", "'001'"), ("INTEGER", 1, "'001'"), ("FLOATING POINT", 1, "'001'"),
     ("BLOB", "needle", "'needle'"), ("TEXT COLLATE RTRIM", "needle", "'needle '"),

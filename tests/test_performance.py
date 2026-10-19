@@ -22,6 +22,63 @@ from zircolite.utils import MemoryTracker
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("csv_mode", [False, True])
+def test_detection_writer_time_belongs_to_output(tmp_path, monkeypatch, csv_mode):
+    from zircolite.config import ProcessingConfig
+    from zircolite.core import ZircoliteCore
+
+    with closing(ZircoliteCore(str(ROOT / "config/config.yaml"),
+                              ProcessingConfig(disable_progress=True, csv_mode=csv_mode))) as core:
+        core.create_db('"EventID" INTEGER')
+        core.insert_data_to_db([{"EventID": 1}])
+        core.load_ruleset_from_var([{"title": "t", "level": "high", "rule": ["SELECT * FROM logs"]}])
+        core.metrics = FileMetrics()
+        clock = [0.0]
+        monkeypatch.setattr("zircolite.performance.perf_counter", lambda: clock[0])
+        original = ZircoliteCore._write_result_to_output
+
+        def write(*args):
+            clock[0] += 7.0
+            return original(*args)
+
+        monkeypatch.setattr(ZircoliteCore, "_write_result_to_output", write)
+        path = tmp_path / "out.txt"
+        core.execute_ruleset(str(path), last_ruleset=True, show_table=False)
+        assert "t" in path.read_text()
+        assert core.metrics.data["seconds"]["output"] == 7.0
+        assert core.metrics.data["seconds"]["detection"] == 0.0
+
+
+def test_template_time_belongs_to_output(tmp_path, monkeypatch):
+    from zircolite import cli
+
+    events = tmp_path / "events.json"
+    events.write_text('{"EventID":1}\n')
+    rules = tmp_path / "rules.json"
+    rules.write_text(json.dumps([{"title": "t", "rule": ["SELECT * FROM logs"]}]))
+    template = tmp_path / "custom.tmpl"
+    template.write_text("{{ data | length }}")
+    report = tmp_path / "performance.json"
+    output = tmp_path / "custom.txt"
+    clock = [0.0]
+    monkeypatch.setattr("zircolite.performance.perf_counter", lambda: clock[0])
+    original = cli.handle_templating
+
+    def render(*args):
+        clock[0] += 7.0
+        return original(*args)
+
+    monkeypatch.setattr(cli, "handle_templating", render)
+    monkeypatch.setattr(sys, "argv", ["zircolite.py", "-e", str(events), "-j", "-r", str(rules),
+        "--no-auto-mode", "--no-parallel", "--nolog", "-q", "-t", str(template), "-T", str(output),
+        "--performance-json", str(report)])
+    cli.main()
+    data = json.loads(report.read_text())
+    assert output.read_text() == "1"
+    assert data["stage_seconds"]["output"] == 7.0
+    assert data["stage_seconds"]["finalization"] < 7.0
+
+
 def test_nested_stage_timings_are_exclusive_even_on_error(monkeypatch):
     ticks = iter([0.0, 1.0, 3.0, 5.0])
     monkeypatch.setattr("zircolite.performance.perf_counter", lambda: next(ticks))

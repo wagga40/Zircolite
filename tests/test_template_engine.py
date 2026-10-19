@@ -4,6 +4,8 @@ Tests for the TemplateEngine class.
 
 import json
 import logging
+import os
+import stat
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -14,6 +16,181 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import TemplateConfig, TemplateEngine
+
+ROW_EXPORTS = ["exportNDJSON.tmpl", "exportForSplunk.tmpl", "exportForSplunkWithRuleID.tmpl",
+               "exportForELK.tmpl", "exportForZinc.tmpl", "exportForTimesketch.tmpl"]
+
+
+@pytest.mark.parametrize("name", ROW_EXPORTS)
+def test_shipped_export_batches_json_without_changing_records(tmp_path, name):
+    from zircolite.templates import _make_jinja2_env
+
+    source = Path(__file__).resolve().parents[1] / "templates" / name
+    data = [{"title": "Rule <&' café", "id": "r", "description": "a\nb", "rule_level": "high",
+             "matches": [{**{f"f{i}": i for i in range(100)}, "title": "event title",
+                          "SystemTime": "2026-01-01", "nested": {"z": [1, None], "a": "<&'é"}}]}]
+    reference = _make_jinja2_env().from_string(source.read_text()).render(data=data, timeField="SystemTime")
+    output = tmp_path / "out.jsonl"
+    engine = TemplateEngine(TemplateConfig(time_field="SystemTime"))
+    assert engine.generate_from_template(str(source), str(output), data)
+    # Keep duplicate metadata/event keys, not only their last decoded value.
+    def records(text):
+        return [json.loads(line, object_pairs_hook=list) for line in text.splitlines() if line.strip()]
+    text = output.read_text(encoding="utf-8")
+    actual, expected = records(text), records(reference)
+    # Object key ordering is not part of JSON; duplicate keys retain their order.
+    assert len(actual) == len(expected)
+    for a, b in zip(actual, expected, strict=True):
+        assert sorted(a, key=lambda item: item[0]) == sorted(b, key=lambda item: item[0])
+    # HTML-sensitive characters stay escaped as tojson escapes them; other
+    # text is written as UTF-8 rather than as \u escapes.
+    assert "\\u003c" in text and "\\u0026" in text and "\\u0027" in text
+    assert not any(character in text for character in "<>&'")
+    assert "café" in text
+
+
+@pytest.mark.parametrize("name", ROW_EXPORTS)
+def test_shipped_export_spooled_by_parts_matches_one_pass(tmp_path, name):
+    from zircolite.exports import ExportSpool, write_spooled
+    from zircolite.templates import _builtin_template
+
+    source = Path(__file__).resolve().parents[1] / "templates" / name
+    kind = _builtin_template(source.read_text())
+    results = [
+        {"title": "One", "id": "1", "description": "d", "rule_level": "low",
+         "matches": [{"SystemTime": "2026-01-01", "x": 1}, {"SystemTime": "2026-01-02", "x": 2}]},
+        {"title": "Two", "id": "2", "description": "d", "rule_level": "high", "result_type": "correlation",
+         "matches": [{"SystemTime": "2026-01-03", "event_ids": ["logs:1"], "group_keys": {"a": "<b>"}}]},
+        {"title": "Three", "id": "3", "description": "d", "rule_level": "high", "matches": []},
+    ]
+    one_pass = tmp_path / "one.jsonl"
+    assert TemplateEngine(TemplateConfig(time_field="SystemTime")).generate_from_template(
+        str(source), str(one_pass), results)
+    spool = ExportSpool(directory=str(tmp_path), kinds=(kind,), time_field="SystemTime")
+    first, second = spool.open_part(), spool.open_part()
+    for result in results[:2]:
+        first.sink(result)
+    second.sink(results[2])
+    records = [first.finish(), second.finish()]
+    assert [record.rows for record in records] == [3, 0]
+    spooled = tmp_path / "spooled.jsonl"
+    progress = []
+    write_spooled(str(spooled), [r.files[kind] for r in records if kind in r.files], False,
+                  lambda done, total: progress.append((done, total)))
+    assert spooled.read_bytes() == one_pass.read_bytes()
+    assert progress[-1] == (spooled.stat().st_size, spooled.stat().st_size)
+
+
+def test_export_part_keeps_its_first_error_and_removes_its_files(tmp_path):
+    from zircolite.exports import ExportError, ExportSpool
+
+    spool = ExportSpool(directory=str(tmp_path), kinds=("ndjson",), time_field="SystemTime")
+    part = spool.open_part()
+    part.sink({"title": "t", "id": "i", "description": "d", "rule_level": "low", "matches": [{"x": 1}]})
+    part.sink({"title": "t", "id": "i", "description": "d", "rule_level": "low", "matches": [{"x": object()}]})
+    part.sink({"title": "t", "id": "i", "description": "d", "rule_level": "low", "matches": [{"x": 2}]})
+    with pytest.raises(ExportError):
+        part.finish()
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("append", [False, True])
+def test_shipped_export_failure_leaves_destination_untouched(tmp_path, append):
+    source = Path(__file__).resolve().parents[1] / "templates/exportNDJSON.tmpl"
+    output = tmp_path / "out.jsonl"
+    output.write_text("previous\n")
+    data = [{"title": "t", "id": "i", "description": "d", "rule_level": "low",
+             "matches": [{"ok": 1}, {"not_json": object()}]}]
+    assert not TemplateEngine().generate_from_template(str(source), str(output), data, append=append)
+    assert output.read_text() == "previous\n"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["out.jsonl"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows also limits the full path length")
+def test_shipped_export_handles_long_output_name(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "templates/exportNDJSON.tmpl"
+    output = tmp_path / ("x" * 240 + ".jsonl")
+    data = [{"title": "t", "id": "i", "description": "d", "rule_level": "low", "matches": [{"x": 1}]}]
+    assert TemplateEngine().generate_from_template(str(source), str(output), data)
+    assert json.loads(output.read_text())["x"] == 1
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX output-file semantics")
+@pytest.mark.parametrize("kind", ["fifo", "hardlink"])
+@pytest.mark.parametrize("append", [False, True])
+def test_shipped_export_preserves_existing_file_identity(tmp_path, kind, append):
+    source = Path(__file__).resolve().parents[1] / "templates/exportNDJSON.tmpl"
+    output = tmp_path / "out.jsonl"
+    linked = tmp_path / "linked.jsonl"
+    reader = None
+    if kind == "fifo":
+        os.mkfifo(output)
+        reader = os.open(output, os.O_RDWR | os.O_NONBLOCK)
+    else:
+        output.write_text("previous\n")
+        linked.hardlink_to(output)
+    identity = output.stat().st_ino
+    data = [{"title": "t", "id": "i", "description": "d", "rule_level": "low", "matches": [{"x": 1}]}]
+    try:
+        assert TemplateEngine().generate_from_template(str(source), str(output), data, append=append)
+        assert output.stat().st_ino == identity
+        if reader is not None:
+            assert stat.S_ISFIFO(output.stat().st_mode)
+            text = os.read(reader, 4096).decode()
+        else:
+            text = linked.read_text()
+            assert text.startswith("previous\n") == append
+        assert json.loads(text.splitlines()[-1])["x"] == 1
+    finally:
+        if reader is not None:
+            os.close(reader)
+
+
+def test_summary_retention_uses_captured_template_content(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "templates/exportSummaryCSV.tmpl"
+    copied = tmp_path / "custom.tmpl"
+    copied.write_text(source.read_text())
+    engine = TemplateEngine(TemplateConfig(template=[[str(copied)]]))
+    assert engine.needs_matches() is False
+    copied.write_text("{{ data[0]['matches'][0]['x'] }}")
+    # A changed template must not be rendered against summaries captured for
+    # the earlier template. New engines still see the customized template.
+    output = tmp_path / "summary.csv"
+    assert engine.generate_from_template(str(copied), str(output), [
+        {"title": "t", "id": "i", "rule_level": "low", "count": 1, "description": "d"}])
+    assert '"t","i","low",1,"d"' in output.read_text()
+    assert TemplateEngine(TemplateConfig(template=[[str(copied)]])).needs_matches() is True
+
+
+def test_row_exports_need_no_retained_matches(tmp_path):
+    shipped = Path(__file__).resolve().parents[1] / "templates"
+    engine = TemplateEngine(TemplateConfig(template=[[str(shipped / "exportForTimesketch.tmpl")],
+                                                     [str(shipped / "exportSummaryCSV.tmpl")]]))
+    assert engine.needs_matches() is False
+    assert engine.row_exports() == {str(shipped / "exportForTimesketch.tmpl"): "timesketch"}
+
+
+def test_modified_shipped_template_keeps_custom_jinja_behavior(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "templates/exportNDJSON.tmpl"
+    copied = tmp_path / source.name
+    copied.write_text(source.read_text() + "\n{{ data[0]['matches'][0]['value'] }}")
+    output = tmp_path / "custom.txt"
+    data = [{"title": "t", "id": "i", "description": "d", "rule_level": "low", "matches": [{"value": "custom"}]}]
+    engine = TemplateEngine(TemplateConfig(template=[[str(copied)]]))
+    assert engine.needs_matches() is True
+    assert engine.generate_from_template(str(copied), str(output), data)
+    assert output.read_text().endswith("custom")
+
+
+def test_custom_template_is_reread_between_library_calls(tmp_path):
+    template = tmp_path / "custom.tmpl"
+    output = tmp_path / "out.txt"
+    template.write_text("first")
+    engine = TemplateEngine()
+    assert engine.generate_from_template(str(template), str(output), [])
+    template.write_text("second")
+    assert engine.generate_from_template(str(template), str(output), [])
+    assert output.read_text() == "second"
 
 
 class TestTemplateEngineInit:

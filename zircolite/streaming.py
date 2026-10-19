@@ -729,11 +729,16 @@ class StreamingEventProcessor:
         # Time filter cache – includes string bounds for comparison
         "_has_time_filter",
         "_ignore_source_condition",
+        # Where read_progress looks: the open input, or the EVTX records read
+        # (_records_read), against its size or record count
+        "_input",
+        "_input_total",
         # Sorted-column caching for _insert_batch
         "_last_column_frozenset",
         "_last_insert_columns",
         "_last_insert_stmt",
         "_last_sorted_columns",
+        "_records_read",
         "_reserved_field_seen",
         # Path resolution cache – maps (raw_field_name, last_part) to resolved
         # (raw_name, mapped_key) or _EXCLUDED_SENTINEL; avoids repeated
@@ -844,6 +849,9 @@ class StreamingEventProcessor:
         self._events_time_filtered_count = 0
         self._skipped_records = 0
         self._had_parse_error = False
+        self._input: Any = None
+        self._input_total = 0
+        self._records_read = 0
         # Pre-compute filtering enabled flag (avoids repeated checks in hot loop)
         self._filtering_enabled = event_filter is not None and event_filter.is_enabled
 
@@ -1519,6 +1527,38 @@ class StreamingEventProcessor:
             self.field_types[FIELD] = "TEXT"
         return flat
 
+    def _track_input(self, handle: Any) -> None:
+        """Let ``read_progress`` follow ``handle`` through the file under it.
+
+        Compressed streams hand down the descriptor of the compressed file, so
+        its offset still measures progress against its size on disk.
+        """
+        try:
+            fd = handle.fileno()
+            size = os.fstat(fd).st_size
+            os.lseek(fd, 0, os.SEEK_CUR)
+        except (OSError, ValueError, AttributeError):
+            return
+        self._input, self._input_total = handle, size
+
+    def read_progress(self) -> tuple[int, int]:
+        """How far the file being read is, as ``(done, total)``; ``(0, 0)`` when unknown."""
+        total = self._input_total
+        if not total:
+            return 0, 0
+        handle = self._input
+        if handle is None:
+            return min(self._records_read, total), total
+        # A reader closes its file once through it, and the descriptor's
+        # number can then belong to another file.
+        if handle.closed:
+            return total, total
+        try:
+            done = os.lseek(handle.fileno(), 0, os.SEEK_CUR)
+        except (OSError, ValueError):
+            return 0, 0
+        return min(done, total), total
+
     def stream_evtx_events(self, evtx_file: str) -> Generator[dict, None, None]:
         """Stream and flatten events from an EVTX file (supports .evtx inside .gz/.bz2/.zip/.7z)."""
         tmp_path = None
@@ -1555,8 +1595,11 @@ class StreamingEventProcessor:
             flatten = self._flatten_event  # Local reference for speed
             json_loads = json.loads
             should_process = self._should_process_event  # Local reference for speed
+            from .parallel import evtx_record_count
+            self._input_total = evtx_record_count(path_to_parse)
 
             for record in parser.records_json():
+                self._records_read += 1
                 if record is None:
                     continue
                 try:
@@ -1619,6 +1662,7 @@ class StreamingEventProcessor:
         should_process = self._should_process_event  # Local reference
 
         with open_maybe_compressed(json_file, password=self.archive_password) as f:
+            self._track_input(f)
             for line in f:
                 line = line.rstrip(b"\n\r")
                 if not line:
@@ -1655,6 +1699,7 @@ class StreamingEventProcessor:
                 _fh = open_maybe_compressed(xml_file, password=self.archive_password)
             else:
                 _fh = open(xml_file, "rb")  # noqa: SIM115 -- closed in the finally below
+            self._track_input(_fh)
             context = etree.iterparse(
                 _xml_document_stream(_fh), events=("end",), recover=True
             )
@@ -1723,6 +1768,7 @@ class StreamingEventProcessor:
             encoding=extractor.encoding,
             password=self.archive_password,
         ) as f:
+            self._track_input(f)
             for line in f:
                 if not line.strip():
                     continue
@@ -1784,6 +1830,7 @@ class StreamingEventProcessor:
         with open_maybe_compressed(
             csv_file, "rt", encoding=encoding, password=self.archive_password
         ) as f:
+            self._track_input(f)
             # Buffer the sample instead of seeking: archive-backed streams
             # are not reliably seekable. DictReader accepts any iterable of
             # lines, so the sample is chained back in front of the rest.
@@ -1896,6 +1943,7 @@ class StreamingEventProcessor:
                 return None
 
         with open_maybe_compressed(json_file, password=self.archive_password) as source:
+            self._track_input(source)
             for event_dict in iter_json_array(source):
                 flattened = process_one(event_dict)
                 if flattened:
@@ -1928,6 +1976,8 @@ class StreamingEventProcessor:
         # Per-file counters: one processor serves every file in unified mode
         self._skipped_records = 0
         self._had_parse_error = False
+        self._input = None
+        self._input_total = self._records_read = 0
 
         # Dispatch to the appropriate stream method
         spec = format_by_name(input_type)
@@ -2017,6 +2067,8 @@ class StreamingEventProcessor:
             return inserted_count
         finally:
             cursor.close()
+            self._input = None
+            self._input_total = 0
 
     def _insert_batch(self, db_connection, cursor, batch: list[dict]):
         """Insert a batch of events into the database with dynamic schema handling.

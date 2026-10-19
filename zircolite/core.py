@@ -67,6 +67,7 @@ from .fulltext import (
 )
 from .performance import FileMetrics, timed_stage
 from .prefilter import AUTO_MIN_QUERIES, AUTO_MIN_ROWS, prepare_rules, rule_queries
+from .progress import Reporter, Steps
 from .results import RowSpool, write_result_json
 from .rule_selection import title_filtered
 from .shutdown import is_shutdown_requested
@@ -224,6 +225,16 @@ def runnable_rules(ruleset: list[Any], rule_filters: list[str] | None = None) ->
     return rules
 
 
+def _backup(source: sqlite3.Connection, target: sqlite3.Connection, report: "Reporter | None", phase: str) -> None:
+    """``source.backup(target)``, in about a hundred steps when someone shows its progress."""
+    if report is None:
+        source.backup(target)
+        return
+    pages = source.execute("PRAGMA page_count").fetchone()[0]
+    source.backup(target, pages=max(64, pages // 100),
+                  progress=lambda _status, remaining, total: report(phase, total - remaining, total))
+
+
 class ZircoliteCore:
     """Load data into database and apply detection rules."""
 
@@ -267,6 +278,7 @@ class ZircoliteCore:
         "metrics",
         "no_output",
         "profile_rules",
+        "progress",
         "remove_index",
         "rounded_integer_fields",
         "rule_prefilter",
@@ -383,6 +395,10 @@ class ZircoliteCore:
         self._escape_cache: dict = {}
         # Reusable cursor to avoid creating new cursors for each query
         self._cursor = None
+        # Where the steps before the rule loop report: the main process's
+        # progress line, or a parallel worker's slot. None shows them on a
+        # line of their own.
+        self.progress: Reporter | None = None
 
     def close(self) -> None:
         """Close the database connection. Safe to call multiple times."""
@@ -1079,7 +1095,7 @@ class ZircoliteCore:
         if self.db_connection is None:
             raise RuntimeError("No main database connection")
         try:
-            db_file_connection.backup(self.db_connection)
+            _backup(db_file_connection, self.db_connection, self.progress, "loading")
         finally:
             db_file_connection.close()
         # backup() replaced the whole in-memory DB, indexes and schema included:
@@ -1191,7 +1207,7 @@ class ZircoliteCore:
             )
         on_disk_db = self._connect(db_filename)
         try:
-            self.db_connection.backup(on_disk_db)
+            _backup(self.db_connection, on_disk_db, self.progress, "saving")
             on_disk_db.execute("PRAGMA journal_mode = DELETE")
         finally:
             on_disk_db.close()
@@ -1539,9 +1555,33 @@ class ZircoliteCore:
         stream_results: bool = False,
     ) -> None:
         """Execute all rules in the ruleset and handle output."""
+        _disable = disable_progress if disable_progress is not None else self.disable_progress
+        report = self.progress
+        if report is None and not _disable and progress_callback is None:
+            report = Steps()
+        try:
+            self._execute_ruleset(out_file, write_mode, keep_results, last_ruleset, source_label, show_table,
+                                  _disable, progress_callback, result_sink, stream_results, report)
+        finally:
+            if report is not None:
+                report.clear()
+
+    def _execute_ruleset(
+        self,
+        out_file: str,
+        write_mode: str,
+        keep_results: bool,
+        last_ruleset: bool,
+        source_label: str | None,
+        show_table: bool,
+        _disable: bool,
+        progress_callback: Callable[[int, int], None] | None,
+        result_sink: Callable[[dict[str, Any]], None] | None,
+        stream_results: bool,
+        report: Reporter | None,
+    ) -> None:
         csv_writer = None
         is_json_mode = not self.csv_mode
-        _disable = disable_progress if disable_progress is not None else self.disable_progress
         # Ingestion discovered the schema through its own connection
         self._logs_columns_lower = None
         self._correlation_diagnostics = {}
@@ -1557,6 +1597,8 @@ class ZircoliteCore:
         # enough, and it then treats the table as analysed. Once is enough;
         # ADD COLUMN leaves sqlite_stat1 intact.
         with self.metrics.stage("indexes"):
+            if report is not None:
+                report("indexing")
             self.apply_auto_index()
             if self.db_connection is not None:
                 try:
@@ -1626,11 +1668,14 @@ class ZircoliteCore:
                 from .prefilter import LiteralPrefilter
 
                 with self.metrics.stage("prefilter"):
+                    if report is not None:
+                        report("prefilter")
                     admitted_rules = [rule for rule, run in zip(self.ruleset, may_run, strict=True) if run]
                     self._preflight_rule_fields(admitted_rules, census)
                     self._prefilter = LiteralPrefilter(
                         self.db_connection, admitted_rules,
                         automatic=self.rule_prefilter == "auto", prepared=self._prepared, census=census,
+                        progress=None if report is None else lambda done, total: report("prefilter", done, total),
                     )
                 self.logger.debug(
                     f"Literal prefilter: {len(self._prefilter.plans)} eligible queries; "
@@ -1682,6 +1727,8 @@ class ZircoliteCore:
                     full_results_append(rule_results)
                 return rule_results
 
+            if report is not None:
+                report.clear()
             # One loop, three ways of showing it: an external callback, no
             # display at all, or a Rich Live progress bar with a running
             # detection counter. Only the reporting differs, so only the
@@ -1727,9 +1774,10 @@ class ZircoliteCore:
                                 if det_level in detection_counts:
                                     detection_counts[det_level] += rule_results.get("count", 0)
                             if not no_output:
-                                csv_writer, needs_comma_prefix = self._write_result_to_output(
-                                    rule_results, file_handle, csv_writer, needs_comma_prefix
-                                )
+                                with self.metrics.stage("output"):
+                                    csv_writer, needs_comma_prefix = self._write_result_to_output(
+                                        rule_results, file_handle, csv_writer, needs_comma_prefix
+                                    )
                             if result_sink is not None:
                                 with self.metrics.stage("output"):
                                     result_sink(rule_results)
@@ -2109,63 +2157,34 @@ class ZircoliteCore:
                 self.failed_files.add(str(log_file))
                 return 0
 
-        show_progress = not is_quiet()
-        if show_progress:
-            if disable_progress:
-                progress = Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    TextColumn("\u2022"),
-                    TextColumn("[magenta]{task.fields[events]:,}[/] events"),
-                    TextColumn("\u2022"),
-                    TimeElapsedColumn(),
-                    console=console,
-                    transient=True,
-                )
-                with progress:
-                    task_id = progress.add_task("Streaming", total=None, events=0)
+        own_steps = None
+        report = self.progress
+        if report is None:
+            report = own_steps = Steps(disable=True if disable_progress else None)
+        try:
+            for position, log_file in enumerate(log_files, 1):
+                name = Path(str(log_file)).name
+                item = f"{position}/{len(log_files)} {name}" if len(log_files) > 1 else name
+                report("reading", events=total_events, item=item)
 
-                    def _streaming_cb_lite(event_count):
-                        progress.update(task_id, events=total_events + event_count)
+                def _read(event_count: int, item: str = item, before: int = total_events) -> None:
+                    done, size = processor.read_progress()
+                    report("reading", done, size, events=before + event_count, item=item)
 
-                    for log_file in log_files:
-                        event_count = process_single_file(log_file, progress_cb=_streaming_cb_lite)
-                        total_events += event_count
-                        progress.update(task_id, events=total_events)
-            else:
-                progress = Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(bar_width=40),
-                    MofNCompleteColumn(),
-                    TextColumn("\u2022"),
-                    TextColumn("[magenta]{task.fields[events]:,}[/] events"),
-                    TextColumn("\u2022"),
-                    TimeElapsedColumn(),
-                    console=console,
-                    transient=True,
-                )
-                with progress:
-                    task_id = progress.add_task("Processing files", total=len(log_files), events=0)
+                total_events += process_single_file(
+                    log_file, progress_cb=None if own_steps is not None and own_steps.disable else _read)
+            new_rounded = processor.rounded_integer_fields - self.rounded_integer_fields
+            if new_rounded:
+                self.rounded_integer_fields |= new_rounded
+                self.logger.warning(rounded_integer_warning(new_rounded))
 
-                    def _streaming_progress_cb(event_count):
-                        progress.update(task_id, events=total_events + event_count)
-
-                    for log_file in log_files:
-                        event_count = process_single_file(log_file, progress_cb=_streaming_progress_cb)
-                        total_events += event_count
-                        progress.update(task_id, advance=1, events=total_events)
-        else:
-            for log_file in log_files:
-                total_events += process_single_file(log_file)
-        new_rounded = processor.rounded_integer_fields - self.rounded_integer_fields
-        if new_rounded:
-            self.rounded_integer_fields |= new_rounded
-            self.logger.warning(rounded_integer_warning(new_rounded))
-
-        # Create index after all data is inserted
-        self.logger.info("[+] Creating indexes")
-        self.create_index()
+            # Create index after all data is inserted
+            self.logger.info("[+] Creating indexes")
+            report("indexing")
+            self.create_index()
+        finally:
+            if own_steps is not None:
+                own_steps.clear()
 
         # Log filtered events statistics. Report whenever a filter was active,
         # not only when it dropped something: "ran and dropped nothing" and

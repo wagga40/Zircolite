@@ -59,6 +59,44 @@ def get_log_arg(tmp_path):
     return ['-l', str(tmp_path / "test.log")]
 
 
+@pytest.mark.parametrize("template_name,custom", [
+    ("exportSummaryCSV.tmpl", False), ("exportForAttackNavigator.tmpl", False),
+    ("exportSummaryCSV.tmpl", True),
+])
+def test_summary_templates_do_not_retain_matches(tmp_path, monkeypatch, template_name, custom):
+    events = tmp_path / "events.json"
+    events.write_text('{"EventID":1,"CommandLine":"present"}\n')
+    rules = tmp_path / "rules.json"
+    rules.write_text(json.dumps([{"title": "Matched", "id": "r", "level": "high",
+                                 "tags": ["attack.execution", "attack.t1059"], "rule": ["SELECT * FROM logs"]}]))
+    output = tmp_path / "template.txt"
+    args = ["zircolite.py", "-e", str(events), "-j", "-r", str(rules), "-q", "--no-auto-mode", "--no-parallel",
+            "-o", str(tmp_path / "detections.json"), "-l", str(tmp_path / "run.log"),
+            "-t", str(WORKSPACE_ROOT / "templates" / template_name), "-T", str(output)]
+    if custom:
+        path = tmp_path / "custom.tmpl"
+        path.write_text("{{ data[0]['matches'][0]['CommandLine'] }}")
+        args += ["-t", str(path), "-T", str(tmp_path / "custom.txt")]
+    seen = {}
+    original = zircolite_script.ProcessingContext
+
+    def capture(**kwargs):
+        seen.update(kwargs)
+        return original(**kwargs)
+
+    monkeypatch.setattr(zircolite_script, "ProcessingContext", capture)
+    monkeypatch.setattr(sys, "argv", args)
+    zircolite_script.main()
+    assert seen["retain_results"] is custom
+    assert json.loads((tmp_path / "detections.json").read_text())[0]["count"] == 1
+    if template_name == "exportForAttackNavigator.tmpl":
+        assert json.loads(output.read_text())["techniques"][0]["score"] == 1
+    else:
+        assert '"Matched","r","high",1' in output.read_text()
+    if custom:
+        assert (tmp_path / "custom.txt").read_text() == "present"
+
+
 def _matched_events(output_file):
     """Every matched event across every rule in a detections file."""
     if not Path(output_file).exists():
@@ -1398,6 +1436,62 @@ class TestCLITemplateGeneration:
         assert "Template output" in result.stdout + result.stderr
         assert source.read_bytes() == original
 
+    @pytest.mark.parametrize("mode", [["--no-parallel"], ["--unified-db"], ["--executor", "process"]])
+    def test_shipped_row_export_is_the_same_in_every_mode(self, tmp_path, mode):
+        """Row exports are written by each working database's rules, then joined; no match list is kept."""
+        events = tmp_path / "events"
+        events.mkdir()
+        for name, values in (("a.jsonl", ["x1", "x2"]), ("b.jsonl", ["x3"])):
+            (events / name).write_text("".join(json.dumps({"Value": v, "Text": "é<&'>"}) + "\n" for v in values))
+        rules = tmp_path / "rules.json"
+        rules.write_text(json.dumps([{"title": "all", "id": "r", "level": "low", "description": "d",
+                                      "rule": ["SELECT * FROM logs"]}]))
+        output = tmp_path / "out.jsonl"
+        result = subprocess.run([
+            sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-e", str(events), "-j", "-r", str(rules),
+            "-o", str(tmp_path / "out.json"), "-l", str(tmp_path / "run.log"), "--quiet", *mode,
+            "-t", str(WORKSPACE_ROOT / "templates" / "exportNDJSON.tmpl"), "-T", str(output),
+        ], cwd=tmp_path, capture_output=True, text=True, timeout=120)
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        lines = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+        assert sorted(line["Value"] for line in lines) == ["x1", "x2", "x3"]
+        assert all(line["title"] == "all" and line["Text"] == "é<&'>" for line in lines)
+        assert not list(tmp_path.glob("tmp-zircolite-exports-*")), "the spool goes with the run"
+
+    def test_a_refused_run_leaves_no_export_spool(self, tmp_path):
+        events = tmp_path / "events.jsonl"
+        events.write_text('{"Value": "a"}\n')
+        rules = tmp_path / "rules.json"
+        rules.write_text(json.dumps([{"title": "all", "rule": ["SELECT * FROM logs"]}]))
+        (tmp_path / "existing.db").write_bytes(b"")
+        result = subprocess.run([
+            sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-e", str(events), "-j", "-r", str(rules),
+            "-o", str(tmp_path / "out.json"), "-l", str(tmp_path / "run.log"), "--quiet",
+            "--dbfile", str(tmp_path / "existing.db"),
+            "-t", str(WORKSPACE_ROOT / "templates" / "exportNDJSON.tmpl"), "-T", str(tmp_path / "out.jsonl"),
+        ], cwd=tmp_path, capture_output=True, text=True, timeout=60)
+
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert not list(tmp_path.glob("tmp-zircolite-exports-*"))
+
+    def test_a_row_export_without_collected_rows_is_an_error(self, tmp_path, test_logger):
+        from zircolite.cli import _spooled_exports
+        from zircolite.exports import ExportError, ExportSpool
+        from zircolite.processing import ProcessingContext
+        from zircolite.utils import MemoryTracker
+
+        ctx = ProcessingContext(
+            config="", logger=test_logger, no_output=True, events_after=time.gmtime(0), events_before=time.gmtime(0),
+            limit=-1, csv_mode=False, time_field="SystemTime", db_location=":memory:", delimiter=";", rulesets=[],
+            outfile="out.json", ready_for_templating=True, package=False, dbfile=None, keepflat=False,
+            memory_tracker=MemoryTracker(logger=test_logger),
+            export_spool=ExportSpool(directory=str(tmp_path), kinds=("ndjson",), time_field="SystemTime"))
+
+        with pytest.raises(ExportError, match="splunk"):
+            _spooled_exports(ctx)("splunk", str(tmp_path / "out.json"), False)
+        assert not (tmp_path / "out.json").exists()
+
     def test_template_output(self, tmp_path):
         """Test template output generation."""
         events_file = tmp_path / "events.json"
@@ -1670,7 +1764,7 @@ class TestCLIPackage:
     def test_export_failure_exits_one_with_detections_written(self, tmp_path, monkeypatch):
         from zircolite.package_spool import PackageError, PartWriter
 
-        def broken(self, connection):
+        def broken(self, connection, progress=None):
             raise PackageError("disk full")
 
         monkeypatch.setattr(PartWriter, "export_events", broken)
@@ -1773,8 +1867,8 @@ class TestCLIPackage:
 
         export = PartWriter.export_events
 
-        def loses_one(self, connection):
-            export(self, connection)
+        def loses_one(self, connection, progress=None):
+            export(self, connection, progress)
             self.record.events -= 1
 
         monkeypatch.setattr(PartWriter, "export_events", loses_one)
@@ -4671,6 +4765,23 @@ def test_expanded_discovery_respects_recursion_selection_and_exclusion(tmp_path,
     )
     found = discover_files(args, logging.getLogger(__name__))
     assert {path.relative_to(tmp_path).as_posix() for path in found} == expected
+
+
+@pytest.mark.parametrize('overrides', [{}, {'file_pattern': '*.json'}, {'no_recursion': True}])
+def test_discovery_order_does_not_follow_the_filesystem(tmp_path, monkeypatch, overrides):
+    (tmp_path / 'nested').mkdir()
+    for name in ('b.json', 'a.json', 'nested/c.json'):
+        (tmp_path / name).touch()
+    # ext4 lists a directory in hash order; reversing the sorted listing stands in for it.
+    for method in ('glob', 'rglob'):
+        listing = getattr(Path, method)
+        monkeypatch.setattr(Path, method, lambda self, *args, listing=listing, **kwargs: iter(
+            sorted(listing(self, *args, **kwargs), reverse=True)))
+
+    found = discover_files(discovery_args(tmp_path, json_input=True, **overrides), logging.getLogger(__name__))
+
+    names = [path.relative_to(tmp_path).as_posix() for path in found]
+    assert names == sorted(names) and names[:2] == ['a.json', 'b.json']
 
 
 def test_discovery_keeps_content_detection_fallback_for_unrecognized_suffixes(tmp_path):

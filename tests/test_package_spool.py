@@ -2,6 +2,7 @@
 
 import pickle
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import orjson
@@ -39,7 +40,103 @@ def export(spool, rows, part=0, **options):
     return writer.record
 
 
+requires_zstd = pytest.mark.skipif(package_spool._zstd is None, reason="compression.zstd needs Python 3.14")
+
+
+@pytest.fixture
+def without_zstd(monkeypatch):
+    monkeypatch.setattr(package_spool, "_zstd", None)
+
+
 class TestEvents:
+    @requires_zstd
+    def test_zstd_compresses_every_chunk_whatever_the_free_space(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(package_spool, "SPOOL_FILE_BYTES", 40, raising=False)
+        monkeypatch.setattr("shutil.disk_usage", lambda _: SimpleNamespace(free=1 << 40))
+        files = package_spool._SpoolFiles(tmp_path / "part")
+        for n in range(5):
+            files.add(orjson.dumps({"n": n, "pad": "é" * 4}))
+        files.close()
+
+        assert len(files.paths) > 1
+        assert all(path.endswith(".ndjson.zst") for path in files.paths)
+        assert read_spool(files.paths) == [{"n": n, "pad": "é" * 4} for n in range(5)]
+
+    @pytest.mark.parametrize("free", [1 << 40, 0])
+    def test_lines_written_in_blocks_keep_their_order(self, tmp_path, monkeypatch, without_zstd, free):
+        monkeypatch.setattr(package_spool, "SPOOL_WRITE_BYTES", 64, raising=False)
+        monkeypatch.setattr(package_spool, "SPOOL_FILE_BYTES", 400, raising=False)
+        monkeypatch.setattr("shutil.disk_usage", lambda _: SimpleNamespace(free=free))
+        files = package_spool._SpoolFiles(tmp_path / "part")
+        for n in range(100):
+            files.add(orjson.dumps({"n": n}))
+        files.close()
+
+        assert len(files.paths) > 1
+
+        assert read_spool(files.paths) == [{"n": n} for n in range(100)]
+
+    def test_roomy_destination_uses_plain_spools(self, spool, monkeypatch, without_zstd):
+        monkeypatch.setattr("shutil.disk_usage", lambda _: SimpleNamespace(free=1 << 40))
+
+        record = export(spool, [{"A": "é\nvalue"}])
+
+        assert record.event_files[0].endswith(".ndjson")
+        assert read_spool(record.event_files)[0]["a"] == "é\nvalue"
+
+    def test_spool_rechecks_space_at_chunk_boundaries(self, tmp_path, monkeypatch, without_zstd):
+        monkeypatch.setattr(package_spool, "SPOOL_FILE_BYTES", 12, raising=False)
+        free = iter([1 << 40, 0, 1 << 40])
+        monkeypatch.setattr("shutil.disk_usage", lambda _: SimpleNamespace(free=next(free)))
+        files = package_spool._SpoolFiles(tmp_path / "part")
+        for n in range(3):
+            files.add(orjson.dumps({"n": n}))
+        files.close()
+
+        assert [Path(p).suffix for p in files.paths] == [".ndjson", ".gz", ".ndjson"]
+        assert read_spool(files.paths) == [{"n": 0}, {"n": 1}, {"n": 2}]
+
+    def test_oversized_record_is_intact_and_uses_its_own_space_allowance(self, tmp_path, monkeypatch, without_zstd):
+        monkeypatch.setattr(package_spool, "SPOOL_FILE_BYTES", 16, raising=False)
+        monkeypatch.setattr("shutil.disk_usage", lambda _: SimpleNamespace(free=(6 << 30) + 16))
+        files = package_spool._SpoolFiles(tmp_path / "part")
+        files.add(orjson.dumps({"n": "x" * 100}))
+        files.add(b'{"n":1}')
+        files.close()
+
+        assert [Path(p).suffix for p in files.paths] == [".gz", ".ndjson"]
+        assert read_spool(files.paths) == [{"n": "x" * 100}, {"n": 1}]
+
+    @pytest.mark.parametrize("writers,compressed", [(1, False), (2, True)])
+    def test_disk_allowance_covers_concurrent_writers(self, spool, monkeypatch, without_zstd, writers, compressed):
+        spool.concurrent_writers = writers
+        monkeypatch.setattr("shutil.disk_usage", lambda _: SimpleNamespace(free=(6 << 30) + (64 << 20)))
+
+        record = export(spool, [{"A": "1"}])
+
+        assert record.event_files[0].endswith(".gz") is compressed
+        assert read_spool(record.event_files)[0]["a"] == "1"
+
+    def test_unknown_free_space_uses_gzip(self, spool, monkeypatch, without_zstd):
+        def unavailable(_):
+            raise OSError("cannot measure disk")
+        monkeypatch.setattr("shutil.disk_usage", unavailable)
+
+        record = export(spool, [{"A": "1"}])
+
+        assert record.event_files[0].endswith(".gz")
+        assert read_spool(record.event_files)[0]["a"] == "1"
+
+    def test_progress_follows_the_rows_copied(self, spool, monkeypatch):
+        monkeypatch.setattr(package_spool, "FETCH_ROWS", 2)
+        seen = []
+        writer = spool.open_part(0, ["x"])
+
+        writer.export_events(make_logs([{"A": str(n)} for n in range(5)]), lambda done, total: seen.append((done, total)))
+
+        assert seen == [(2, 5), (4, 5), (5, 5)]
+        assert writer.record.events == 5
+
     def test_every_row_is_spooled_with_its_identity(self, spool):
         record = export(spool, [{"Computer": "a", "EventID": "1"}, {"Computer": "b"}, {"EventID": "3"}], part=5)
 
@@ -411,6 +508,29 @@ class _FailingHandle:
 
 
 class TestCloseFailures:
+    @pytest.mark.parametrize("free", [0, 100 << 30])
+    def test_failed_event_close_preserves_error_and_discards_all_chunks(self, hit_spool, monkeypatch, tmp_path, free):
+        import builtins
+        from types import SimpleNamespace
+
+        monkeypatch.setattr("shutil.disk_usage", lambda path: SimpleNamespace(free=free))
+        real_open = builtins.open
+        handles = []
+        def fail_close(path, *args, **kwargs):
+            handle = _FailingHandle(real_open(path, *args, **kwargs))
+            handles.append(handle)
+            return handle
+        monkeypatch.setattr("zircolite.package_spool.open", fail_close, raising=False)
+        writer = hit_spool.open_part(0, ["x"])
+
+        with pytest.raises(PackageError, match="No space left") as raised:
+            writer.export_events(make_logs([{"A": "1"}]))
+
+        assert isinstance(raised.value.__cause__, OSError)
+        assert handles and all(handle.closed for handle in handles)
+        writer.discard()
+        assert list(tmp_path.iterdir()) == []
+
     def test_a_failing_close_is_a_package_error_and_closes_the_other_file(self, hit_spool):
         writer = hit_spool.open_part(0, ["x"])
         writer.sink({"title": "Two", "count": 1, "matches": [{"row_id": 1}]})

@@ -16,6 +16,8 @@ Contents
     - ``process_db_input``
 - Package spooling: ``_start_package_part`` / ``_finish_package_part`` copy each
   working database's events and hits for ``--package`` (``zircolite.package_spool``)
+- Result-sink parts: ``_execute_with_parts`` adds each working database's timeline
+  and row-export parts to the rules' result sinks
 """
 
 import argparse
@@ -23,7 +25,6 @@ import csv
 import logging
 import multiprocessing
 import os
-import queue
 import shutil
 import signal
 import sqlite3
@@ -53,11 +54,13 @@ from .console import (
     sort_key_severity,
 )
 from .core import ZircoliteCore
+from .exports import ExportError, ExportPart, ExportPartRecord, ExportSpool
 from .extractor import EvtxExtractor
 from .formats import format_by_name
 from .package_spool import PackageError, PackageSpool, PartRecord, PartWriter
 from .parallel import MemoryAwareParallelProcessor, ParallelConfig
 from .performance import FileMetrics
+from .progress import BoardSlot, Reporter, Steps, WorkerBoard
 from .results import RowSpool, result_summary, write_result_json
 from .shutdown import is_shutdown_requested, set_worker_shutdown_event
 from .timeline import TimelineError, TimelinePart, TimelinePartRecord, TimelineSpool
@@ -121,8 +124,11 @@ class ProcessingContext:
     auto_index_top_n: int = 0
     strict_evtx: bool = False
     # Library callers retain the historical full-match return value. The CLI
-    # needs only summaries unless templates or packaging request the matches.
+    # needs only summaries unless a template requests the matches.
     retain_results: bool = True
+    # Snapshot summary-only templates so edits during ingestion cannot make
+    # them ask for matches that this run has already discarded.
+    template_sources: dict[str, str] = field(default_factory=dict)
     evtx_threads: int | None = None
     working_db: str = "memory"
     working_db_dir: str | None = None
@@ -139,6 +145,11 @@ class ProcessingContext:
     timeline_spool: TimelineSpool | None = None
     timeline_parts: list = field(default_factory=list, init=False)
     timeline_errors: list = field(default_factory=list, init=False)
+    # Shipped row-export templates, rendered by each working database's result
+    # sink so that no match list is kept for them; plain data like the others.
+    export_spool: ExportSpool | None = None
+    export_parts: list = field(default_factory=list, init=False)
+    export_errors: list = field(default_factory=list, init=False)
     performance_files: list = field(default_factory=list)
     parent_metrics: FileMetrics = field(default_factory=FileMetrics, repr=False)
     # Cached formatted time strings (computed in __post_init__)
@@ -301,7 +312,8 @@ def _fan_out(*sinks: Callable[[dict[str, Any]], None] | None) -> Callable[[dict[
 
 def _start_package_part(spool: PackageSpool | None, part: int, sources: list[str],
                         connection: sqlite3.Connection | None,
-                        failed_files: Collection[str] = (), metrics: Any = None) -> tuple[PartWriter | None, str | None]:
+                        failed_files: Collection[str] = (), metrics: Any = None,
+                        report: Reporter | None = None) -> tuple[PartWriter | None, str | None]:
     """Spool one working database's events; the writer then records its hits.
 
     Called after ingestion and before the rules run: the rules add all-NULL
@@ -318,7 +330,10 @@ def _start_package_part(spool: PackageSpool | None, part: int, sources: list[str
         if connection is None:
             raise PackageError("the working database is not open")
         with metrics.stage("output") if metrics is not None else nullcontext():
-            writer.export_events(connection)
+            if report is not None:
+                report("package")
+            writer.export_events(connection, None if report is None else
+                                 lambda done, total: report("package", done, total))
     except (PackageError, OSError, sqlite3.Error) as exc:
         writer.discard()
         return None, f"{', '.join(sources)}: {exc}"
@@ -368,18 +383,44 @@ def _timeline_spool_for(ctx: "ProcessingContext") -> TimelineSpool | None:
     return None if ctx.timeline_errors else ctx.timeline_spool
 
 
-def _execute_with_timeline(ctx: "ProcessingContext", core: ZircoliteCore, sources: list[str],
-                           sinks: tuple[Callable[[dict[str, Any]], None] | None, ...], **options: Any) -> None:
-    """``core.execute_ruleset`` with the run's timeline part, if any, as one more sink."""
-    spool = _timeline_spool_for(ctx)
-    part = spool.open_part() if spool is not None else None
+def _finish_export_part(part: ExportPart | None, sources: list[str]) -> tuple[ExportPartRecord | None, str | None]:
+    if part is None:
+        return None, None
     try:
-        core.execute_ruleset(result_sink=_fan_out(*sinks, part.sink if part else None), **options)
+        return part.finish(), None
+    except ExportError as exc:
+        return None, f"{', '.join(sources)}: {exc}"
+
+
+def _collect_export_part(ctx: "ProcessingContext", record: ExportPartRecord | None, error: str | None) -> None:
+    if error is not None:
+        ctx.export_errors.append(error)
+    elif record is not None:
+        ctx.export_parts.append(record)
+
+
+def _export_spool_for(ctx: "ProcessingContext") -> ExportSpool | None:
+    """The spool, unless an earlier part already failed and the exports are lost."""
+    return None if ctx.export_errors else ctx.export_spool
+
+
+def _execute_with_parts(ctx: "ProcessingContext", core: ZircoliteCore, sources: list[str],
+                        sinks: tuple[Callable[[dict[str, Any]], None] | None, ...], **options: Any) -> None:
+    """``core.execute_ruleset`` with the run's timeline and row-export parts, if any, as more sinks."""
+    timeline_spool = _timeline_spool_for(ctx)
+    timeline_part = timeline_spool.open_part() if timeline_spool is not None else None
+    export_spool = _export_spool_for(ctx)
+    export_part = export_spool.open_part() if export_spool is not None else None
+    try:
+        core.execute_ruleset(result_sink=_fan_out(*sinks, timeline_part.sink if timeline_part else None,
+                                                  export_part.sink if export_part else None), **options)
     except BaseException:
-        if part is not None:
-            part.discard()
+        for part in (timeline_part, export_part):
+            if part is not None:
+                part.discard()
         raise
-    _collect_timeline_part(ctx, *_finish_timeline_part(part, sources))
+    _collect_timeline_part(ctx, *_finish_timeline_part(timeline_part, sources))
+    _collect_export_part(ctx, *_finish_export_part(export_part, sources))
 
 
 class _ThreadSafeWriter:
@@ -429,6 +470,16 @@ def _keepflat_context(ctx: 'ProcessingContext', *, thread_safe: bool = False):
 # UNIFIED STREAMING
 # ============================================================================
 
+_CSV_PROGRESS_ROWS = 4096
+
+
+def _csv_metadata(result):
+    return sanitize_row_for_csv({
+        "rule_title": result["title"], "rule_description": result["description"],
+        "rule_level": result["rule_level"], "rule_count": result["count"],
+    })
+
+
 class _CsvResultSpool:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -436,10 +487,7 @@ class _CsvResultSpool:
         self.columns = set()
 
     def add(self, result):
-        metadata = {
-            "rule_title": result["title"], "rule_description": result["description"],
-            "rule_level": result["rule_level"], "rule_count": result["count"],
-        }
+        metadata = _csv_metadata(result)
         for row in result.get("matches", ()):
             self.columns.update(row)
             self.rows.append({**metadata, **sanitize_row_for_csv(row)})
@@ -451,12 +499,15 @@ class _CsvResultSpool:
     def _finish(self):
         try:
             columns = sorted(self.columns - {"row_id", "rule_title", "rule_description", "rule_level", "rule_count"})
-            with open(self.ctx.outfile, "w", encoding="utf-8", newline="") as fh:
+            with open(self.ctx.outfile, "w", encoding="utf-8", newline="") as fh, Steps() as steps:
                 writer = csv.DictWriter(fh, delimiter=self.ctx.delimiter, extrasaction="ignore",
                     fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", *columns])
                 write_csv_header(writer)
-                for row in self.rows:
-                    writer.writerow(sanitize_row_for_csv(row))
+                total = len(self.rows)
+                for done, row in enumerate(self.rows, 1):
+                    writer.writerow(row)
+                    if not done % _CSV_PROGRESS_ROWS:
+                        steps("Writing the detections", done, total)
         finally:
             self.close()
 
@@ -489,59 +540,61 @@ def process_unified_streaming(
     zircolite_core = create_zircolite_core(ctx, disable_progress=disable_nested)
     ctx.performance_files.append(zircolite_core.metrics.data)
 
-    with _keepflat_context(ctx) as kf:
-        result = zircolite_core.run_streaming(
-            file_list,
-            input_type=input_type,
-            args_config=args,
-            extractor=extractor,
-            disable_progress=disable_nested,
-            event_filter=ctx.event_filter,
-            return_filtered_count=True,
-            keepflat_file=kf,
-        )
-    total_events, filtered_count, time_filtered_count = _unpack_streaming_result(result)
-    ctx.total_filtered_events += filtered_count
-    ctx.total_time_filtered_events += time_filtered_count
-    ctx.total_events += total_events
-    ctx.memory_tracker.sample()
-
-    if ctx.dbfile:
-        zircolite_core.save_db_to_disk(ctx.dbfile)
-        ctx.logger.info(f"[+] Saved unified database to: {make_file_link(ctx.dbfile)}")
+    with Steps() as steps:
+        zircolite_core.progress = steps
+        with _keepflat_context(ctx) as kf:
+            result = zircolite_core.run_streaming(
+                file_list,
+                input_type=input_type,
+                args_config=args,
+                extractor=extractor,
+                disable_progress=disable_nested,
+                event_filter=ctx.event_filter,
+                return_filtered_count=True,
+                keepflat_file=kf,
+            )
+        total_events, filtered_count, time_filtered_count = _unpack_streaming_result(result)
+        ctx.total_filtered_events += filtered_count
+        ctx.total_time_filtered_events += time_filtered_count
+        ctx.total_events += total_events
         ctx.memory_tracker.sample()
 
-    package_part, error = _start_package_part(
-        _package_spool_for(ctx), 0, [str(f) for f in file_list], zircolite_core.db_connection,
-        zircolite_core.failed_files, metrics=zircolite_core.metrics)
-    _collect_package_part(ctx, None, error)
+        if ctx.dbfile:
+            zircolite_core.save_db_to_disk(ctx.dbfile)
+            ctx.logger.info(f"[+] Saved unified database to: {make_file_link(ctx.dbfile)}")
+            ctx.memory_tracker.sample()
 
-    zircolite_core.load_ruleset_from_var(ctx.rulesets)
+        package_part, error = _start_package_part(
+            _package_spool_for(ctx), 0, [str(f) for f in file_list], zircolite_core.db_connection,
+            zircolite_core.failed_files, metrics=zircolite_core.metrics, report=steps)
+        _collect_package_part(ctx, None, error)
 
-    if ctx.limit > 0:
+        zircolite_core.load_ruleset_from_var(ctx.rulesets)
+
+        if ctx.limit > 0:
+            ctx.logger.info(
+                f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events (alerts for correlations) will be discarded"
+            )
+
         ctx.logger.info(
-            f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events (alerts for correlations) will be discarded"
+            f"[+] Executing ruleset against unified database "
+            f"([magenta]{total_events:,}[/] events) - "
+            f"[yellow]{len(zircolite_core.ruleset)}[/] rules"
         )
-
-    ctx.logger.info(
-        f"[+] Executing ruleset against unified database "
-        f"([magenta]{total_events:,}[/] events) - "
-        f"[yellow]{len(zircolite_core.ruleset)}[/] rules"
-    )
-    summaries: list[dict[str, Any]] = []
-    _execute_with_timeline(
-        ctx, zircolite_core, [str(f) for f in file_list],
-        (_summary_sink(summaries) if not ctx.retain_results else None,
-         package_part.sink if package_part else None),
-        out_file=ctx.outfile,
-        write_mode="w",
-        keep_results=ctx.retain_results,
-        stream_results=not ctx.retain_results,
-        last_ruleset=True,
-        disable_progress=is_quiet(),
-    )
-    _collect_package_part(ctx, *_finish_package_part(package_part))
-    ctx.memory_tracker.sample()
+        summaries: list[dict[str, Any]] = []
+        _execute_with_parts(
+            ctx, zircolite_core, [str(f) for f in file_list],
+            (_summary_sink(summaries) if not ctx.retain_results else None,
+             package_part.sink if package_part else None),
+            out_file=ctx.outfile,
+            write_mode="w",
+            keep_results=ctx.retain_results,
+            stream_results=not ctx.retain_results,
+            last_ruleset=True,
+            disable_progress=is_quiet(),
+        )
+        _collect_package_part(ctx, *_finish_package_part(package_part))
+        ctx.memory_tracker.sample()
 
     results = list(zircolite_core.full_results) if ctx.retain_results else summaries
     return zircolite_core, results
@@ -636,6 +689,7 @@ def process_perfile_streaming(
     )
     raw_config = load_field_mappings(ctx.config)
     csv_spool = _CsvResultSpool(ctx) if defer_csv and not ctx.retain_results else None
+    zircolite_core.progress = steps = Steps()
     try:
         with _keepflat_context(ctx) as kf:
             for file_idx, log_file in enumerate(file_list):
@@ -685,7 +739,7 @@ def process_perfile_streaming(
 
                 package_part, error = _start_package_part(
                     _package_spool_for(ctx), file_idx, [str(log_file)], zircolite_core.db_connection,
-                    zircolite_core.failed_files, metrics=zircolite_core.metrics)
+                    zircolite_core.failed_files, metrics=zircolite_core.metrics, report=steps)
                 _collect_package_part(ctx, None, error)
 
                 zircolite_core.load_ruleset_from_var(ctx.rulesets)
@@ -703,7 +757,7 @@ def process_perfile_streaming(
                     f"[yellow]{len(zircolite_core.ruleset)}[/] rules"
                 )
                 file_results: list[dict[str, Any]] = []
-                _execute_with_timeline(
+                _execute_with_parts(
                     ctx, zircolite_core, [str(log_file)],
                     (_summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
                      package_part.sink if package_part else None),
@@ -737,6 +791,7 @@ def process_perfile_streaming(
                     profiling_core.merge_profiling_data(zircolite_core)
                 first_file = False
     finally:
+        steps.clear()
         try:
             # Written here rather than per file so an interrupted run still gets the
             # detections it did find, with a header covering all of them.
@@ -843,6 +898,7 @@ def process_db_input(
     defer_csv = ctx.csv_mode and not ctx.no_output
     csv_spool = _CsvResultSpool(ctx) if defer_csv and not ctx.retain_results else None
     zircolite_core = create_zircolite_core(ctx, disable_progress=is_quiet(), no_output=True if defer_csv else None)
+    zircolite_core.progress = steps = Steps()
 
     try:
         for file_idx, db_path in enumerate(db_files):
@@ -910,7 +966,7 @@ def process_db_input(
 
             package_part, error = _start_package_part(
                 _package_spool_for(ctx), file_idx, [str(db_path)], zircolite_core.db_connection,
-                zircolite_core.failed_files, metrics=zircolite_core.metrics)
+                zircolite_core.failed_files, metrics=zircolite_core.metrics, report=steps)
             _collect_package_part(ctx, None, error)
 
             zircolite_core.load_ruleset_from_var(ctx.rulesets)
@@ -928,7 +984,7 @@ def process_db_input(
                 f"[+] Executing ruleset - [yellow]{len(zircolite_core.ruleset)}[/] rules"
             )
             file_results: list[dict[str, Any]] = []
-            _execute_with_timeline(
+            _execute_with_parts(
                 ctx, zircolite_core, [str(db_path)],
                 (_summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
                  package_part.sink if package_part else None),
@@ -959,6 +1015,7 @@ def process_db_input(
             first_file = False
             processed_any = True
     finally:
+        steps.clear()
         if csv_spool is not None:
             csv_spool.finish()
         elif defer_csv:
@@ -1007,19 +1064,25 @@ def process_single_file_worker(
     thread_local: Any,
     raw_config: dict | None = None,
     keepflat_file: Any | None = None,
-    rule_progress_queue: queue.Queue | None = None,
     spool_dir: str | None = None,
+    progress_board: WorkerBoard | None = None,
+    progress_files: dict[str, int] | None = None,
+    progress_slot: int | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Process a single file inside a thread or process worker.
 
     Returns ``(event_count, file_data_dict)``.  This is a top-level function
-    (not a closure) to improve readability and testability.
+    (not a closure) to improve readability and testability. With a
+    ``progress_board``, the worker reports each step of the file in its slot:
+    ``progress_slot`` for a process worker, its thread's number otherwise.
     """
     file_name = Path(log_file).name
     metrics = FileMetrics()
     metrics.data["sources"] = [str(log_file)]
     package_part: PartWriter | None = None
     timeline_part: TimelinePart | None = None
+    export_part: ExportPart | None = None
+    slot: BoardSlot | None = None
     try:
         # Get or create thread-local ZircoliteCore
         if not hasattr(thread_local, "core"):
@@ -1036,6 +1099,10 @@ def process_single_file_worker(
 
         core = thread_local.core
         core.metrics = metrics
+        if progress_board is not None and progress_files is not None:
+            worker = progress_slot if progress_slot is not None else thread_local.worker_id
+            slot = progress_board.slot(worker, progress_files.get(str(log_file), -1))
+        core.progress = slot
 
         _streaming_result = core.run_streaming(
             [log_file],
@@ -1062,7 +1129,7 @@ def process_single_file_worker(
             else:
                 package_part, package_error = _start_package_part(
                     ctx.package_spool, part, [str(log_file)], core.db_connection, core.failed_files,
-                    metrics=core.metrics)
+                    metrics=core.metrics, report=slot)
 
         # The worker's logger is silent, so a file Zircolite could only read in
         # part is indistinguishable from a clean one unless it is reported here
@@ -1091,12 +1158,7 @@ def process_single_file_worker(
         core.load_ruleset_from_var(ctx.rulesets)
         core.full_results = []
 
-        worker_id = getattr(thread_local, "worker_id", 0)
-        progress_callback = (
-            (lambda cur, tot: rule_progress_queue.put((worker_id, file_name, cur, tot)))
-            if rule_progress_queue is not None
-            else None
-        )
+        progress_callback = None if slot is None else (lambda done, total: slot("rules", done, total))
         spool_output = spool_dir is not None
         file_results = []
         result_path = None
@@ -1116,10 +1178,7 @@ def process_single_file_worker(
             if output is None:
                 return
             if csv_spooled:
-                metadata = {
-                    "rule_title": result["title"], "rule_description": result["description"],
-                    "rule_level": result["rule_level"], "rule_count": result["count"],
-                }
+                metadata = _csv_metadata(result)
                 for row in result["matches"]:
                     csv_columns.update(row)
                     output.write(orjson.dumps({**metadata, **sanitize_row_for_csv(row)}) + b"\n")
@@ -1132,6 +1191,8 @@ def process_single_file_worker(
 
         timeline_spool = _timeline_spool_for(ctx)
         timeline_part = timeline_spool.open_part() if timeline_spool is not None else None
+        export_spool = _export_spool_for(ctx)
+        export_part = export_spool.open_part() if export_spool is not None else None
         try:
             if output is not None and not csv_spooled:
                 output.write(b"[")
@@ -1140,7 +1201,8 @@ def process_single_file_worker(
                 stream_results=spool_output,
                 result_sink=_fan_out(receive if spool_output else None,
                                      package_part.sink if package_part else None,
-                                     timeline_part.sink if timeline_part else None),
+                                     timeline_part.sink if timeline_part else None,
+                                     export_part.sink if export_part else None),
                 last_ruleset=True, show_table=False, progress_callback=progress_callback,
             )
         finally:
@@ -1153,6 +1215,8 @@ def process_single_file_worker(
         package_record, finish_error = _finish_package_part(package_part)
         timeline_record, timeline_finish_error = _finish_timeline_part(timeline_part, [str(log_file)])
         timeline_part = None
+        export_record, export_finish_error = _finish_export_part(export_part, [str(log_file)])
+        export_part = None
         summary = {
             "name": file_name,
             "path": str(log_file),
@@ -1173,6 +1237,8 @@ def process_single_file_worker(
             "package_error": package_error or finish_error,
             "timeline_part": timeline_record,
             "timeline_error": timeline_finish_error,
+            "export_part": export_record,
+            "export_error": export_finish_error,
         }
         if degraded:
             metrics.data["status"] = "partial"
@@ -1187,6 +1253,8 @@ def process_single_file_worker(
             package_part.discard()
         if timeline_part is not None:
             timeline_part.discard()
+        if export_part is not None:
+            export_part.discard()
         return (
             0,
             {
@@ -1199,6 +1267,9 @@ def process_single_file_worker(
                 "performance": metrics.data,
             },
         )
+    finally:
+        if slot is not None:
+            slot.release()
 
 
 # ============================================================================
@@ -1208,7 +1279,8 @@ def process_single_file_worker(
 _PROCESS_STATE = None
 
 
-def _initialize_process_worker(payload, args, input_type, raw_config, spool_dir, cancel_event):
+def _initialize_process_worker(payload, args, input_type, raw_config, spool_dir, cancel_event,
+                               progress=None):
     global _PROCESS_STATE
     from multiprocessing.util import Finalize
 
@@ -1229,6 +1301,13 @@ def _initialize_process_worker(payload, args, input_type, raw_config, spool_dir,
         extractor=create_extractor(args, logger, input_type), raw_config=raw_config,
         spool_dir=spool_dir, thread_local=local, counter_lock=threading.Lock(),
         worker_counter=[0], total_filtered_count=[0, 0])
+    if progress is not None:
+        # Every process numbers its own threads from 0, so the slot on the
+        # board is claimed here, once per process.
+        board, files, claimed = progress
+        with claimed.get_lock():
+            state.update(progress_board=board, progress_files=files, progress_slot=claimed.value)
+            claimed.value += 1
     _PROCESS_STATE = state
 
     def close_core():
@@ -1352,12 +1431,16 @@ def _write_csv_results(
     # or the same corpus gains a column purely from the mode it was run in.
     all_keys.discard("row_id")
     fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count", *sorted(all_keys)]
-    with open(ctx.outfile, "w", encoding="utf-8", newline="") as f:
+    total = sum(len(result.get("matches", ())) for result in all_results)
+    done = 0
+    with open(ctx.outfile, "w", encoding="utf-8", newline="") as f, Steps() as steps:
         writer = csv.DictWriter(
             f, delimiter=ctx.delimiter, fieldnames=fieldnames, extrasaction="ignore"
         )
         write_csv_header(writer)
         for result in all_results:
+            steps("Writing the detections", done, total)
+            done += len(result.get("matches", ()))
             title = result.get("title", "")
             description = sanitize_value_for_csv(result.get("description") or "")
             level = result.get("rule_level", "")
@@ -1431,6 +1514,8 @@ def process_parallel_streaming(
 
     # Give each file worker a share of the native parser CPU budget.
     worker_count = processor.calculate_optimal_workers(file_list)
+    if ctx.package_spool is not None:
+        ctx.package_spool.concurrent_writers = worker_count
     ctx.evtx_threads = max(1, (os.cpu_count() or 1) // worker_count)
     process_mode = parallel_config.executor == "process"
     spool_results = process_mode or not ctx.retain_results
@@ -1456,6 +1541,7 @@ def process_parallel_streaming(
             ctx.performance_files.append(file_data["performance"])
         _collect_package_part(ctx, file_data.get("package_part"), file_data.get("package_error"))
         _collect_timeline_part(ctx, file_data.get("timeline_part"), file_data.get("timeline_error"))
+        _collect_export_part(ctx, file_data.get("export_part"), file_data.get("export_error"))
         if process_mode:
             total_filtered_count[0] += file_data.get("filtered", 0)
             total_filtered_count[1] += file_data.get("time_filtered", 0)
@@ -1488,9 +1574,15 @@ def process_parallel_streaming(
     # time, so columns from later files would be silently dropped.  CSV
     # falls back to _write_csv_results which collects all columns first.
     use_incremental = not ctx.csv_mode
-    rule_progress_queue: queue.Queue | None = (
-        queue.Queue() if not is_quiet() and not process_mode else None
-    )
+    board = None
+    progress_files = {str(path): index for index, path in enumerate(file_list)}
+    if not is_quiet():
+        # More slots than workers costs a few integers, and the pool may
+        # start more workers than counted above once memory is measured again,
+        # up to twice the CPUs.
+        slots = max(worker_count, 2 * (os.cpu_count() or 1))
+        board = (WorkerBoard.shared(slots, multiprocessing.get_context("spawn"))
+                 if process_mode else WorkerBoard(slots))
 
     with (
         closing(csv_spool) if csv_spool is not None else nullcontext(),
@@ -1512,8 +1604,9 @@ def process_parallel_streaming(
                 thread_local=thread_local,
                 raw_config=deepcopy(raw_config),
                 keepflat_file=kf,
-                rule_progress_queue=rule_progress_queue,
                 spool_dir=spool_dir if spool_results else None,
+                progress_board=board,
+                progress_files=progress_files,
             )
 
         process_options: dict[str, Any] = {}
@@ -1523,8 +1616,10 @@ def process_parallel_streaming(
             payload = {f.name: getattr(ctx, f.name) for f in fields(ctx)
                        if f.init and f.name not in ("logger", "memory_tracker", "parent_metrics", "performance_files")}
             worker = _process_file_job
+            spawn = multiprocessing.get_context("spawn")
+            progress = (board, progress_files, spawn.Value("i", 0)) if board is not None else None
             process_options = dict(initializer=_initialize_process_worker,
-                initargs=(payload, args, input_type, raw_config, spool_dir, cancel_event),
+                initargs=(payload, args, input_type, raw_config, spool_dir, cancel_event, progress),
                 cancel_event=cancel_event)
 
         # Workers are separate processes, invisible to the phase-boundary samples.
@@ -1546,7 +1641,7 @@ def process_parallel_streaming(
                         desc="Processing",
                         disable_progress=is_quiet(),
                         on_result=_on_result,
-                        rule_progress_queue=rule_progress_queue,
+                        board=board,
                         **process_options,
                     )
             else:
@@ -1563,7 +1658,7 @@ def process_parallel_streaming(
                     desc="Processing",
                     disable_progress=is_quiet(),
                     on_result=_on_csv_result,
-                    rule_progress_queue=rule_progress_queue,
+                    board=board,
                     **process_options,
                 )
                 if csv_spool is not None:
