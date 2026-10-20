@@ -29170,6 +29170,48 @@
     "title": "Tap Installer Execution"
   },
   {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects modification of the Microsoft Security Center AV registry keys, particularly those related with DisplayName, ProductEXE, or ReportingExe.\nThese keys typically store information about antivirus products installed on the system, which is Windows Defender or third-party antivirus software.\nBut, if these keys holds unexpected values or are modified in a suspicious manner, it could indicate an attempt to tamper with the security settings of the system.\n",
+    "eventid": [
+      4657
+    ],
+    "falsepositives": [
+      "Legitimate changes by antivirus software missing in the filter list"
+    ],
+    "filename": "rules/windows/registry/registry_set/registry_set_security_center_av_registry_modification.yml",
+    "id": "9991c683-05aa-47b7-a865-df14dc4b9dc4",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "NewProcessName",
+      "NewValue",
+      "OperationType",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\Software\\\\Microsoft\\\\Security Center\\\\Provider\\\\Av\\\\%' ESCAPE '\\' AND (TargetObject LIKE '%\\\\ProductEXE' ESCAPE '\\' OR TargetObject LIKE '%\\\\DisplayName' ESCAPE '\\' OR TargetObject LIKE '%\\\\ReportingExe' ESCAPE '\\')) AND (NOT COALESCE((NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' AND (NewValue LIKE '%Avira%' ESCAPE '\\' OR NewValue LIKE '%Windows Defender%' ESCAPE '\\' OR NewValue LIKE '%Microsoft Defender%' ESCAPE '\\' OR NewValue LIKE '%Sophos%' ESCAPE '\\' OR NewValue LIKE '%Kaspersky%' ESCAPE '\\' OR NewValue LIKE '%ESET%' ESCAPE '\\' OR NewValue LIKE '%Bitdefender%' ESCAPE '\\' OR NewValue LIKE '%Trend Micro%' ESCAPE '\\' OR NewValue LIKE '%McAfee%' ESCAPE '\\' OR NewValue LIKE '%Symantec%' ESCAPE '\\' OR NewValue LIKE '%CrowdStrike%' ESCAPE '\\' OR NewValue LIKE '%SentinelOne%' ESCAPE '\\' OR NewValue LIKE '%Carbon Black%' ESCAPE '\\' OR NewValue LIKE '%Elastic%' ESCAPE '\\' OR NewValue LIKE '%Cortex%' ESCAPE '\\' OR NewValue LIKE '%AVG%' ESCAPE '\\' OR NewValue LIKE '%Avast%' ESCAPE '\\' OR NewValue LIKE '%Malwarebytes%' ESCAPE '\\')), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-impairment",
+      "attack.t1685"
+    ],
+    "title": "Potential HackTool - Defendnot Security Center AV Registry Modification"
+  },
+  {
     "author": "Sai Prashanth Pulisetti @pulisettis, Aishwarya Singam",
     "channel": [
       "Windows PowerShell"
@@ -45027,6 +45069,51 @@
     "title": "Suspicious Download from Office Domain"
   },
   {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects the default scheduled task activity of the hacktool Defendnot, which is used to disable Windows Defender Security.\nIt abuses Microsoft's undocumented WSC API to register itself as a fake antivirus product, allowing it to disable Windows Defender.\nDuring installation, Defendnot creates a scheduled task named 'defendnot' with the argument '--from-autorun' for persistence.\n",
+    "eventid": [
+      4698,
+      4702
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "rules/windows/builtin/security/win_security_hktl_defendnot_default_scheduled_task_activity.yml",
+    "id": "015ff932-4156-41ae-9d4c-1443995611fd",
+    "level": "high",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "TaskContent",
+      "TaskName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4698 OR EventID=4702) AND (TaskName LIKE '\\\\defendnot' ESCAPE '\\' OR (TaskContent LIKE '%defendnot%' ESCAPE '\\' OR TaskContent LIKE '%<Arguments>--from-autorun</Arguments>%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.persistence",
+      "attack.privilege-escalation",
+      "attack.defense-impairment",
+      "attack.t1053.005",
+      "attack.t1685"
+    ],
+    "title": "HackTool - Defendnot Default Scheduled Task Activity"
+  },
+  {
     "author": "Sander Wiebing",
     "channel": [
       "Security"
@@ -46518,6 +46605,47 @@
       "attack.persistence"
     ],
     "title": "Uncommon Userinit Child Process"
+  },
+  {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects the execution of the hacktool Defendnot. Defendnot is a hacktool that abuses Microsoft undocumented WSC (Windows Security Center) API\nto disable Windows Defender by registering itself as a fake antivirus product. Threat actors often use these kind of tools to bypass security measures.\n",
+    "eventid": [
+      4688
+    ],
+    "falsepositives": [
+      "Unlikely"
+    ],
+    "filename": "rules/windows/process_creation/proc_creation_win_hktl_defendnot_execution.yml",
+    "id": "0aaa9689-9f38-491d-bd4d-a9af6eb43138",
+    "level": "high",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Hashes",
+      "NewProcessName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (NewProcessName LIKE '%defendnot%' ESCAPE '\\' OR (CommandLine LIKE '%defendnot%' ESCAPE '\\' OR CommandLine LIKE '%https://dnot.sh/%' ESCAPE '\\') OR (Hashes LIKE '%IMPHASH=1FAAED26690A9455A795E2215661726F%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=304786466DE25780347A9DCFAF381EF7%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=55B10396EA722770E51BC288E62179DB%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=59D65F5EFACBDB1AA2A6CF745B07C058%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=6CEDEC3562FEF2DC2F959A1D0BF54DB8%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=75002197E0D24AAF0B8C6A1BF68513D6%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=7EC4023C85149450AB388F0837192FE0%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=CA4A3E08E9410A6AEF018424C64C2641%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-impairment",
+      "attack.t1685"
+    ],
+    "title": "HackTool - Defendnot Execution"
   },
   {
     "author": "Jonathan Cheong, oscd.community",
@@ -57943,6 +58071,47 @@
       "attack.t1027.010"
     ],
     "title": "Python One-Liners with Base64 Decoding"
+  },
+  {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-PowerShell/Operational",
+      "PowerShellCore/Operational"
+    ],
+    "description": "Detects execution of Defendnot installation via PowerShell one-liner that downloads and executes the Defendnot script from a remote URL.\nDefendnot is a hacktool that abuses Microsoft's undocumented WSC API to disable Windows Defender by registering itself as a fake antivirus product.\n",
+    "eventid": [
+      4104
+    ],
+    "falsepositives": [
+      "Unlikely"
+    ],
+    "filename": "rules/windows/powershell/powershell_script/posh_ps_hktl_defendnot_installation.yml",
+    "id": "50b159ba-a147-40f7-9d11-561e724b8a2e",
+    "level": "high",
+    "license": "DRL-1.1",
+    "logsource": {
+      "category": "ps_script",
+      "product": "windows",
+      "service": "powershell"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ScriptBlockText"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%https://dnot.sh/%' ESCAPE '\\' OR (ScriptBlockText LIKE '%/defendnot%' ESCAPE '\\' AND ScriptBlockText LIKE '%github%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-impairment",
+      "attack.t1685"
+    ],
+    "title": "HackTool - Defendnot Installation via PowerShell One-Liner"
   },
   {
     "author": "Nasreddine Bencherchali (Nextron Systems)",
@@ -73563,6 +73732,46 @@
       "attack.t1569.002"
     ],
     "title": "PowerShell Scripts Installed as Services"
+  },
+  {
+    "author": "Swarup-Ingale",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects the execution of Lynx ransomware based on specific command line flags such as '--noprint' and '--mode fast'.\n",
+    "eventid": [
+      4688
+    ],
+    "falsepositives": [
+      "Unlikely"
+    ],
+    "filename": "rules-emerging-threats/2026/Malware/Lynx-Ransomware/proc_creation_win_malware_lynx.yml",
+    "id": "a30c7711-1b6d-49eb-9925-a4b2c0e9f039",
+    "level": "high",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '% --mode %' ESCAPE '\\' AND CommandLine LIKE '% fast%' ESCAPE '\\' AND CommandLine LIKE '% --noprint%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1486",
+      "detection.emerging-threats"
+    ],
+    "title": "Lynx Ransomware Execution Pattern"
   },
   {
     "author": "Florian Roth (Nextron Systems)",
