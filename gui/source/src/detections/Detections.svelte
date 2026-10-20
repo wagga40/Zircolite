@@ -7,6 +7,7 @@
   import type { QueryState } from '../state/query.svelte';
   import { run, runAgain } from '../state/run.svelte';
   import { formatCount } from '../ui/format';
+  import Placeholder from '../ui/Placeholder.svelte';
   import { ownScope } from '../ui/scope';
   import RuleItem from './RuleItem.svelte';
   import {
@@ -95,6 +96,7 @@
   {:else if loaded && shown.length === 0}
     <p class="note">{manifest.totals.rules_matched === 0 ? 'No rule matched any event in this run.' : 'No detection matches the current filters. Remove a filter to see them.'}</p>
   {/if}
+  {#if pending && !loaded && !failure && !stopped}<div class="waiting"><Placeholder label="Counting the detections of each rule" lines={6} /></div>{/if}
   <div class="list" class:stale={pending && loaded !== null}>
     {#each shown as section (section.rank)}
       <section aria-label={levelLabel(section.rank)}>
@@ -110,6 +112,7 @@
 </main>
 
 <style>
+  .waiting { padding: 8px 16px; max-width: 720px; }
   .detections { min-height: 0; overflow: auto; background: var(--paper); }
   .bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--rule); }
   h1 { margin: 0; font-size: var(--t-18); }

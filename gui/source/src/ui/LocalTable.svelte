@@ -1,10 +1,11 @@
 <script lang="ts" generics="T extends object">
   import FilterCell from './FilterCell.svelte';
+  import Placeholder from './Placeholder.svelte';
   import { formatCount, isoTime } from './format';
   import { applyLocalCell, cellHint, type LocalColumn, localCellText, type LocalSort, localSchema, type TableColumn } from './localFilters';
 
   let {
-    id, columns, rows, pending, answered, filters = $bindable(''), sort = $bindable(null), order, pivot, empty, missing = '',
+    id, columns, rows, pending, answered, filters = $bindable(''), sort = $bindable(null), order, pivot, empty, missing = '', loading = 'Loading',
   }: {
     id: string;
     columns: TableColumn<T>[];
@@ -23,6 +24,8 @@
     empty: string;
     /** How a missing text value reads; empty leaves the cell blank. */
     missing?: string;
+    /** What the table says while its first answer is on its way. */
+    loading?: string;
   } = $props();
 
   let problem = $state<string | null>(null);
@@ -88,7 +91,8 @@
           {/each}
         </tr>
       {:else}
-        {#if !pending}<tr><td colspan={columns.length} class="note">{empty}</td></tr>{/if}
+        {#if !pending}<tr><td colspan={columns.length} class="note">{empty}</td></tr>
+        {:else if !answered}<tr><td colspan={columns.length}><Placeholder label={loading} /></td></tr>{/if}
       {/each}
     </tbody>
   </table>

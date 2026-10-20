@@ -1,7 +1,7 @@
 <script lang="ts">
   import { textIndex } from '../engine/textIndex.svelte';
   import type { Manifest } from '../engine/manifest';
-  import { formatCount, inputCount, isoTime, timeRange } from './format';
+  import { formatCount, formatPercent, inputCount, isoTime, timeRange } from './format';
 
   let { manifest, detected }: { manifest: Manifest; detected: number | null } = $props();
   let dialog: HTMLDialogElement;
@@ -31,7 +31,7 @@
     <dt>Processing</dt><dd>{manifest.run.mode}, {manifest.run.executor}</dd>
     <dt>Time field</dt><dd>{manifest.run.time_field || 'none'}</dd>
     <dt>Full-text search</dt>
-    <dd>{textIndex.status === 'ready' ? 'Indexed' : textIndex.status === 'loading' ? 'Loading the index' : textIndex.status === 'failed' ? `Scanning every field: the index could not be loaded (${textIndex.error})` : 'Scanning every field: this package has no index'}</dd>
+    <dd>{textIndex.status === 'ready' ? 'Indexed' : textIndex.status === 'loading' ? `Loading the index${textIndex.total > 0 ? `, ${formatPercent(textIndex.loaded / textIndex.total)}` : ''}` : textIndex.status === 'failed' ? `Scanning every field: the index could not be loaded (${textIndex.error})` : 'Scanning every field: this package has no index'}</dd>
     <dt>Event filtering</dt><dd>{manifest.run.event_filter}</dd>
     <dt>Made by</dt><dd>Zircolite {manifest.zircolite}{Number.isNaN(made) ? '' : ` on ${isoTime(made, false)} UTC`}</dd>
   </dl>

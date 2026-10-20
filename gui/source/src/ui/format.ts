@@ -8,6 +8,27 @@ export function formatCount(n: number): string {
   return COUNT.format(n);
 }
 
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** How long something has run, to the second; past an hour, to the minute. */
+export function formatElapsed(ms: number): string {
+  const seconds = Math.floor(Math.max(0, ms) / 1000);
+  if (seconds < 60) return `${seconds} s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ${pad(seconds % 60)} s`;
+  return `${Math.floor(seconds / 3600)} h ${pad(Math.floor(seconds / 60) % 60)} min`;
+}
+
+export function formatBytes(n: number): string {
+  if (n < 1000) return `${Math.round(n)} B`;
+  const [value, unit] = n < 1e6 ? [n / 1e3, 'kB'] : n < 1e9 ? [n / 1e6, 'MB'] : [n / 1e9, 'GB'];
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${unit}`;
+}
+
+/** Rounded down, so 100% means done. */
+export function formatPercent(fraction: number): string {
+  return `${Math.floor(Math.min(1, Math.max(0, fraction)) * 100)}%`;
+}
+
 export function isoTime(ms: number | null | undefined, withMs = true): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms)) return '';
   const iso = new Date(ms).toISOString();

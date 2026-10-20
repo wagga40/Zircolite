@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { isSuperseded, QueryScheduler, type Sender } from '../src/engine/queries';
+import { type Activity, isSuperseded, QueryScheduler, type Sender } from '../src/engine/queries';
 import { ident } from '../src/engine/sql';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
@@ -17,7 +17,7 @@ let sent: string[] = [];
 let before: ((sql: string) => void | Promise<void>) | null = null;
 let after: ((sql: string) => void) | null = null;
 
-function scheduler(options: { largeColumn?: number; sliceBytes?: number } = { largeColumn: 0, sliceBytes: 1 }): QueryScheduler {
+function scheduler(options: ConstructorParameters<typeof QueryScheduler>[1] = { largeColumn: 0, sliceBytes: 1 }): QueryScheduler {
   const sender: Sender = {
     async send(sql: string) {
       sent.push(sql);
@@ -98,6 +98,30 @@ describe('field matches through the scheduler, on a real engine', () => {
     expect(statements(/^INSERT INTO _zl_fm_/).length).toBeGreaterThan(2);
     expect(statements(/stats_min_value.*parquet_metadata\('events.parquet'\)/)).toHaveLength(1);
     expect(statements(/total_uncompressed_size.*parquet_metadata\('events.parquet'\)/)).toHaveLength(1);
+  });
+});
+
+describe('the progress of a sliced scan', () => {
+  function watched(query: string, compiled: (query: string) => string) {
+    const seen: Activity[] = [];
+    const s = scheduler({ largeColumn: 0, sliceBytes: 1, onActivity: (activity) => seen.push(activity) });
+    return { seen, answer: s.rows(`SELECT count(*) AS n FROM events WHERE ${compiled(query)}`) };
+  }
+
+  it.each([
+    ['a field match', 'CommandLine:*whoami*', 'Searching CommandLine', (query: string) => compile(parse(query), schema, { matches: true })],
+    ['a bare word', 'powershell', 'Searching every field', through],
+  ])('reports each slice of %s as it goes, and nothing once the query answers', async (_, query, label, compiled) => {
+    const { seen, answer } = watched(query, compiled);
+    await answer;
+    const scans = seen.flatMap((activity) => (activity.scan ? [activity.scan] : []));
+    const total = scans[0].total;
+    expect(total).toBeGreaterThan(2);
+    expect(scans.map((scan) => scan.done)).toEqual(Array.from({ length: total + 1 }, (_, i) => i));
+    expect(scans.every((scan) => scan.label === label && scan.total === total)).toBe(true);
+    // The query that reads the finished matches runs on: it says it works, not that the scan is at 100%.
+    expect(seen.at(-2)).toEqual({ queries: 1, scan: null, waiting: false });
+    expect(seen.at(-1)).toEqual({ queries: 0, scan: null, waiting: false });
   });
 });
 

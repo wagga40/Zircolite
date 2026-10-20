@@ -1,6 +1,6 @@
 # Zircolite tools
 
-Scripts for packaging, benchmarking, Sigma regression tests and the docs pictures.
+Scripts for packaging, benchmarking, Sigma regression tests and the docs pictures and tour.
 
 `tests/test_tools.py` runs the benchmark and regression tools over tracked fixtures.
 Release-script unit tests use temporary checkouts; end-to-end validation requires a
@@ -340,3 +340,49 @@ pdm run python tools/svg-theme-variants.py docs/pics/how-it-works.svg
 ```
 
 `tests/test_tools.py` fails while a copy differs from what the script writes.
+
+## viewer-tour/
+
+Records the README's tour of the Zircolite Viewer, `docs/pics/viewer-tour.webp`: a
+looping animated WebP of every view, played in headless Chromium with a drawn cursor.
+
+```sh
+tools/viewer-tour/make-tour.sh <unpacked package or its .zip> gui/viewer [output.webp]
+```
+
+It needs [uv](https://docs.astral.sh/uv/), which fetches Playwright 1.62.0 (with its
+Chromium) and Pillow outside the project's environment, and `img2webp` and `webpmux`
+(`brew install webp`). A run takes about four minutes:
+
+1. `record.py` copies the package to the work directory, puts the viewer build's
+   `app.js`, `app.css` and `index.html` over the copy, and refuses a manifest that holds a
+   local path. It then visits every view and the Run details dialog looking for the home
+   directory or the user name, and plays the storyboard at 1280×800 in the light theme,
+   capturing frames with the DevTools screencast plus a screenshot at the start of every
+   hold. Each hold checks the page for local paths again. `--dry` plays the storyboard
+   without capturing and saves one screenshot per beat, to check its targets quickly.
+2. `encode.py` shortens the waits for data to 0.2 s, keeps at most 15 frames a second
+   (5 while the drawer scrolls), merges identical frames and encodes them losslessly. It
+   writes the frame shown late in each beat, decoded back from the WebP, to `review/` in
+   the work directory. It warns above 2,500,000 bytes and fails above 3,000,000.
+
+The work directory is a new temporary one unless `TOUR_WORK` names it; neither it nor the
+output path may contain a space. `TOUR_FPS`, `TOUR_MODE` (`lossless`, `lossy` or `mixed`),
+`TOUR_Q` and `TOUR_METHOD` change the encoding. On the current tour, lossless at 15 frames a
+second gave 1.8 MB for 70 s, smaller than lossy at quality 70 and 12 frames a second
+(2.0 MB), because most frames change little and lossy blurs the text.
+
+The storyboard is tied to the public
+[EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) corpus: a rule
+title, two event times, plink.exe PID 2312 and the Logons view's 87 sessions. Another
+corpus needs those targets changed in `record.py`. Make the package from relative paths,
+so no local path reaches its manifest:
+
+```sh
+mkdir tour && cd tour
+ln -s /path/to/EVTX-ATTACK-SAMPLES EVTX-ATTACK-SAMPLES
+ln -s /path/to/Zircolite/rules rules
+mkdir pkg
+python /path/to/Zircolite/zircolite.py --events EVTX-ATTACK-SAMPLES/ \
+    -r rules/rules_windows_merged.json --package --package-dir pkg -o out.json
+```

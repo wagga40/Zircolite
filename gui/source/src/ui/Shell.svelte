@@ -17,6 +17,7 @@
   import Stacking from '../stacking/Stacking.svelte';
   import Logons from '../logons/Logons.svelte';
   import Timeline from '../timeline/Timeline.svelte';
+  import BusyBar from './BusyBar.svelte';
   import { typing } from './keys';
   import { pageTopLayer } from './layers';
   import NavRail from './NavRail.svelte';
@@ -60,6 +61,7 @@
   <div class="frame">
     <NavRail />
     <div class="main" class:drawer={view.uid !== null}>
+      <BusyBar {db} />
       {#if view.route === 'overview'}
         <Overview {db} {schema} {manifest} {query} />
       {:else if view.route === 'detections'}

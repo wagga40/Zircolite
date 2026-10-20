@@ -4,10 +4,11 @@
   import { levelInk } from '../engine/levels';
   import { isSuperseded } from '../engine/queries';
   import type { Field, Schema } from '../engine/schema';
-  import { run, runAgain, stopAll } from '../state/run.svelte';
+  import { holdStop, run, runAgain, stopAll } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { download } from '../ui/download';
   import { formatCount, isoTime, levelName } from '../ui/format';
+  import Placeholder from '../ui/Placeholder.svelte';
   import { typing } from '../ui/keys';
   import { tick, untrack } from 'svelte';
   import { pageTopLayer } from '../ui/layers';
@@ -47,6 +48,10 @@
   // The result list on screen; 0 until the first one is built.
   let current = $state(0);
   let busy = $state(true);
+  // The Stop beside the count stands for the page's while it shows.
+  $effect(() => {
+    if (busy) return holdStop();
+  });
   let failure = $state<string | null>(null);
   let pages = $state.raw(new Map<string, PageRow[]>());
   let active = $state(0);
@@ -567,6 +572,9 @@
         {/each}
       </div>
     </div>
+    {#if busy && total === 0 && !failure}
+      <div class="empty waiting" style:top={`${HEAD + 12}px`}><Placeholder label="Searching the events" lines={6} /></div>
+    {/if}
     {#if !busy && total === 0 && !failure}
       <p class="empty" style:top={`${HEAD + 24}px`}>No events match. Remove a filter or change the search.</p>
     {/if}
@@ -622,6 +630,7 @@
   .level i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; }
   .loading { color: var(--ink-2); }
   .empty { position: absolute; left: 16px; margin: 0; color: var(--ink-2); }
+  .waiting { right: 16px; max-width: 720px; }
   .exports { display: inline-flex; gap: 8px; }
   .export-menu { display: none; position: relative; }
   .export-menu summary { min-height: 28px; padding: 3px 10px; border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; list-style: none; }

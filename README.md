@@ -126,7 +126,7 @@ any column, a timeline, the ATT&CK matrix, entities, stacking of the rarest valu
 lateral movement, process trees and an SQL console. Share a package as you would the logs it
 came from. See [Zircolite Viewer](docs/Viewer.md).
 
-![A tour of the Zircolite Viewer: from the Overview to a Mimikatz detection, its event, a host search, the timeline, the ATT&CK matrix and the process tree](docs/pics/viewer-tour.webp)
+![A tour of the Zircolite Viewer: the Overview, a critical detection and its events, a column filter and a column's rarest values, an event with its PowerShell command decoded and its process activity, the timeline, the ATT&CK matrix, entities, stacking, lateral movement and privileged sessions, the process tree and the SQL console](docs/pics/viewer-tour.webp)
 
 ## Benchmark
 

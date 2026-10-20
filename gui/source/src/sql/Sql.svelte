@@ -6,10 +6,11 @@
   import { csvLine } from '../explore/export';
   import type { QueryState } from '../state/query.svelte';
   import { view } from '../state/view.svelte';
-  import { run, runAgain, stopAll } from '../state/run.svelte';
+  import { holdStop, run, runAgain, stopAll } from '../state/run.svelte';
   import { download } from '../ui/download';
   import { formatCount } from '../ui/format';
   import { Panel } from '../ui/panel.svelte';
+  import Placeholder from '../ui/Placeholder.svelte';
   import { ownScope } from '../ui/scope';
   import { windowOf } from '../ui/virtual';
   import FilterCell from '../ui/FilterCell.svelte';
@@ -25,6 +26,10 @@
   const HEAD = 62;
 
   const result = new Panel<Result>(false);
+  // The Stop beside Run stands for the page's while it shows.
+  $effect(() => {
+    if (result.slot.pending) return holdStop();
+  });
   const tables = new Panel<{ table: string; columns: { name: string; type: string }[] }[]>();
   let editor = $state<HTMLTextAreaElement>();
   let scrollTop = $state(0);
@@ -195,7 +200,9 @@
   <div id="sql-result" class="grid" role="table" aria-label="Query result" aria-rowcount={(data?.rows.length ?? 0) + 1} aria-busy={result.slot.pending}
     data-rows={result.slot.pending || !data ? '' : data.rows.length} class:stale={result.slot.pending && data !== null}
     bind:clientHeight={height} onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}>
-    {#if data}
+    {#if result.slot.pending && !data}
+      <div class="waiting"><Placeholder label="Running the query" lines={6} /></div>
+    {:else if data}
       <div class="head" role="row" aria-rowindex="1" style:width={`${total}ch`}>
         {#each data.columns as column, i (i)}
           <span role="columnheader" class:num={numeric[i]} style:width={`${widths[i]}ch`} aria-sort={ariaSort(i)}>
@@ -239,6 +246,7 @@
   .insert { min-height: 24px; padding: 0; background: none; border: 0; color: var(--signal); font: 400 var(--t-12) / 1.4 var(--mono); cursor: pointer; text-align: left; }
   .count { color: var(--ink-2); font-size: var(--t-12); }
   .grid { font: 400 var(--t-13) / 28px var(--mono); position: relative; overflow: auto; min-height: 200px; border-top: 1px solid var(--rule); }
+  .waiting { padding: 8px 16px; max-width: 720px; font: 400 var(--t-13) / 1.4 var(--sans); }
   .head { position: sticky; top: 0; z-index: 1; display: flex; height: 62px; background: var(--panel); border-bottom: 1px solid var(--rule); }
   .head > span, .row span { flex: none; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; font: 400 var(--t-13) / 28px var(--mono); }
   .head > span { display: grid; grid-template-rows: 30px 28px; align-items: center; }

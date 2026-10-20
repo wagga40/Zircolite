@@ -584,6 +584,10 @@ async function scenario(page, open, steps, expectedText, expectedStarts) {
   } else {
     steps.push('full text skipped: this package has no index');
   }
+
+  // Every view has answered by now: an activity bar still up would say the page works when it does not.
+  await poll(page, async () => (await page.locator('#page-busy').count()) === 0, 'the activity bar to go');
+  steps.push('the activity bar goes once the page is idle');
 }
 
 const expectedText = await scanCount(WORD);

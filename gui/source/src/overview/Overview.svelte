@@ -13,6 +13,7 @@
   import { view } from '../state/view.svelte';
   import { formatCount } from '../ui/format';
   import { Panel, type Slot } from '../ui/panel.svelte';
+  import Placeholder from '../ui/Placeholder.svelte';
   import { ownScope } from '../ui/scope';
   import {
     entityField, type TacticCell, tacticCells, tacticsSql, type Tile, tileEventsSql, tileRulesSql, tiles, topRulesSql,
@@ -111,6 +112,7 @@
         </button>
       {/each}
     </section>
+    {#if tileSlot.pending && !tileSlot.data}<Placeholder label="Counting the events of each level" lines={1} />{/if}
     {@render problem(tileSlot, 'severity counts')}
 
     <Strip {db} {manifest} where={query.whereWithoutTime} />
@@ -118,6 +120,7 @@
     <section class="tactics" aria-label="Events by ATT&CK tactic">
       <h2>ATT&amp;CK tactics{filtered ? ', under the current filters' : ''}</h2>
       {@render problem(tacticSlot, 'tactics')}
+      {#if tacticSlot.pending && !tacticSlot.data}<Placeholder label="Counting the events of each tactic" lines={2} />{/if}
       <div class="cells" class:stale={tacticSlot.pending && tacticSlot.data !== null}>
         {#each tacticSlot.data ?? [] as cell (cell.tactic)}
           <button type="button" class="cell" class:none={cell.events === 0} data-tactic={cell.tactic}
@@ -134,6 +137,7 @@
       <section aria-label="Top rules" class:stale={ruleSlot.pending && ruleSlot.data !== null}>
         <h2>Top rules{filtered ? ', under the current filters' : ''}</h2>
         {@render problem(ruleSlot, 'rules')}
+        {#if ruleSlot.pending && !ruleSlot.data}<Placeholder label="Ranking the rules" lines={5} />{/if}
         {#if ruleSlot.data && ruleSlot.data.length === 0}<p class="note">No detection under the current filters.</p>{/if}
         <ol class="list" id="overview-rules">
           {#each ruleSlot.data ?? [] as rule (rule.key)}
@@ -149,6 +153,7 @@
             <h2>{list.label}{#if list.field}<span class="field"> ({list.field.name})</span>{/if}</h2>
             {#if !list.field}<p class="note">This package has no such field.</p>{/if}
             {@render problem(list.slot, list.label.toLowerCase())}
+            {#if list.field && list.slot.pending && !list.slot.data}<Placeholder label={`Ranking the ${list.label.slice(4)}`} lines={5} />{/if}
             {#if list.field && list.slot.data && list.slot.data.length === 0}<p class="note">Nothing under the current filters.</p>{/if}
             <ol class="list">
               {#each list.slot.data ?? [] as row (row.v)}

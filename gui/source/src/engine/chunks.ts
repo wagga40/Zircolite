@@ -64,13 +64,13 @@ export function loadScript(source: string): Promise<void> {
   });
 }
 
-export async function loadScripts(sources: string[], loaded: () => void, concurrency = 6): Promise<void> {
+export async function loadScripts(sources: string[], loaded: (source: string) => void, concurrency = 6): Promise<void> {
   let next = 0;
   const worker = async (): Promise<void> => {
     while (next < sources.length) {
       const source = sources[next++];
       await loadScript(source);
-      loaded();
+      loaded(source);
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, sources.length) }, worker));

@@ -5,7 +5,10 @@ import { TEXT_FILE } from './textMatches';
 
 export type TextIndexStatus = 'absent' | 'loading' | 'ready' | 'failed';
 
-export const textIndex = $state<{ status: TextIndexStatus; error: string | null }>({ status: 'absent', error: null });
+/** loaded and total count the index file's scripts, for the page to say how far the load has got. */
+export const textIndex = $state<{ status: TextIndexStatus; error: string | null; loaded: number; total: number }>({
+  status: 'absent', error: null, loaded: 0, total: 0,
+});
 
 /** The package's full-text index file, when it has one. */
 export function textIndexFile(manifest: Pick<Manifest, 'files'>): PackageFile | undefined {
@@ -25,6 +28,8 @@ export async function loadTextIndex(
 ): Promise<void> {
   const file = textIndexFile(manifest);
   textIndex.error = null;
+  textIndex.loaded = 0;
+  textIndex.total = file?.chunks.length ?? 0;
   if (!file) {
     textIndex.status = 'absent';
     return;
@@ -43,7 +48,9 @@ export async function loadTextIndex(
   textIndex.status = 'loading';
   db.useTextIndex({ registered, failed: fail });
   try {
-    await load(file.chunks, () => undefined);
+    await load(file.chunks, () => {
+      textIndex.loaded += 1;
+    });
     await db.register(file.name, new Uint8Array(await store.take(file).arrayBuffer()));
     textIndex.status = 'ready';
     settle.resolve();

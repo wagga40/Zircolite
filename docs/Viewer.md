@@ -59,7 +59,8 @@ addresses, file paths. Share and store it as you would the logs themselves. The
 2. Open `index.html` from the extracted folder; double-clicking usually works.
 
 The page cannot run from inside the zip, because it loads the files beside it. While it
-loads, it checks that every file arrived whole and that the engine holds exactly the events
+loads, it lists its steps, with how much of the data has arrived and how long a slow step has
+taken. It checks that every file arrived whole and that the engine holds exactly the events
 and matches the package lists. A truncated package is reported, never shown incomplete.
 These checks compare counts and sizes, not checksums.
 
@@ -77,8 +78,16 @@ Zircolite version that made the package — followed by its warnings: a `--limit
 time bounds, events without a readable time, inputs read in part or failed, a missing
 full-text index. The theme switch offers Auto, Light and Dark.
 
-**Stop** appears while Explore or the SQL console is busy and cancels every query of the
-page; **Run again** restarts them.
+**While the page works.** A query that takes more than a moment shows a bar under the top bar
+and, at the foot of the view, what the page is doing and for how long. When the page can tell
+how far it has got, the bar fills and says so: loading the full-text index, a search of every
+field, or a search of a large field such as `CommandLine:*mimikatz*`, which runs in parts.
+Other queries cannot report their progress, so the bar only sweeps. A panel still waiting for
+its first answer says what it is doing over the outline of the rows to come; a panel
+answering a new question dims its previous answer until then.
+
+**Stop** cancels every query of the page; **Run again** restarts them. It is at the foot of the
+view, except while Explore's events or an SQL query load: their own Stop then stands beside them.
 
 **Keys.** `/` focuses the search, `?` opens the help, `Esc` closes what is on top, `j` and
 `k` move through events in Explore, and `Enter` opens one.
