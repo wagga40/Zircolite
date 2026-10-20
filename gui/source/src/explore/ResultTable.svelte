@@ -4,7 +4,7 @@
   import { levelInk } from '../engine/levels';
   import { isSuperseded } from '../engine/queries';
   import type { Field, Schema } from '../engine/schema';
-  import { run, runAgain, stopAll } from '../state/run.svelte';
+  import { holdStop, run, runAgain, stopAll } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { download } from '../ui/download';
   import { formatCount, isoTime, levelName } from '../ui/format';
@@ -48,6 +48,10 @@
   // The result list on screen; 0 until the first one is built.
   let current = $state(0);
   let busy = $state(true);
+  // The Stop beside the count stands for the page's while it shows.
+  $effect(() => {
+    if (busy) return holdStop();
+  });
   let failure = $state<string | null>(null);
   let pages = $state.raw(new Map<string, PageRow[]>());
   let active = $state(0);

@@ -2,8 +2,7 @@
   import { onDestroy } from 'svelte';
   import type { Db } from '../engine/db';
   import { textIndex } from '../engine/textIndex.svelte';
-  import { stopAll } from '../state/run.svelte';
-  import { view } from '../state/view.svelte';
+  import { run, stopAll } from '../state/run.svelte';
   import { activity, activityText, BusyClock } from './busy.svelte';
   import { formatElapsed, formatPercent } from './format';
 
@@ -23,8 +22,7 @@
 
   const text = $derived(activityText(activity, textIndex));
   const elapsed = $derived(clock.since === null ? 0 : now - clock.since);
-  // Explore and the SQL console have a Stop of their own, beside what they run.
-  const stoppable = $derived(view.route !== 'explore' && view.route !== 'sql');
+  const stoppable = $derived(run.ownStops === 0);
 </script>
 
 {#if clock.shown}

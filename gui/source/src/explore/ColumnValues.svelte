@@ -5,7 +5,7 @@
   import type { Field } from '../engine/schema';
   import { asciiLower } from '../engine/sql';
   import type { ColumnFilter, ColumnState } from '../search/filters';
-  import { run } from '../state/run.svelte';
+  import { run, runAgain } from '../state/run.svelte';
   import { formatCount } from '../ui/format';
   import Placeholder from '../ui/Placeholder.svelte';
   import { ownScope } from '../ui/scope';
@@ -46,6 +46,8 @@
   let rows = $state.raw<Value[] | null>(null);
   let failure = $state<string | null>(null);
   let pending = $state(true);
+  // A stop leaves no answer: the values on screen would belong to an earlier filter.
+  let stopped = $state(false);
   // Picked values by their lowercase, as the search matches them; each keeps the spelling it was picked in.
   let picked = $state.raw(new Map(chosen.map((value) => [asciiLower(value), value])));
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -65,6 +67,7 @@
     const mine = ++ticket;
     pending = true;
     failure = null;
+    stopped = false;
     db.rows<Value>(sql, { lane: 'values' }).then(
       (result) => {
         if (mine !== ticket) return;
@@ -74,6 +77,10 @@
       (error: unknown) => {
         if (mine !== ticket) return;
         if (!isSuperseded(error)) failure = error instanceof Error ? error.message : String(error);
+        else if (run.stopped) {
+          rows = null;
+          stopped = true;
+        }
         pending = false;
       },
     );
@@ -108,6 +115,8 @@
   </div>
   {#if failure}
     <p class="note failure" role="alert">The values could not be counted: {failure}</p>
+  {:else if stopped}
+    <p class="note" role="status">Stopped. <button type="button" onclick={runAgain}>Run again</button></p>
   {:else if rows === null}
     <Placeholder label="Counting values" lines={4} />
   {:else if listed.length === 0}

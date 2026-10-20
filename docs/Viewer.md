@@ -86,8 +86,8 @@ Other queries cannot report their progress, so the bar only sweeps. A panel stil
 its first answer says what it is doing over the outline of the rows to come; a panel
 answering a new question dims its previous answer until then.
 
-**Stop** cancels every query of the page; **Run again** restarts them. Explore and the SQL console
-have their own Stop, beside what they run; elsewhere, it is at the foot of the view.
+**Stop** cancels every query of the page; **Run again** restarts them. It is at the foot of the
+view, except while Explore's events or an SQL query load: their own Stop then stands beside them.
 
 **Keys.** `/` focuses the search, `?` opens the help, `Esc` closes what is on top, `j` and
 `k` move through events in Explore, and `Enter` opens one.

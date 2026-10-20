@@ -171,6 +171,11 @@ export class QueryScheduler {
     try {
       const stop = this.stopOf(job);
       const sql = await this.fields.prepare(await this.matches.prepare(job.sql, stop), stop);
+      // The matches are built: what runs now is the query itself, however long it takes.
+      if (this.scan) {
+        this.scan = null;
+        this.report();
+      }
       // A cancel that came before the statement was sent had nothing in the engine to stop.
       if (job.cancelled) throw new Superseded();
       const out = await this.collect(sql, job.rows);

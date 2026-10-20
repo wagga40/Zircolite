@@ -119,6 +119,8 @@ describe('the progress of a sliced scan', () => {
     expect(total).toBeGreaterThan(2);
     expect(scans.map((scan) => scan.done)).toEqual(Array.from({ length: total + 1 }, (_, i) => i));
     expect(scans.every((scan) => scan.label === label && scan.total === total)).toBe(true);
+    // The query that reads the finished matches runs on: it says it works, not that the scan is at 100%.
+    expect(seen.at(-2)).toEqual({ queries: 1, scan: null, waiting: false });
     expect(seen.at(-1)).toEqual({ queries: 0, scan: null, waiting: false });
   });
 });

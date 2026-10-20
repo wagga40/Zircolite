@@ -92,6 +92,11 @@ describe('what the activity bar says', () => {
     expect(activityText({ ...IDLE, queries: 1, scan }, index)).toEqual({ label: 'Searching CommandLine', fraction: 0.25 });
   });
 
+  it('sweeps for a scan in one part, which has no way to say how far it got', () => {
+    const scan = { label: 'Searching Message', done: 0, total: 1 };
+    expect(activityText({ ...IDLE, queries: 1, scan }, index)).toEqual({ label: 'Searching Message', fraction: null });
+  });
+
   it('says a query waits for the full-text index, and how much of it has loaded', () => {
     expect(activityText({ ...IDLE, queries: 1, waiting: true }, { loaded: 4, total: 10 })).toEqual({ label: 'Loading the full-text index', fraction: 0.4 });
     expect(activityText({ ...IDLE, queries: 1, waiting: true }, index)).toEqual({ label: 'Loading the full-text index', fraction: null });

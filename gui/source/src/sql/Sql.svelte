@@ -6,7 +6,7 @@
   import { csvLine } from '../explore/export';
   import type { QueryState } from '../state/query.svelte';
   import { view } from '../state/view.svelte';
-  import { run, runAgain, stopAll } from '../state/run.svelte';
+  import { holdStop, run, runAgain, stopAll } from '../state/run.svelte';
   import { download } from '../ui/download';
   import { formatCount } from '../ui/format';
   import { Panel } from '../ui/panel.svelte';
@@ -26,6 +26,10 @@
   const HEAD = 62;
 
   const result = new Panel<Result>(false);
+  // The Stop beside Run stands for the page's while it shows.
+  $effect(() => {
+    if (result.slot.pending) return holdStop();
+  });
   const tables = new Panel<{ table: string; columns: { name: string; type: string }[] }[]>();
   let editor = $state<HTMLTextAreaElement>();
   let scrollTop = $state(0);

@@ -53,7 +53,8 @@ export class BusyClock {
 /** What the bar says the page is doing, and how far it has got when it can tell. */
 export function activityText(activity: Activity, index: { loaded: number; total: number }): { label: string; fraction: number | null } {
   if (activity.waiting) return { label: 'Loading the full-text index', fraction: index.total > 0 ? index.loaded / index.total : null };
-  if (activity.scan) return { label: activity.scan.label, fraction: activity.scan.done / activity.scan.total };
+  // A scan in one part cannot say how far it got until it ends.
+  if (activity.scan) return { label: activity.scan.label, fraction: activity.scan.total > 1 ? activity.scan.done / activity.scan.total : null };
   return { label: 'Working', fraction: null };
 }
 
