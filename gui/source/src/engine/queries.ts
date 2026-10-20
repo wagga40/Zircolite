@@ -1,4 +1,4 @@
-import { FieldMatches, type Stop, TextMatches, type TextSource } from './textMatches';
+import { FieldMatches, type Scan, type Stop, TextMatches, type TextSource } from './textMatches';
 
 /** A query the page no longer wants: a newer one replaced it in its lane, or the page was stopped. */
 export class Superseded extends Error {
@@ -25,6 +25,16 @@ export interface QueryOptions {
   cache?: boolean;
   /** A newer request in the same lane supersedes this one, whether it is queued or running. */
   lane?: string;
+}
+
+/** What the page is waiting for, for the activity bar. */
+export interface Activity {
+  /** Queries queued or running. */
+  queries: number;
+  /** How far the running query's scan of a whole file has got, while it runs one. */
+  scan: Scan | null;
+  /** Whether the running query waits for the full-text index to load. */
+  waiting: boolean;
 }
 
 interface Job {
@@ -69,12 +79,23 @@ export class QueryScheduler {
   private readonly cache = new Map<string, Record<string, unknown>[]>();
   private readonly matches: TextMatches;
   private readonly fields: FieldMatches;
+  private readonly onActivity: (activity: Activity) => void;
+  private scan: Scan | null = null;
+  private waiting = false;
 
-  /** largeColumn: the column size from which a field match gets a table; sliceBytes: how much each slice of its scan reads. Tests lower both. */
-  constructor(conn: Sender, options: { largeColumn?: number; sliceBytes?: number } = {}) {
+  /**
+   * largeColumn: the column size from which a field match gets a table; sliceBytes: how much each slice of its scan reads. Tests lower both.
+   * onActivity: told whenever what the page waits for changes.
+   */
+  constructor(conn: Sender, options: { largeColumn?: number; sliceBytes?: number; onActivity?: (activity: Activity) => void } = {}) {
     this.conn = conn;
-    this.matches = new TextMatches((sql) => this.collect(sql));
-    this.fields = new FieldMatches((sql) => this.collect(sql), options.largeColumn, options.sliceBytes);
+    this.onActivity = options.onActivity ?? (() => {});
+    const progress = (scan: Scan) => {
+      this.scan = scan;
+      this.report();
+    };
+    this.matches = new TextMatches((sql) => this.collect(sql), progress);
+    this.fields = new FieldMatches((sql) => this.collect(sql), options.largeColumn, options.sliceBytes, progress);
   }
 
   rows<T = Record<string, unknown>>(sql: string, options: QueryOptions = {}): Promise<T[]> {
@@ -116,6 +137,7 @@ export class QueryScheduler {
   }
 
   private drop(match: (job: Job) => boolean): void {
+    const queued = this.queue.length;
     for (let i = this.queue.length - 1; i >= 0; i--) {
       const job = this.queue[i];
       if (match(job)) {
@@ -123,6 +145,7 @@ export class QueryScheduler {
         job.reject(new Superseded());
       }
     }
+    if (this.queue.length !== queued) this.report();
     const running = this.running;
     if (running && !running.cancelled && match(running)) {
       running.cancelled = true;
@@ -136,6 +159,7 @@ export class QueryScheduler {
   private enqueue(sql: string, lane: string | null, rows: boolean, cache: boolean): Promise<Record<string, unknown>[]> {
     return new Promise((resolve, reject) => {
       this.queue.push({ sql, lane, rows, cache, cancelled: false, wake: null, resolve, reject });
+      this.report();
       void this.pump();
     });
   }
@@ -157,8 +181,15 @@ export class QueryScheduler {
       job.reject(job.cancelled ? new Superseded() : error);
     } finally {
       this.running = null;
+      this.scan = null;
+      this.waiting = false;
+      this.report();
       void this.pump();
     }
+  }
+
+  private report(): void {
+    this.onActivity({ queries: this.queue.length + (this.running ? 1 : 0), scan: this.scan, waiting: this.waiting });
   }
 
   private stopOf(job: Job): Stop {
@@ -171,14 +202,24 @@ export class QueryScheduler {
             reject(new Superseded());
             return;
           }
-          job.wake = () => reject(new Superseded());
+          const settle = () => {
+            job.wake = null;
+            this.waiting = false;
+            this.report();
+          };
+          job.wake = () => {
+            settle();
+            reject(new Superseded());
+          };
+          this.waiting = true;
+          this.report();
           promise.then(
             (value) => {
-              job.wake = null;
+              settle();
               resolve(value);
             },
             (error: unknown) => {
-              job.wake = null;
+              settle();
               reject(error);
             },
           );

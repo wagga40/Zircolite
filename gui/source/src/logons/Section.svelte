@@ -43,7 +43,7 @@
     {#if total > rows.length}<p class="note">Showing {formatCount(rows.length)} of {formatCount(total)} rows. Filter a column to find the others.</p>{/if}
     {@render figure?.()}
     <LocalTable {id} {columns} {rows} pending={table.list.slot.pending} answered={table.answer !== null} bind:filters={table.filters} bind:sort={table.sort}
-      {order} empty={`No ${noun} ${table.filters ? 'pass the column filters' : 'among these events'}.`}
+      {order} empty={`No ${noun} ${table.filters ? 'pass the column filters' : 'among these events'}.`} loading={`Listing the ${noun}`}
       pivot={{ events, open, title: (row) => opens?.(row) ?? `Show the ${formatCount(events?.(row) ?? 0)} events of this row` }} />
     {#if rows.length === LOGON_LIMIT}<p class="note">The table stops at {formatCount(LOGON_LIMIT)} rows.</p>{/if}
   {/if}

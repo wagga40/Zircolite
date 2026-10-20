@@ -7,13 +7,15 @@
   import { Schema } from './engine/schema';
   import { loadTextIndex, textIndex } from './engine/textIndex.svelte';
   import { bindHash, view } from './state/view.svelte';
+  import { activity } from './ui/busy.svelte';
   import Loading from './ui/Loading.svelte';
+  import { type BootStep, chunkWeights } from './ui/loading';
   import Shell from './ui/Shell.svelte';
 
   let manifest = $state<Manifest | null>(null);
   let db = $state<Db | null>(null);
   let schema = $state<Schema | null>(null);
-  let phase = $state('Reading the package');
+  let phase = $state<BootStep>('Reading the package');
   let loaded = $state(0);
   let total = $state(0);
   let failure = $state<string | null>(null);
@@ -36,17 +38,19 @@
       throw new Error(`This viewer reads package format ${PACKAGE_FORMAT}; this package is format ${m.format}. Open it with the viewer of the Zircolite version that made it, or re-create the package with this version.`);
     }
     manifest = m;
-    const scripts = m.files.filter((file) => file.kind !== 'index').flatMap((file) => file.chunks);
-    total = scripts.length;
+    const weights = chunkWeights(m.files);
+    total = [...weights.values()].reduce((sum, bytes) => sum + bytes, 0);
     phase = 'Loading the data';
-    await loadScripts(scripts, () => {
-      loaded += 1;
+    await loadScripts([...weights.keys()], (source) => {
+      loaded += weights.get(source) ?? 0;
     });
     phase = 'Starting the query engine';
     const engine = await bootEngine(m, store, (label) => {
       phase = label;
     });
-    const opened = await openDb(engine);
+    phase = 'Linking detections to their events';
+    const opened = await openDb(engine, { onActivity: (next) => Object.assign(activity, next) });
+    phase = 'Checking the package';
     const [counts] = await opened.rows<{ events: number; hits: number }>(
       'SELECT (SELECT count(*) FROM events)::DOUBLE AS events, (SELECT count(*) FROM hits)::DOUBLE AS hits',
       { cache: false },

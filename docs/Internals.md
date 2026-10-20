@@ -395,6 +395,11 @@ build, and the only part of `gui/` that ships.
   in place with `ILIKE`, because building and joining a table costs more than the scans it saves.
   On 1.87M events, `Message:*error*` went from 45 s to 12 s and `CommandLine:*powershell*` from
   1.6 s to 0.8 s.
+- **Progress.** The scheduler reports how many queries are queued or running, the slice a
+  match scan has reached, and whether the running query waits for the full-text index; the
+  activity bar reads that, with the index's share of scripts loaded. DuckDB-WASM's own query
+  progress is not used: its worker builds the callback with `new Function`, which the page's
+  CSP forbids, and allowing `'unsafe-eval'` for a progress bar is not worth it.
 - **Sorting.** The result list (`view_ids`) is ordered by time, or by a column or the level.
   The sort key is computed below the window. Text sorts by its first 128 characters, ignoring
   case: on whole values, sorting a long column such as `Message` ran DuckDB-WASM out of memory.

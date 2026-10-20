@@ -1,6 +1,6 @@
 import { tableFromArrays } from 'apache-arrow';
 import { describe, expect, it } from 'vitest';
-import { isSuperseded, plain, QueryScheduler, type Sender } from '../src/engine/queries';
+import { type Activity, isSuperseded, plain, QueryScheduler, type Sender } from '../src/engine/queries';
 import { fakeConnection } from './connection';
 
 describe('QueryScheduler', () => {
@@ -167,6 +167,50 @@ describe('QueryScheduler', () => {
     const done = s.exec('CREATE TEMP TABLE t AS SELECT 1');
     await c.finish();
     await expect(done).resolves.toBeUndefined();
+  });
+});
+
+describe("the scheduler's activity", () => {
+  const IDLE: Activity = { queries: 0, scan: null, waiting: false };
+
+  it('counts the queries queued or running, down to none once they answer', async () => {
+    const c = fakeConnection();
+    const seen: Activity[] = [];
+    const s = new QueryScheduler(c.sender, { onActivity: (activity) => seen.push(activity) });
+    const a = s.rows('A');
+    const b = s.exec('B');
+    expect(seen.at(-1)).toEqual({ ...IDLE, queries: 2 });
+    await c.finish();
+    expect(seen.at(-1)).toEqual({ ...IDLE, queries: 1 });
+    await c.finish();
+    await Promise.all([a, b]);
+    expect(seen.at(-1)).toEqual(IDLE);
+  });
+
+  it('is not woken by an answer from the cache', async () => {
+    const c = fakeConnection();
+    const seen: Activity[] = [];
+    const s = new QueryScheduler(c.sender, { onActivity: (activity) => seen.push(activity) });
+    const first = s.rows('A');
+    await c.finish([{ n: 1 }]);
+    await first;
+    seen.length = 0;
+    expect(await s.rows('A')).toEqual([{ n: 1 }]);
+    expect(seen).toEqual([]);
+  });
+
+  it('drops a stopped query from the count at once, and the running one when the engine gives it up', async () => {
+    const c = fakeConnection();
+    const seen: Activity[] = [];
+    const s = new QueryScheduler(c.sender, { onActivity: (activity) => seen.push(activity) });
+    const running = s.rows('A');
+    const queued = s.rows('B');
+    const stopped = Promise.all([expect(running).rejects.toSatisfy(isSuperseded), expect(queued).rejects.toSatisfy(isSuperseded)]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    s.cancel();
+    await stopped;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(seen.at(-1)).toEqual(IDLE);
   });
 });
 

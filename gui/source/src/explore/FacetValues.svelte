@@ -6,6 +6,7 @@
   import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { formatCount } from '../ui/format';
+  import Placeholder from '../ui/Placeholder.svelte';
   import { ownScope } from '../ui/scope';
   import { topValuesSql, valueLabel } from './sidebar';
 
@@ -63,7 +64,7 @@
   {:else if stopped}
     <p class="note" role="status">Stopped. <button type="button" class="again" onclick={runAgain}>Run again</button></p>
   {:else if rows === null}
-    <p class="note">Counting values</p>
+    <Placeholder label="Counting values" lines={4} />
   {:else if rows.length === 0}
     <p class="note dims" aria-busy={pending}>No event in the results has this field.</p>
   {:else}

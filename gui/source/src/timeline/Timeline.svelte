@@ -12,6 +12,7 @@
   import { view } from '../state/view.svelte';
   import { drag } from '../ui/drag';
   import { formatCount, isoTime, levelName } from '../ui/format';
+  import Placeholder from '../ui/Placeholder.svelte';
   import { pageTopLayer } from '../ui/layers';
   import { ownScope } from '../ui/scope';
   import {
@@ -389,6 +390,7 @@
     <p class="note pad">No detection in this package has a time, so there is nothing to place on a timeline. Detections lists them all.</p>
   {:else}
     <div class="plot" class:stale={pending && marks !== null} aria-busy={pending} bind:clientWidth={width}>
+      {#if pending && marks === null}<div class="waiting"><Placeholder label="Placing the detections in time" lines={3} /></div>{/if}
       <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
       <!-- A canvas has no native role for this; the key handler and the note below make it operable. -->
       <canvas
@@ -458,7 +460,9 @@
   h1 { margin: 0; font-size: var(--t-18); }
   .controls { display: flex; gap: 6px; }
   .controls button, .pinned button, .again { min-height: 28px; background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 3px 10px; cursor: pointer; }
-  .plot { padding: 12px 16px; }
+  .plot { position: relative; padding: 12px 16px; }
+  /* Over the empty lanes, which keep their height for the marks to come. */
+  .waiting { position: absolute; top: 12px; left: 16px; right: 16px; padding: 8px 12px; background: var(--paper); }
   canvas { display: block; width: 100%; cursor: grab; touch-action: pan-y; }
   .stale { opacity: 0.5; transition: opacity var(--motion); }
   .note { margin: 0; color: var(--ink-2); font-size: var(--t-13); }

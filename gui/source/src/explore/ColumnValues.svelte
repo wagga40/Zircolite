@@ -7,6 +7,7 @@
   import type { ColumnFilter, ColumnState } from '../search/filters';
   import { run } from '../state/run.svelte';
   import { formatCount } from '../ui/format';
+  import Placeholder from '../ui/Placeholder.svelte';
   import { ownScope } from '../ui/scope';
   import { columnValuesSql, valueLabel } from './sidebar';
 
@@ -108,7 +109,7 @@
   {#if failure}
     <p class="note failure" role="alert">The values could not be counted: {failure}</p>
   {:else if rows === null}
-    <p class="note">Counting values</p>
+    <Placeholder label="Counting values" lines={4} />
   {:else if listed.length === 0}
     <p class="note">{query ? 'No value contains this text.' : 'No event in the results has this field.'}</p>
   {:else}

@@ -1,5 +1,5 @@
 import type { Engine } from './boot';
-import { type QueryOptions, QueryScheduler, type Sender, Superseded } from './queries';
+import { type Activity, type QueryOptions, QueryScheduler, type Sender, Superseded } from './queries';
 import { EVENT_LEVELS_SQL } from './sql';
 import type { TextSource } from './textMatches';
 
@@ -52,9 +52,10 @@ function over(scheduler: QueryScheduler, register: Db['register'], prefix: strin
   };
 }
 
-export async function openDb(engine: Engine): Promise<Db> {
+/** onActivity: told whenever what the page waits for changes. */
+export async function openDb(engine: Engine, options: { onActivity?: (activity: Activity) => void } = {}): Promise<Db> {
   // DuckDB-WASM's reader is typed against its own Arrow classes; the scheduler needs only toArray and toJSON.
-  const scheduler = new QueryScheduler(engine.conn as unknown as Sender);
+  const scheduler = new QueryScheduler(engine.conn as unknown as Sender, { onActivity: options.onActivity });
   const { dispose: _, ...db } = over(scheduler, (name, bytes) => engine.db.registerFileBuffer(name, bytes), '', () => true);
   await db.exec(EVENT_LEVELS_SQL);
   return db;

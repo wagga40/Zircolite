@@ -126,7 +126,7 @@
   {:else}
     {#if total > rows.length}<p class="note">Showing {formatCount(rows.length)} of {formatCount(total)} combinations. Filter a column to find the others.</p>{/if}
     <LocalTable id="stacking-table" columns={tableColumns} {rows} pending={list.slot.pending} answered={answer !== null} bind:filters bind:sort
-      order={{ column: 'events', desc: false }} missing="(missing)" empty={`No combination ${filters ? 'passes the column filters' : 'among these events'}.`}
+      order={{ column: 'events', desc: false }} missing="(missing)" empty={`No combination ${filters ? 'passes the column filters' : 'among these events'}.`} loading="Stacking the values"
       pivot={{ events: (row) => row.events, open: explore, title: (row) => `Show the ${formatCount(row.events)} events of this combination` }} />
     {#if total > STACK_LIMIT && rows.length === STACK_LIMIT}<p class="note">The table stops at {formatCount(STACK_LIMIT)} rows.</p>{/if}
   {/if}

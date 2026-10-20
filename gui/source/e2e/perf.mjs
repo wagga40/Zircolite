@@ -289,6 +289,17 @@ try {
   await page.waitForTimeout(1000);
   report.leave_search_overview_ms = await timed(() => page.goto(`${base}#/overview?q=EventID%3A4625`), filled('#overview-tiles', 'data-events'));
   report.leave_search_overview_events = Number(await page.locator('#overview-tiles').getAttribute('data-events'));
+
+  // The activity bar on a view with no Stop of its own: how soon it shows once the tree is asked for under a
+  // search not answered before, and whether its Stop reaches the tree. Not a budget.
+  const busy = page.locator('#page-busy');
+  const treeStopped = page.locator('main.processes p.note', { hasText: 'Stopped.' });
+  await poll(page, async () => (await busy.count()) === 0, 60_000);
+  report.busy_bar_shown_ms = await timed(() => page.goto(`${base}#/processes?q=-EventID%3A4625`), () => busy.waitFor({ timeout: 10_000 }));
+  report.busy_bar_stop_ms = await timed(() => busy.getByRole('button', { name: 'Stop' }).click(), () => treeStopped.waitFor({ timeout: 10_000 }));
+  await poll(page, async () => (await busy.count()) === 0, 10_000);
+  report.busy_bar_run_again_ms = await timed(() => page.locator('main.processes').getByRole('button', { name: 'Run again' }).click(),
+    filled('#process-tree', 'data-starts'));
   await page.close();
 
   // A bookmark or Back with a bare word: the page opens on Overview before the index has loaded, and every

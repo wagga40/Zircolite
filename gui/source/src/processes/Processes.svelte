@@ -10,6 +10,7 @@
   import { view } from '../state/view.svelte';
   import { formatCount, isoTime } from '../ui/format';
   import { Panel } from '../ui/panel.svelte';
+  import Placeholder from '../ui/Placeholder.svelte';
   import { ownScope } from '../ui/scope';
   import { windowOf } from '../ui/virtual';
   import { ACTIVITY, type Activity, activitySummary, activityTerms } from './activity';
@@ -209,6 +210,7 @@
       <div class="head" aria-hidden="true">
         <span>Process</span><span class="pid">PID</span><span class="user">User</span><span class="host">Host</span><span class="time">Started (UTC)</span><span>Detections</span><span class="act">Activity</span>
       </div>
+      {#if tree.slot.pending && !tree.slot.data}<div class="waiting"><Placeholder label="Reading the process starts" lines={8} /></div>{/if}
       <div class="spacer" style:height={`${rows.length * ROW}px`}>
         {#each shown as { row, at } (row.process.uid)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -255,6 +257,7 @@
   .head { position: sticky; top: 0; z-index: 1; height: 28px; min-width: 1060px; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 64px 160px 160px 190px 120px 160px; gap: 8px; align-items: center; padding: 0 8px; background: var(--panel); border-bottom: 1px solid var(--rule); color: var(--ink-2); font-size: var(--t-12); font-weight: 600; }
   .head .pid { text-align: right; }
   .spacer { position: relative; min-width: 1060px; }
+  .waiting { padding: 4px 8px; max-width: 720px; }
   .row { position: absolute; left: 0; right: 0; height: 28px; display: grid; grid-template-columns: minmax(0, 1fr) 64px 160px 160px 190px 120px 160px; gap: 8px; align-items: center; padding: 0 8px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 50%, transparent); cursor: pointer; font-size: var(--t-13); }
   .row.active { background: color-mix(in srgb, var(--signal) 14%, transparent); }
   .row.context { opacity: 0.55; }

@@ -28,6 +28,16 @@ export const TEXT_VIEW_SQL = `CREATE OR REPLACE VIEW fulltext AS SELECT * FROM r
 
 export type RunSql = (sql: string) => Promise<Record<string, unknown>[]>;
 
+/** How far a scan of a whole file has got: it runs in `total` slices, `done` of them already. */
+export interface Scan {
+  label: string;
+  done: number;
+  total: number;
+}
+
+/** How far the scan being built has got. */
+export type Progress = (scan: Scan) => void;
+
 /** How the query being prepared learns that the page no longer wants it. */
 export interface Stop {
   cancelled(): boolean;
@@ -123,6 +133,8 @@ interface Kind {
   file: string;
   /** The scan of one predicate, before its slice bounds. */
   scan(key: string): string;
+  /** What the page says while it scans. */
+  label(key: string): string;
 }
 
 /** Predicates that scan a whole file, each answered once into a table of uids that every query then reads. */
@@ -137,6 +149,7 @@ class Matches {
   constructor(
     protected readonly run: RunSql,
     private readonly kind: Kind,
+    private readonly progress: Progress = () => {},
   ) {}
 
   /** The query with each predicate answered from its table of matches, built first when it is missing. */
@@ -184,8 +197,10 @@ class Matches {
       await this.evict(wanted, stop);
     }
     const bounds = sliceBounds(await this.rowGroups(stop), this.slices(key));
+    const scan = (done: number) => this.progress({ label: this.kind.label(key), done, total: bounds.length + 1 });
     while (entry.done <= bounds.length) {
       if (stop.cancelled()) throw stop.superseded();
+      scan(entry.done);
       const low = entry.done > 0 ? ` AND _zl_uid >= ${bounds[entry.done - 1]}` : '';
       const high = entry.done < bounds.length ? ` AND _zl_uid < ${bounds[entry.done]}` : '';
       const select = `${this.kind.scan(key)}${low}${high}`;
@@ -198,6 +213,7 @@ class Matches {
       }
       entry.done += 1;
     }
+    scan(entry.done);
     entry.ready = true;
   }
 
@@ -244,13 +260,14 @@ export class TextMatches extends Matches {
   private source: TextSource | null = null;
   private opened = false;
 
-  constructor(run: RunSql) {
+  constructor(run: RunSql, progress?: Progress) {
     super(run, {
       pattern: PREDICATE,
       table: '_zl_tm_',
       file: TEXT_FILE,
       scan: (like) => `SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE ${like}${escapeClause(like)}`,
-    });
+      label: () => 'Searching every field',
+    }, progress);
   }
 
   use(source: TextSource): void {
@@ -291,6 +308,11 @@ export const LARGE_COLUMN = 64 * 1024 * 1024;
 /** About a second of reading a column in the browser: each slice of a field scan reads this much, so a Stop waits about that long. */
 const SLICE_BYTES = 256 * 1024 * 1024;
 
+/** The predicate's first quoted name is its column: a literal comes after it, in single quotes. */
+function columnOf(predicate: string): string | undefined {
+  return /"((?:[^"]|"")+)"/.exec(predicate)?.[1].replaceAll('""', '"');
+}
+
 /**
  * Field matches that open with a wildcard, such as CommandLine:*powershell*:
  * the engine reads the whole column for each, and the list, the strip and the
@@ -304,9 +326,16 @@ export class FieldMatches extends Matches {
     run: RunSql,
     private readonly large = LARGE_COLUMN,
     private readonly sliceBytes = SLICE_BYTES,
+    progress?: Progress,
   ) {
-    // Parenthesised, so the slice bounds appended after it bind to the whole predicate.
-    super(run, { pattern: FIELD_PREDICATE, table: '_zl_fm_', file: EVENTS_FILE, scan: (predicate) => `SELECT _zl_uid FROM events WHERE (${largeScan(predicate)})` });
+    super(run, {
+      pattern: FIELD_PREDICATE,
+      table: '_zl_fm_',
+      file: EVENTS_FILE,
+      // Parenthesised, so the slice bounds appended after it bind to the whole predicate.
+      scan: (predicate) => `SELECT _zl_uid FROM events WHERE (${largeScan(predicate)})`,
+      label: (predicate) => `Searching ${columnOf(predicate) ?? 'a field'}`,
+    }, progress);
   }
 
   protected override async worth(predicate: string, stop: Stop): Promise<boolean> {
@@ -320,8 +349,7 @@ export class FieldMatches extends Matches {
   }
 
   private sizeOf(predicate: string): number {
-    // The predicate's first quoted name is its column: a literal comes after it, in single quotes.
-    const name = /"((?:[^"]|"")+)"/.exec(predicate)?.[1].replaceAll('""', '"');
+    const name = columnOf(predicate);
     return name === undefined ? 0 : (this.sizes?.get(name) ?? 0);
   }
 

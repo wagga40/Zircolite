@@ -91,7 +91,7 @@
         <p class="note">Showing {formatCount(rows.length)} of {formatCount(total)} values. Filter a column to find the others.</p>
       {/if}
       <LocalTable id="entities-table" columns={tableColumns} {rows} pending={list.slot.pending} answered={answer !== null} bind:filters bind:sort
-        order={{ column: 'events', desc: true }} empty={`No ${kind.noun} ${filters ? 'pass the column filters' : 'among these events'}.`}
+        order={{ column: 'events', desc: true }} empty={`No ${kind.noun} ${filters ? 'pass the column filters' : 'among these events'}.`} loading={`Listing the ${kind.noun}`}
         pivot={{ events: (row) => row.events, open: (row) => explore(row.v), title: (row) => `Show the ${formatCount(row.events)} events of ${valueLabel(row.v)}` }} />
       {#if total > ENTITY_LIMIT && rows.length === ENTITY_LIMIT}<p class="note">The table stops at {formatCount(ENTITY_LIMIT)} rows.</p>{/if}
     {/if}

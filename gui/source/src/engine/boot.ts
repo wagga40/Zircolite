@@ -1,5 +1,6 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
 import { blobToDataUrl, type ChunkStore, gunzip } from './chunks';
+import type { BootStep } from '../ui/loading';
 import type { Manifest, PackageFile } from './manifest';
 
 export interface Engine {
@@ -15,7 +16,7 @@ function find(manifest: Manifest, name: string): PackageFile {
   return file;
 }
 
-export async function bootEngine(manifest: Manifest, store: ChunkStore, step: (label: string) => void): Promise<Engine> {
+export async function bootEngine(manifest: Manifest, store: ChunkStore, step: (label: BootStep) => void): Promise<Engine> {
   const wasm = await gunzip(store.take(find(manifest, 'duckdb-eh.wasm.gz')), 'application/wasm');
   // A worker started from a file:// page cannot fetch a blob: URL in Chromium
   // or WebKit, but it can read a data: URL.

@@ -11,6 +11,7 @@
   import { view } from '../state/view.svelte';
   import { copyText } from '../ui/clipboard';
   import { isoTime } from '../ui/format';
+  import Placeholder from '../ui/Placeholder.svelte';
   import { focusFallback } from '../ui/focus';
   import { pageTopLayer } from '../ui/layers';
   import { ui } from '../ui/ui.svelte';
@@ -227,7 +228,7 @@
     {:else if stopped}
       <p class="note" role="status">Stopped. <button type="button" onclick={runAgain}>Run again</button></p>
     {:else if !loaded}
-      <p class="note">Reading the event</p>
+      <Placeholder label="Reading the event" lines={8} />
     {:else}
       <div class="dims" aria-busy={stale}>
         <div class="actions">

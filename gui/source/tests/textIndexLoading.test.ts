@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from '../src/engine/db';
-import { isSuperseded, QueryScheduler, type Sender } from '../src/engine/queries';
+import { type Activity, isSuperseded, QueryScheduler, type Sender } from '../src/engine/queries';
 import { ident } from '../src/engine/sql';
 import { loadTextIndex, textIndex } from '../src/engine/textIndex.svelte';
 import { compile } from '../src/search/compile';
@@ -25,7 +25,7 @@ const store = { take: () => new Blob([new Uint8Array([1])]) };
 const scanOf = (query: string) => fx.uids(compile(parse(query), schema));
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-function scheduler(): QueryScheduler {
+function scheduler(onActivity?: (activity: Activity) => void): QueryScheduler {
   const sender: Sender = {
     async send(sql: string) {
       sent.push(sql);
@@ -38,7 +38,7 @@ function scheduler(): QueryScheduler {
       return false;
     },
   };
-  return new QueryScheduler(sender);
+  return new QueryScheduler(sender, { onActivity });
 }
 
 /** The Db loadTextIndex sees, over a scheduler; the file is registered when `arrive` is called. */
@@ -93,6 +93,40 @@ describe('a bare word while the index loads', () => {
     expect(textIndex.status).toBe('ready');
     expect((await answer).map((row) => row._zl_uid)).toEqual(await scanOf('powershell'));
     expect(sent[0]).toMatch(/^CREATE OR REPLACE VIEW fulltext/);
+  });
+
+  it('says the query waits for the index, and how much of the file has loaded', async () => {
+    const seen: Activity[] = [];
+    const s = scheduler((activity) => seen.push(activity));
+    const page = pageDb(s);
+    const file = { ...FILE, chunks: ['data/text.parquet.0000.js', 'data/text.parquet.0001.js'] };
+    let next: () => void = () => {};
+    const load = async (sources: string[], loaded: () => void) => {
+      for (const _ of sources) {
+        await new Promise<void>((resolve) => {
+          next = resolve;
+        });
+        loaded();
+      }
+    };
+    const loading = loadTextIndex({ files: [file] }, store, page.db, load);
+    const query = new QueryState(schema, 6, true);
+    view.q = 'powershell';
+    const answer = s.rows(`SELECT _zl_uid FROM events WHERE ${query.where}`, { lane: 'table' });
+    await tick();
+    expect(seen.at(-1)).toEqual({ queries: 1, scan: null, waiting: true });
+    expect(textIndex).toMatchObject({ status: 'loading', loaded: 0, total: 2 });
+    next();
+    await tick();
+    expect(textIndex).toMatchObject({ loaded: 1, total: 2 });
+    next();
+    await tick();
+    page.arrive();
+    await loading;
+    await answer;
+    expect(textIndex).toMatchObject({ status: 'ready', loaded: 2, total: 2 });
+    expect(seen.some((activity) => activity.waiting)).toBe(true);
+    expect(seen.at(-1)).toEqual({ queries: 0, scan: null, waiting: false });
   });
 
   it('rejects the waiting query when the load fails, and the recompiled scan answers', async () => {
