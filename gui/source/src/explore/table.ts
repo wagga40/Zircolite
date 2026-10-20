@@ -200,3 +200,17 @@ export function wheelPosition(kept: number | null, scrollTop: number, deltaY: nu
   const from = kept !== null && Math.abs(Math.round(kept) - scrollTop) < 1 ? kept : scrollTop;
   return wheelScroll(from, deltaY, total, viewport);
 }
+
+/** Where an event sits in the result list; no row when the list leaves it out. */
+export function positionSql(uid: number): string {
+  if (!Number.isSafeInteger(uid) || uid < 0) throw new Error(`${uid} is not an event id`);
+  return `SELECT _zl_pos FROM view_ids WHERE _zl_uid = ${uid}`;
+}
+
+/** The scroll position that puts a row in the middle of the viewport, as near as the list's ends allow. */
+export function centerScroll(position: number, total: number, viewport: number, row = ROW, cap = HEIGHT_CAP): number {
+  if (total * row <= cap) return Math.min(Math.max(0, total * row - viewport), Math.max(0, position * row + row / 2 - viewport / 2));
+  const span = Math.max(1, total - viewport / row);
+  const exact = position - viewport / row / 2;
+  return Math.min(1, Math.max(0, exact / span)) * (cap - viewport);
+}

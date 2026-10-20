@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Schema } from '../src/engine/schema';
 import {
-  explicitSql, explicitTerms, type LogonRow, logonFields, logonsSql, logonTerms, rdpSql, rdpTerms, type RdpRow, sessionActivity,
-  type SessionRow, sessionsSql,
+  explicitSql, explicitTerms, type LateralRow, lateralSql, lateralTerms, type LogonRow, logonFields, logonsSql, logonTerms, rdpSql, rdpTerms,
+  type RdpRow, sessionActivity, type SessionRow, sessionsSql,
 } from '../src/logons/logons';
 import { timePredicate } from '../src/state/where';
 import { compile } from '../src/search/compile';
@@ -39,12 +39,13 @@ describe.each(kinds)('logons, with a %s', (_name, textIds) => {
       ['DC01', 'CORP\\eve', '3 Network', '10.0.0.8', null, 1, 0, null, 1],
       ['DC01', 'CORP\\frank', '3 Network', '10.0.0.8', null, 1, 0, null, 1],
       ['WS2', 'CORP\\carol', '10 RemoteInteractive', '10.0.0.7', null, 1, 0, null, 1],
+      ['WS2', 'CORP\\WS1$', '3 Network', '10.0.0.5', null, 1, 0, null, 1],
     ]);
   });
 
   it('leaves out other channels, logoffs and other events', async () => {
     const rows = await logons();
-    expect(rows.reduce((sum, r) => sum + r.successes + r.failures, 0)).toBe(9);
+    expect(rows.reduce((sum, r) => sum + r.successes + r.failures, 0)).toBe(10);
   });
 
   it('pivots each row to exactly its logons and failures', async () => {
@@ -61,16 +62,19 @@ describe.each(kinds)('logons, with a %s', (_name, textIds) => {
 
   it('applies the page filters', async () => {
     const where = compile(parse('Computer:WS2'), schema);
-    expect((await fixture(textIds).rows(logonsSql(fields, where, {}) as string)).length).toBe(1);
+    expect((await fixture(textIds).rows(logonsSql(fields, where, {}) as string)).length).toBe(2);
   });
 
   it('lists explicit credentials from the host they were used on', async () => {
     const rows = await fixture(textIds).rows(explicitSql(fields, 'TRUE', {}) as string);
     expect(rows.map((r) => [r.host, r.subject, r.account, r.server, r.process, r.events])).toEqual([
       ['WS1', 'CORP\\alice', 'CORP\\admin', 'DC01', 'C:\\Windows\\System32\\runas.exe', 1],
+      ['WS1', 'CORP\\alice', 'CORP\\alice', 'localhost', 'C:\\Windows\\System32\\svchost.exe', 1],
+      ['WS1', 'CORP\\alice', 'CORP\\alice', 'ws1', 'C:\\Windows\\System32\\svchost.exe', 1],
     ]);
+    expect(await fixture(textIds).uids(compile(parse(explicitTerms(fields, rows[0] as never)), schema))).toEqual([9]);
     for (const row of rows) {
-      expect(await fixture(textIds).uids(compile(parse(explicitTerms(fields, row as never)), schema))).toEqual([9]);
+      expect(await fixture(textIds).uids(compile(parse(explicitTerms(fields, row as never)), schema))).toHaveLength(1);
     }
   });
 
@@ -87,6 +91,47 @@ describe.each(kinds)('logons, with a %s', (_name, textIds) => {
   });
 });
 
+describe.each(kinds)('lateral movement, with a %s', (_name, textIds) => {
+  const schema = logonSchema(textIds);
+  const fields = logonFields(schema);
+  const lateral = async (options = {}, where = 'TRUE') =>
+    (await fixture(textIds).rows(lateralSql(fields, where, options) as string)) as unknown as LateralRow[];
+
+  it('links each source to the host it reached: network and Remote Desktop logons, and explicit credentials', async () => {
+    expect((await lateral()).map((r) => [r.source, r.target, r.kind, r.accounts, r.account_list, r.events])).toEqual([
+      ['10.0.0.5', 'DC01', '3 Network logon', 1, 'CORP\\alice', 2],
+      ['10.0.0.8', 'DC01', '3 Network logon', 2, 'CORP\\eve, CORP\\frank', 2],
+      ['10.0.0.5', 'WS2', '3 Network logon', 1, 'CORP\\WS1$', 1],
+      ['10.0.0.7', 'WS2', '10 Remote Desktop logon', 1, 'CORP\\carol', 1],
+      ['WS1', 'DC01', '4648 Explicit credentials', 1, 'CORP\\admin', 1],
+    ]);
+  });
+
+  it('leaves out logons from the host itself and credentials used for the host itself', async () => {
+    const rows = await lateral();
+    expect(rows.map((r) => r.source)).not.toContain('::1');
+    expect(rows.map((r) => r.target.toLowerCase())).not.toContain('localhost');
+    expect(rows.filter((r) => r.source.toLowerCase() === r.target.toLowerCase())).toEqual([]);
+  });
+
+  it('pivots each link to exactly its events', async () => {
+    for (const options of [{}, { hideMachines: true }]) {
+      for (const row of await lateral(options)) {
+        const listed = await fixture(textIds).uids(compile(parse(lateralTerms(fields, row, options)), schema));
+        expect(listed.length, JSON.stringify([row, options])).toBe(row.events);
+      }
+    }
+  });
+
+  it('hides computer accounts on request', async () => {
+    expect((await lateral({ hideMachines: true })).map((r) => r.account_list)).not.toContain('CORP\\WS1$');
+  });
+
+  it('applies the page filters', async () => {
+    expect((await lateral({}, compile(parse('Computer:WS2'), schema))).map((r) => r.target)).toEqual(['WS2', 'WS2']);
+  });
+});
+
 describe.each(kinds)('sessions, with a %s', (_name, textIds) => {
   const schema = logonSchema(textIds);
   const fields = logonFields(schema);
@@ -97,26 +142,43 @@ describe.each(kinds)('sessions, with a %s', (_name, textIds) => {
     expect((await sessions()).map((r) => [r.host, r.account, r.session, r.start, r.end, r.minutes, r.next_logon])).toEqual([
       ['DC01', 'CORP\\alice', '0x1', at('08:00'), at('08:20'), 20, at('12:00')],
       ['DC01', 'CORP\\DC01$', '0x3', at('08:30'), null, null, null],
-      ['DC01', 'CORP\\eve', '0x5', at('08:40'), null, null, at('09:10')],
+      ['DC01', 'CORP\\eve', '0x5', at('08:40'), null, null, at('09:10') - 3000],
       ['dc01', 'corp\\Alice', '0x2', at('09:00'), at('10:00'), 60, null],
       ['DC01', 'CORP\\frank', '0x5', at('09:10'), at('09:30'), 20, null],
       ['WS2', 'CORP\\carol', '0x1', at('11:00'), null, null, null],
       ['DC01', 'CORP\\alice', '0x1', at('12:00'), null, null, null],
+      ['WS2', 'CORP\\WS1$', '0x9', at('13:00'), null, null, null],
     ]);
   });
 
   it('filters the logons, never the logoffs that close them', async () => {
     const rows = await sessions(compile(parse('LogonType:3'), schema));
-    expect(rows.map((r) => [r.session, r.end])).toEqual([['0x1', at('08:20')], ['0x3', null], ['0x5', null], ['0x2', at('10:00')], ['0x5', at('09:30')]]);
+    expect(rows.map((r) => [r.session, r.end])).toEqual([
+      ['0x1', at('08:20')], ['0x3', null], ['0x5', null], ['0x2', at('10:00')], ['0x5', at('09:30')], ['0x9', null],
+    ]);
   });
 
-  it('opens a session\'s activity: its logon id on its host, from logon to logoff', async () => {
+  it('opens a session\'s activity: its logon id on its host, from its special privileges or logon to its logoff', async () => {
     const [first, open] = await sessions();
     const activity = sessionActivity(fields, first);
-    expect(activity.t).toEqual([at('08:00'), at('08:20') + 1]);
+    expect(activity.t).toEqual([at('08:00') - 2000, at('08:20') + 1]);
     const where = `(${compile(parse(activity.q), schema)}) AND (${timePredicate(activity.t)})`;
-    expect(await fixture(textIds).uids(where)).toEqual([1, 6]);
-    expect(sessionActivity(fields, open).t[1]).toBe(at('12:00') + 1);
+    expect(await fixture(textIds).uids(where)).toEqual([1, 6, 17]);
+    // Open to the end of the logs: the package's last event.
+    expect(sessionActivity(fields, open).t).toEqual([at('08:30'), at('13:20') + 1]);
+  });
+
+  it('flags the sessions given special privileges (4672), with the privileges they were given', async () => {
+    expect((await sessions()).map((r) => [r.account, r.session, r.privileges, r.privileged_at])).toEqual([
+      ['CORP\\alice', '0x1', 'SeDebugPrivilege, SeBackupPrivilege', at('08:00') - 2000],
+      ['CORP\\DC01$', '0x3', null, null],
+      ['CORP\\eve', '0x5', null, null],
+      ['corp\\Alice', '0x2', null, null],
+      ['CORP\\frank', '0x5', 'SeTcbPrivilege', at('09:10') - 3000],
+      ['CORP\\carol', '0x1', null, null],
+      ['CORP\\alice', '0x1', null, null],
+      ['CORP\\WS1$', '0x9', null, null],
+    ]);
   });
 
   it('keeps remote logon types only, and hides computer accounts, on request', async () => {
@@ -128,10 +190,11 @@ describe.each(kinds)('sessions, with a %s', (_name, textIds) => {
     expect(people).toHaveLength(6);
   });
 
-  it('ends the activity of a session that never logged off at the next logon with its id', async () => {
+  it('ends the activity of a session that never logged off where the next logon with its id begins', async () => {
     const eve = (await sessions()).find((r) => r.account === 'CORP\\eve') as SessionRow;
     const activity = sessionActivity(fields, eve);
-    expect(activity.t).toEqual([at('08:40'), at('09:10')]);
+    // Frank's logon with eve's id begins with his special privileges, three seconds before the logon itself.
+    expect(activity.t).toEqual([at('08:40'), at('09:10') - 3000]);
     const where = `(${compile(parse(activity.q), schema)}) AND (${timePredicate(activity.t)})`;
     expect(await fixture(textIds).uids(where)).toEqual([14]);
   });
@@ -145,5 +208,6 @@ describe('logons without the fields', () => {
     expect(explicitSql(fields, 'TRUE', {})).toBeNull();
     expect(rdpSql(fields, 'TRUE', {})).toBeNull();
     expect(sessionsSql(fields, 'TRUE', {})).toBeNull();
+    expect(lateralSql(fields, 'TRUE', {})).toBeNull();
   });
 });

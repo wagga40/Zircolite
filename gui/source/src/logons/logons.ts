@@ -20,7 +20,7 @@ export const LOGON_LIMIT = 1000;
 const NAMES = [
   'Channel', 'EventID', 'Computer', 'TargetUserName', 'TargetDomainName', 'LogonType', 'IpAddress', 'WorkstationName', 'TargetLogonId',
   'Status', 'SubStatus', 'SubjectUserName', 'SubjectDomainName', 'TargetServerName', 'ProcessName', 'Param1', 'Param2', 'Param3',
-  'AccountName', 'AccountDomain', 'ClientName', 'ClientAddress', 'User', 'Address', 'SubjectLogonId', 'LogonId',
+  'AccountName', 'AccountDomain', 'ClientName', 'ClientAddress', 'User', 'Address', 'SubjectLogonId', 'LogonId', 'PrivilegeList',
 ] as const;
 
 export type LogonFieldName = (typeof NAMES)[number];
@@ -317,6 +317,90 @@ export function rdpTerms(fields: LogonFields, row: RdpRow): string {
   );
 }
 
+// Lateral movement -----------------------------------------------------------------------------------------------
+
+const NETWORK_LINK = '3 Network logon';
+const RDP_LINK = '10 Remote Desktop logon';
+const EXPLICIT_LINK = '4648 Explicit credentials';
+
+export interface LateralRow {
+  source: string;
+  target: string;
+  kind: string;
+  accounts: number;
+  /** The accounts with the most events on the link, up to three. */
+  account_list: string | null;
+  events: number;
+  first: number | null;
+  last: number | null;
+  total: number;
+}
+
+export const LATERAL_COLUMNS: LocalColumn[] = [
+  { name: 'source', type: 'text' }, { name: 'target', type: 'text' }, { name: 'kind', type: 'text' }, { name: 'accounts', type: 'number' },
+  { name: 'account_list', type: 'text' }, { name: 'events', type: 'number' }, { name: 'first', type: 'time' }, { name: 'last', type: 'time' },
+];
+
+export const LATERAL_ORDER = ['"events" DESC', 'lower("source")', 'lower("target")', '"kind"'];
+
+// A source or target naming the host itself, or nobody, is no movement.
+const NOWHERE = ['', '-', '::1', '127.0.0.1', 'localhost'];
+
+function somewhere(value: string): string {
+  return `${value} IS NOT NULL AND lower(trim(${value})) NOT IN (${NOWHERE.map((v) => str(v)).join(', ')})`;
+}
+
+/**
+ * Who reached which host: network (3) and Remote Desktop (10) logons from
+ * their source address to the host that logged them, and explicit
+ * credentials (4648) from the host that used them to the target server.
+ * A 4648 for the host itself, by name or short name, is left out.
+ */
+export function lateralSql(fields: LogonFields, where: string, options: LogonOptions): string | null {
+  const f = fields.field;
+  if (!f.EventID || !f.Computer) return null;
+  const host = text(f.Computer);
+  const acct = account(text(f.TargetDomainName), text(f.TargetUserName));
+  const machines = options.hideMachines && f.TargetUserName ? ` AND coalesce(${text(f.TargetUserName)}, '') NOT LIKE '%$'` : '';
+  const from = `FROM events WHERE (${where}) AND ${channelIs(f.Channel, SECURITY)} AND ${host} IS NOT NULL${machines}`;
+  const parts: string[] = [];
+  if (f.LogonType && f.IpAddress) {
+    const type = `trim(${text(f.LogonType)})`;
+    parts.push(
+      `SELECT _zl_time, CASE ${type} WHEN '10' THEN ${str(RDP_LINK)} ELSE ${str(NETWORK_LINK)} END AS kind, ${text(f.IpAddress)} AS source, ` +
+      `${host} AS target, ${acct} AS acct ${from} AND ${eventIs(f.EventID, [4624])} AND ${type} IN ('3', '10') AND ${somewhere(text(f.IpAddress))}`);
+  }
+  if (f.TargetServerName) {
+    const server = text(f.TargetServerName);
+    parts.push(
+      `SELECT _zl_time, ${str(EXPLICIT_LINK)} AS kind, ${host} AS source, ${server} AS target, ${acct} AS acct ${from} ` +
+      `AND ${eventIs(f.EventID, [4648])} AND ${somewhere(server)} AND split_part(lower(${server}), '.', 1) <> split_part(lower(${host}), '.', 1)`);
+  }
+  if (parts.length === 0) return null;
+  return (
+    `WITH x AS (${parts.join(' UNION ALL ')}), ` +
+    'y AS (SELECT kind, lower(source) AS sk, lower(target) AS tk, min(source) AS source, min(target) AS target, min(acct) AS acct, count(*) AS n, ' +
+    'min(_zl_time) AS first, max(_zl_time) AS last FROM x GROUP BY kind, lower(source), lower(target), lower(acct)), ' +
+    'g AS (SELECT min(source) AS source, min(target) AS target, kind, count(acct)::DOUBLE AS accounts, ' +
+    "array_to_string(list_slice(list(acct ORDER BY n DESC, lower(acct)) FILTER (WHERE acct IS NOT NULL), 1, 3), ', ') AS account_list, " +
+    'sum(n)::DOUBLE AS events, epoch_ms(min(first))::DOUBLE AS first, epoch_ms(max(last))::DOUBLE AS last FROM y GROUP BY kind, sk, tk) ' +
+    tail(options, LATERAL_ORDER)
+  );
+}
+
+/** The search that lists exactly a link's events. */
+export function lateralTerms(fields: LogonFields, row: LateralRow, options: LogonOptions): string {
+  const f = fields.field;
+  const machines = options.hideMachines && f.TargetUserName ? `-${fieldToken(f.TargetUserName.name)}:*$` : null;
+  if (row.kind === EXPLICIT_LINK) {
+    return terms(idTerm(fields, [4648]), channelTerm(fields, SECURITY), term(f.Computer, row.source), term(f.TargetServerName, row.target), machines);
+  }
+  return terms(
+    idTerm(fields, [4624]), channelTerm(fields, SECURITY), term(f.LogonType, row.kind === RDP_LINK ? '10' : '3'), term(f.IpAddress, row.source),
+    term(f.Computer, row.target), machines,
+  );
+}
+
 // Sessions -------------------------------------------------------------------------------------------------------
 
 export interface SessionRow {
@@ -332,7 +416,14 @@ export interface SessionRow {
   /** The logoff, or null when none came before the next logon with the id or the end of the logs. */
   end: number | null;
   minutes: number | null;
-  /** The next logon on the host with the same id: a session without a logoff ended by then at the latest. */
+  /** The special privileges (4672) given to the session, or null when it was given none. */
+  privileges: string | null;
+  privileged_at: number | null;
+  /**
+   * Where the next logon on the host with the same id begins, with its
+   * special privileges or the logon itself: a session without a logoff ended
+   * by then at the latest.
+   */
   next_logon: number | null;
   /** The package's last event time: where an open session's activity is looked for up to. */
   horizon: number;
@@ -342,9 +433,31 @@ export interface SessionRow {
 export const SESSION_COLUMNS: LocalColumn[] = [
   { name: 'host', type: 'text' }, { name: 'account', type: 'text' }, { name: 'type_name', type: 'text' }, { name: 'ip', type: 'text' },
   { name: 'session', type: 'text' }, { name: 'start', type: 'time' }, { name: 'end', type: 'time' }, { name: 'minutes', type: 'number' },
+  { name: 'privileges', type: 'text' },
 ];
 
 export const SESSION_ORDER = ['"start" ASC', 'lower("host")', 'lower("session")'];
+
+/**
+ * The special privileges (4672) each logon was given, joined as
+ * granted(pt, list). Windows writes them with the logon, up to a few seconds
+ * before it on a busy domain controller; the closest one in that window is
+ * the logon's, so a reused logon id never inherits an older session's.
+ */
+function granted(fields: LogonFields, security: string): string {
+  const f = fields.field;
+  if (!f.EventID || !f.Computer || !f.SubjectLogonId || !f.PrivilegeList) {
+    return 'granted AS (SELECT logon.*, NULL::TIMESTAMP AS pt, NULL::VARCHAR AS list FROM logon)';
+  }
+  const id = text(f.SubjectLogonId);
+  const near = 'priv.t >= logon.t - INTERVAL 5 SECOND';
+  return (
+    `priv AS (SELECT _zl_time AS t, lower(${text(f.Computer)}) AS hk, lower(${id}) AS sk, ${text(f.PrivilegeList)} AS list FROM events ` +
+    `WHERE ${security} AND ${eventIs(f.EventID, [4672])} AND ${id} IS NOT NULL AND _zl_time IS NOT NULL), ` +
+    `granted AS (SELECT logon.*, CASE WHEN ${near} THEN priv.t END AS pt, CASE WHEN ${near} THEN priv.list END AS list FROM logon ` +
+    'ASOF LEFT JOIN priv ON logon.hk = priv.hk AND logon.sk = priv.sk AND logon.late >= priv.t)'
+  );
+}
 
 /**
  * Each successful logon (4624) as a session, closed by the first logoff
@@ -362,26 +475,32 @@ export function sessionsSql(fields: LogonFields, where: string, options: LogonOp
   return (
     `WITH logon AS (SELECT _zl_uid, _zl_time AS t, ${host} AS host, lower(${host}) AS hk, ${text(f.TargetDomainName)} AS domain, ` +
     `${text(f.TargetUserName)} AS "user", trim(${text(f.LogonType)}) AS type, ${text(f.IpAddress)} AS ip, ${id} AS session, lower(${id}) AS sk, ` +
-    `lead(_zl_time) OVER (PARTITION BY lower(${host}), lower(${id}) ORDER BY _zl_time) AS next ` +
+    '_zl_time + INTERVAL 2 SECOND AS late ' +
     `FROM events WHERE ${security} AND ${eventIs(f.EventID, [4624])} AND ${id} IS NOT NULL AND _zl_time IS NOT NULL), ` +
+    `${granted(fields, security)}, ` +
+    // Both in one window: DuckDB sorts the logons once for the two.
+    'windowed AS (SELECT granted.*, lead(t) OVER w AS next, lead(CASE WHEN pt < t THEN pt ELSE t END) OVER w AS next_begin FROM granted ' +
+    'WINDOW w AS (PARTITION BY hk, sk ORDER BY t)), ' +
     `off AS (SELECT _zl_time AS t, lower(${host}) AS hk, lower(${id}) AS sk FROM events ` +
     `WHERE ${security} AND ${eventIs(f.EventID, [4634, 4647])} AND ${id} IS NOT NULL AND _zl_time IS NOT NULL), ` +
-    'paired AS (SELECT logon.*, CASE WHEN next IS NULL OR off.t < next THEN off.t END AS stop FROM logon ' +
-    'ASOF LEFT JOIN off ON logon.hk = off.hk AND logon.sk = off.sk AND logon.t <= off.t), ' +
+    'paired AS (SELECT windowed.*, CASE WHEN next IS NULL OR off.t < next THEN off.t END AS stop FROM windowed ' +
+    'ASOF LEFT JOIN off ON windowed.hk = off.hk AND windowed.sk = off.sk AND windowed.t <= off.t), ' +
     `g AS (SELECT host, domain, "user", ${account('domain', '"user"')} AS account, type, ${named('type', LOGON_TYPES)} AS type_name, ip, session, ` +
     'epoch_ms(t)::DOUBLE AS start, epoch_ms(stop)::DOUBLE AS "end", round(epoch_ms(stop - t) / 60000, 1)::DOUBLE AS minutes, ' +
-    'epoch_ms(next)::DOUBLE AS next_logon, ' +
+    // PrivilegeList puts each privilege on a line of its own, indented with tabs.
+    "regexp_replace(trim(regexp_replace(list, '\\s+', ' ', 'g')), ' ', ', ', 'g') AS privileges, epoch_ms(pt)::DOUBLE AS privileged_at, " +
+    'epoch_ms(next_begin)::DOUBLE AS next_logon, ' +
     '(SELECT epoch_ms(max(_zl_time)) FROM events)::DOUBLE AS horizon ' +
     // Narrowed after the pairing: a hidden logon still ends the session before it.
-    `FROM paired WHERE _zl_uid IN (SELECT _zl_uid FROM events WHERE ${where})${narrowing(f, options, 'type', '"user"')}) ` +
+    `FROM paired WHERE ${where === 'TRUE' ? 'TRUE' : `_zl_uid IN (SELECT _zl_uid FROM events WHERE ${where})`}${narrowing(f, options, 'type', '"user"')}) ` +
     tail(options, SESSION_ORDER)
   );
 }
 
 /**
  * A session's activity: events on its host that carry its logon id, from its
- * logon to its logoff. Without a logoff it runs to the next logon with the
- * same id, which belongs to that session, or to the end of the logs.
+ * special privileges or logon to its logoff. Without a logoff it runs to
+ * where the next logon with the same id begins, or to the end of the logs.
  */
 export function sessionActivity(fields: LogonFields, row: SessionRow): { q: string; t: [number, number] } {
   const f = fields.field;
@@ -391,5 +510,6 @@ export function sessionActivity(fields: LogonFields, row: SessionRow): { q: stri
   const anyId = ids.length === 1 ? ids[0] : `(${ids.join(' OR ')})`;
   // The range is half-open: the logoff and the last event of the logs belong to the session, the next logon does not.
   const end = row.end !== null ? row.end + 1 : (row.next_logon ?? row.horizon + 1);
-  return { q: terms(term(f.Computer, row.host), anyId), t: [row.start, end] };
+  const start = row.privileged_at !== null && row.privileged_at < row.start ? row.privileged_at : row.start;
+  return { q: terms(term(f.Computer, row.host), anyId), t: [start, end] };
 }

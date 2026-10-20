@@ -298,9 +298,25 @@ async function phase4(page, state, steps, expectedStarts) {
   }
   steps.push(presetCount > 0 ? 'stacking: the rarest rows list exactly their events' : 'stacking: no preset fits this package');
 
+  // A route changes on a hash change, after goto returns: a table looked for before the view is drawn is not there yet.
+  // The tables then fill in one after the other, each pushing those below it down, so a row is clicked only once
+  // every table has answered: a click aimed before the sessions fill in lands on whatever moved under it.
+  const logons = async (hash) => {
+    await route(hash);
+    await page.locator('main.logons').waitFor();
+    await poll(page, async () => {
+      for (const table of await page.locator('main.logons table').all()) {
+        if ((await table.getAttribute('data-rows')) === '') return null;
+      }
+      return true;
+    }, 'every logons table');
+  };
+
   // Logons: the first row of each table lists exactly its events, successes and failures together.
-  for (const [id, what] of [['logons-table', 'logons'], ['explicit-table', 'explicit credentials'], ['rdp-table', 'Remote Desktop events']]) {
-    await route('logons');
+  for (const [id, what] of [
+    ['lateral-table', 'lateral movement'], ['logons-table', 'logons'], ['explicit-table', 'explicit credentials'], ['rdp-table', 'Remote Desktop events'],
+  ]) {
+    await logons('logons');
     const table = page.locator(`#${id}`);
     if ((await table.count()) === 0) {
       steps.push(`logons: this package has no ${what}`);
@@ -315,9 +331,21 @@ async function phase4(page, state, steps, expectedStarts) {
     steps.push(`logons: the first row of ${what} lists exactly its events`);
   }
 
+  // Lateral movement: a link of the graph lists exactly its events, as its row in the table does.
+  await logons('logons');
+  const lateralTable = page.locator('#lateral-table');
+  if ((await lateralTable.count()) > 0 && await poll(page, () => number(lateralTable, 'data-rows'), 'the lateral movement links')) {
+    const links = page.locator('#lateral-graph g.link');
+    check((await links.count()) > 0, 'the lateral movement table has links but the graph draws none');
+    await clickAndCount(links.last(), 'the last link of the graph');
+    steps.push('logons: a link of the lateral movement graph lists exactly its events');
+  } else {
+    steps.push('logons: no lateral movement');
+  }
+
   // Sessions: a session's activity opens with its logon id and its time range, holds at least the logon itself,
   // and replaces the search that found the session: that search would cut the activity down to the logons.
-  await route(`logons?q=${encodeURIComponent('EventID:4624')}&d=1`);
+  await logons(`logons?q=${encodeURIComponent('EventID:4624')}&d=1`);
   const sessionTable = page.locator('#sessions-table');
   if ((await sessionTable.count()) > 0 && await poll(page, () => number(sessionTable, 'data-rows'), 'the sessions')) {
     const logonId = await sessionTable.locator('tbody tr').first().locator('td').nth(4).textContent();
@@ -329,6 +357,43 @@ async function phase4(page, state, steps, expectedStarts) {
     check(listed.count >= 1, 'a session\'s activity lists not even its logon');
     steps.push('logons: a session opens its activity');
     await route('explore?q=');
+  }
+
+  // Privileged sessions: the activity of a session given special privileges holds the 4672 that gave them,
+  // written just before the logon.
+  await logons('logons');
+  if ((await sessionTable.count()) > 0 && await poll(page, () => number(sessionTable, 'data-rows'), 'the sessions')) {
+    const headers = await sessionTable.locator('thead th').allTextContents();
+    const column = headers.findIndex((text) => text.includes('Special privileges'));
+    check(column >= 0, `the sessions have no special privileges column: ${headers.join(' | ')}`);
+    const row = await sessionTable.locator('tbody tr').evaluateAll((rows, at) => rows.findIndex((r) => (r.children[at]?.textContent ?? '').trim() !== ''), column);
+    if (row < 0) {
+      steps.push('logons: no session was given special privileges');
+    } else {
+      await sessionTable.locator('tbody tr').nth(row).locator('button.value').click();
+      await reopened(page, state);
+      const q = await page.locator('#search-input').inputValue();
+      const granted = await search(page, state, `${q} EventID:4672`);
+      check(granted.count >= 1, `a privileged session's activity holds no 4672: ${q}`);
+      steps.push('logons: a privileged session\'s activity holds its special privileges');
+    }
+    await route('explore?q=');
+  }
+
+  // Process activity: a Sysmon event's process lists exactly the events each of its counts counts.
+  await route(`explore?q=${encodeURIComponent('Channel:"Microsoft-Windows-Sysmon/Operational" EventID:3 ProcessGuid:*')}`);
+  const withActivity = await reopened(page, state);
+  if (withActivity.count > 0) {
+    await page.locator('#result-grid').focus();
+    await page.keyboard.press('Enter');
+    const drawer = page.getByRole('complementary', { name: 'Event details' });
+    const counted = drawer.locator('.activity button:not([disabled])').first();
+    await counted.waitFor();
+    await clickAndCount(counted, 'a process\'s activity');
+    await page.keyboard.press('Escape');
+    steps.push('process activity lists exactly its events');
+  } else {
+    steps.push('process activity: no Sysmon network event with a ProcessGuid');
   }
 
   // Processes: the tree counts every process start, and a start opens as its event.
@@ -387,6 +452,20 @@ async function phase4(page, state, steps, expectedStarts) {
   await poll(page, async () => (await firstN()) === '19999', 'the largest n first');
   check((await number(page.locator('#sql-result'), 'data-rows')) === 5000, 'sorting changed how many rows the filter keeps');
   steps.push('the SQL results filter and sort in the engine');
+
+  // A result with _zl_uid opens its events: one in the event view, all of them in Explore.
+  await runSql('SELECT _zl_uid, "EventID" FROM events ORDER BY _zl_uid LIMIT 7');
+  await firstCell();
+  const firstUid = await page.locator('#sql-result [role="cell"] button').first().textContent();
+  await page.locator('#sql-result [role="cell"] button').first().click();
+  await page.getByRole('complementary', { name: 'Event details' }).waitFor();
+  check(page.url().includes(`uid=${firstUid}`), `opening a result's event left ${page.url()}`);
+  await page.keyboard.press('Escape');
+  await page.getByRole('complementary', { name: 'Event details' }).waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: 'Open in Explore' }).click();
+  const opened = await reopened(page, state);
+  check(opened.count === 7 && decodeURIComponent(page.url()).includes('q=uids:'), `Open in Explore lists ${opened.count} events at ${page.url()}`);
+  steps.push('the SQL console opens the events of its results');
 
   // Timeline: a lane holds exactly the events of its tactic in the window drawn.
   await route('timeline');

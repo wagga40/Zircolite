@@ -21,7 +21,7 @@
   import ColumnValues from './ColumnValues.svelte';
   import { applyFilter } from './header';
   import ResultHeader from './ResultHeader.svelte';
-  import { columnTracks, COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, resolveSort, ROW, tableMinWidth, wheelDelta, wheelPosition, widthOf } from './table';
+  import { centerScroll, columnTracks, COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, positionSql, resolveSort, ROW, tableMinWidth, wheelDelta, wheelPosition, widthOf } from './table';
 
   let { db, exportDb, schema, manifest, where, whereFor, columns, slow }: {
     db: Db;
@@ -302,6 +302,32 @@
     );
   });
 
+  // An event asked for from its drawer: once the list it belongs in is built, it becomes the active row, centred.
+  let locateNote = $state<string | null>(null);
+  $effect(() => {
+    const uid = ui.locate;
+    if (uid === null || busy || current === 0 || current !== build) return;
+    const mine = current;
+    locateNote = null;
+    db.rows<{ _zl_pos: number }>(positionSql(uid), { cache: false, lane: 'locate' }).then(
+      ([row]) => {
+        if (mine !== current) return;
+        ui.locate = null;
+        if (!row) {
+          locateNote = 'That event is not in this list.';
+          return;
+        }
+        active = row._zl_pos;
+        const top = centerScroll(row._zl_pos, total, viewport);
+        if (scroller) scroller.scrollTop = top;
+        scrollTop = top;
+      },
+      () => {
+        if (mine === current) ui.locate = null;
+      },
+    );
+  });
+
   // Asked after the first page, on its own lane, and only of lists small enough that it costs little.
   $effect(() => {
     probed = null;
@@ -485,6 +511,7 @@
   {#if exportNote}<p class="note" role="status">{exportNote}</p>{/if}
   {#if failure}<p class="note failure" role="alert">The results could not be read: {failure}. Change the search, or reload the page if this repeats.</p>{/if}
   {#if cellProblem}<p class="note failure" role="alert">{cellProblem}</p>{/if}
+  {#if locateNote}<p class="note" role="status">{locateNote}</p>{/if}
 
   <div
     id="result-grid"

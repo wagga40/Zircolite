@@ -231,6 +231,31 @@ describe('rulekey', () => {
   });
 });
 
+describe('uids', () => {
+  it.each<[string, number[]]>([
+    ['uids:3', [CMD]],
+    ['uids:3,4294967297', [CMD, PS]],
+    ['uids:"3,4294967297,3"', [CMD, PS]],
+    ['-uids:3,1', [B, PS, OFF, PROC]],
+    ['uids:999', []],
+  ])('%s', async (query, expected) => {
+    expect(await run(query)).toEqual(expected);
+  });
+
+  it.each([
+    ['a name', 'uids:x', /event ids/],
+    ['an empty id', 'uids:3,,4', /event ids/],
+    ['a negative id', 'uids:-3', /event ids/],
+    ['a wildcard', 'uids:*', /event ids/],
+    ['a comparison', 'uids:>3', /only level and hour compare/],
+    ['an id past 2^53', 'uids:99999999999999999999', /event ids/],
+    ['a star beside quotes', 'uids:*"3"*', /uids: matches one list of ids exactly/],
+    ['1,001 ids', `uids:${Array.from({ length: 1001 }, (_, i) => i).join(',')}`, /at most 1,000/],
+  ])('refuses %s', (_name, query, message) => {
+    expect(() => compile(parse(query), schema)).toThrowError(message);
+  });
+});
+
 describe('field contains', () => {
   it('reads a scan that starts with a wildcard from one shared table when asked', () => {
     const matches = { matches: true };

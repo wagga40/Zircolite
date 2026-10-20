@@ -13,9 +13,12 @@
   import { isoTime } from '../ui/format';
   import { focusFallback } from '../ui/focus';
   import { pageTopLayer } from '../ui/layers';
+  import { ui } from '../ui/ui.svelte';
   import {
     type Entry, familyFields, groupEntries, type Head, headSql, hostEntry, isCurrent, nearbyRange, type RuleRow, rulesSql, valuesSql,
   } from './detail';
+  import { ACTIVITY, type Activity, activitySql, activityTerms } from '../processes/activity';
+  import Decoded from './Decoded.svelte';
   import { eventJson } from './export';
 
   let { db, schema, manifest }: { db: Db; schema: Schema; manifest: Manifest } = $props();
@@ -51,6 +54,33 @@
   const groups = $derived(loaded ? groupEntries(loaded.entries) : []);
   const host = $derived(loaded ? hostEntry(loaded.entries) : null);
   const title = $derived(loaded ? titleOf(loaded) : 'Event');
+  // What the event's process did, by its ProcessGuid: asked after the event itself, so it never delays it.
+  const guid = $derived(loaded?.entries.find((entry) => entry.field.key === 'processguid')?.value ?? null);
+  let activity = $state.raw<{ guid: string; counts: Activity } | null>(null);
+  let activityTicket = 0;
+  $effect(() => {
+    const asked = guid;
+    const mine = ++activityTicket;
+    activity = null;
+    const sql = asked ? activitySql(schema, asked) : null;
+    if (!asked || !sql) return;
+    db.rows<Activity>(sql, { lane: 'drawer-activity' }).then(
+      ([counts]) => {
+        if (mine === activityTicket && counts) activity = { guid: asked, counts };
+      },
+      () => {},
+    );
+  });
+
+  function openActivity(key: keyof Activity): void {
+    if (stale || !activity) return;
+    const terms = activityTerms(schema, activity.guid, key);
+    if (!terms) return;
+    view.q = terms;
+    view.t = null;
+    view.d = false;
+    view.route = 'explore';
+  }
 
   function titleOf(l: Loaded): string {
     return [l.head._zl_channel ?? 'Event', l.head._zl_eventid ?? ''].join(' ').trim();
@@ -157,6 +187,18 @@
     view.d = false;
   }
 
+  // The event among every event, in time order: what happened just before and after it, whatever filter found it.
+  function showAmongAll(): void {
+    if (stale || !loaded) return;
+    view.q = '';
+    view.t = null;
+    view.d = false;
+    view.sort = null;
+    view.desc = false;
+    ui.locate = loaded.uid;
+    view.route = 'explore';
+  }
+
   function filterRule(rule: RuleRow): void {
     if (stale) return;
     view.q = appendRaw(view.q, `rulekey:${quoteValue(rule.key)}`);
@@ -194,6 +236,7 @@
           {#if host && loaded.head._zl_t !== null}
             <button type="button" disabled={stale} onclick={nearby}>Events on {host.value} within 5 minutes</button>
           {/if}
+          <button type="button" disabled={stale} onclick={showAmongAll} title="Clear the search and the time range, and scroll the events table to this event">Show in all events</button>
         </div>
         <p class="status" role="status">{status}</p>
 
@@ -213,6 +256,19 @@
           </section>
         {/if}
 
+        {#if activity && activity.guid === guid}
+          <section class="activity" aria-label="Process activity">
+            <h3>Process activity</h3>
+            <p class="hint">What Sysmon recorded for this event's process ({activity.guid}), in place of the search when opened.</p>
+            <div class="actions">
+              {#each ACTIVITY as kind (kind.key)}
+                <button type="button" disabled={stale || activity.counts[kind.key] === 0} onclick={() => openActivity(kind.key)}
+                  data-events={activity.counts[kind.key]}>{kind.label} {activity.counts[kind.key]}</button>
+              {/each}
+            </div>
+          </section>
+        {/if}
+
         {#if raw}
           <pre class="json">{json(true)}</pre>
         {:else}
@@ -224,7 +280,10 @@
                   <div class="entry">
                     <dt>{entry.name}</dt>
                     <dd>
-                      <span class="value">{entry.value}</span>
+                      <div class="value-col">
+                        <span class="value">{entry.value}</span>
+                        <Decoded value={entry.value} name={entry.name} oncopy={(text, what) => copy(text, what)} />
+                      </div>
                       <span class="tools">
                         <button type="button" disabled={stale} aria-label={`Filter for ${entry.name}`} onclick={() => (view.q = appendTerm(view.q, entry.field.name, entry.value, false))}>+</button>
                         <button type="button" disabled={stale} aria-label={`Filter out ${entry.name}`} onclick={() => (view.q = appendTerm(view.q, entry.field.name, entry.value, true))}>−</button>
@@ -253,6 +312,7 @@
   button { background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 3px 10px; cursor: pointer; }
   button:disabled { cursor: default; }
   .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .hint { margin: 0 0 6px; font-size: var(--t-12); color: var(--ink-2); overflow-wrap: anywhere; }
   .status { min-height: 1.2em; margin: 6px 0 0; font-size: var(--t-12); color: var(--ink-2); }
   .note { margin: 14px 0; color: var(--ink-2); }
   .failure { color: var(--danger); }
@@ -267,7 +327,8 @@
   .entry { display: grid; grid-template-columns: minmax(110px, 34%) minmax(0, 1fr); gap: 10px; padding: 4px 0; border-bottom: 1px solid color-mix(in srgb, var(--rule) 45%, transparent); }
   dt { font-size: var(--t-13); color: var(--ink-2); overflow-wrap: anywhere; }
   dd { margin: 0; display: flex; gap: 6px; align-items: flex-start; }
-  .value { flex: 1; min-width: 0; font: 400 var(--t-13) / 1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .value-col { flex: 1; min-width: 0; }
+  .value { display: block; font: 400 var(--t-13) / 1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .tools { display: inline-flex; gap: 2px; opacity: 0; }
   .entry:hover .tools, .entry:focus-within .tools { opacity: 1; }
   .tools button { min-width: 24px; min-height: 24px; padding: 0 6px; font-size: var(--t-12); border-color: transparent; }

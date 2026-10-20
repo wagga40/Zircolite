@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Superseded } from '../src/engine/queries';
 import { csvLine } from '../src/explore/export';
-import { columnWidths, consoleColumns, LOGGING_SQL, type Narrowing, numericType, resultSql, runQuery, SqlRefused, TABLES_SQL, trimStatement } from '../src/sql/console';
+import { columnWidths, consoleColumns, eventIds, LOGGING_SQL, type Narrowing, numericType, resultSql, runQuery, SqlRefused, TABLES_SQL, trimStatement } from '../src/sql/console';
 import { applyLocalCell, localSchema, localWhere, sortClause } from '../src/ui/localFilters';
 import { type Fixture, openFixture } from './fixture';
 
@@ -196,5 +196,22 @@ describe('filters and sorts on the results', () => {
     const result = await runQuery(send, text, send, await narrowed(text, [[0, "'); DROP TABLE events; --"]]));
     expect(result.rows).toEqual([]);
     expect(await events()).toBe(before);
+  });
+});
+
+describe('the events of a result', () => {
+  const result = (rows: (string | null)[][], more = false, name = '_zl_uid') => ({ columns: [{ name: 'x', type: 'VARCHAR' }, { name, type: 'BIGINT' }], rows, more });
+
+  it('are the distinct ids of its _zl_uid column, in any letter case', () => {
+    expect(eventIds(result([['a', '3'], ['b', '4294967297'], ['c', '3'], ['d', null]]))).toEqual({ column: 1, uids: [3, 4294967297] });
+    expect(eventIds(result([['a', '3']], false, '_ZL_UID'))).toEqual({ column: 1, uids: [3] });
+    expect(eventIds(result([['a', '3']], false, 'uid'))).toBeNull();
+  });
+
+  it('are refused, saying why, when they would not be the whole result', () => {
+    expect(eventIds(result([['a', '3']], true))).toMatchObject({ column: 1, problem: expect.stringMatching(/more rows than shown/) });
+    expect(eventIds(result(Array.from({ length: 1001 }, (_, i) => ['a', String(i)])))).toMatchObject({ problem: expect.stringMatching(/at most 1,000/) });
+    expect(eventIds(result([['a', null]]))).toMatchObject({ problem: expect.stringMatching(/no event id/) });
+    expect(eventIds(result([['a', 'x']]))).toMatchObject({ problem: expect.stringMatching(/not event ids/) });
   });
 });

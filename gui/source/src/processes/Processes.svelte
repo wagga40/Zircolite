@@ -12,6 +12,7 @@
   import { Panel } from '../ui/panel.svelte';
   import { ownScope } from '../ui/scope';
   import { windowOf } from '../ui/virtual';
+  import { ACTIVITY, type Activity, activitySummary, activityTerms } from './activity';
   import { ANCESTOR_DEPTH, ANCESTOR_LIMIT, ancestorsSql, creationPredicate, keepAncestors, PROCESS_LIMIT, processCountSql, processRowsSql } from './processes';
   import { basename, buildForest, cutRoots, type Process, type RawProcess, type Row, toProcess, visibleAncestor, visibleRows, withChildren } from './tree';
 
@@ -136,6 +137,15 @@
     view.route = 'explore';
   }
 
+  function activityOf(process: Process, key: keyof Activity): void {
+    const terms = process.guid && process.rawGuid ? activityTerms(schema, process.rawGuid, key) : null;
+    if (!terms) return;
+    view.q = terms;
+    view.t = null;
+    view.d = false;
+    view.route = 'explore';
+  }
+
   // A root's parent is not in the tree: never started in these logs, named by a guid no start carries, past the ancestor depth or count, or cut out of a cycle.
   const startedBy = (p: Process) => basename(p.parentImage) || (p.ppid === null ? '' : `PID ${p.ppid}`);
   const matched = (p: Process) => `${p.lvl === null ? '' : `${levelLabel(p.lvl)}, `}${formatCount(p.hits)} ${p.hits === 1 ? 'rule' : 'rules'} matched`;
@@ -155,6 +165,14 @@
       <button type="button" disabled={!tree.slot.data} onclick={() => applyExpanded(new Set(withChildren(tree.slot.data?.roots ?? [])))}>Expand all</button>
       <button type="button" disabled={!tree.slot.data} onclick={() => applyExpanded(new Set())}>Collapse all</button>
       {#if current?.guid && guidField}<button type="button" onclick={() => current && eventsOf(current)}>Events of this process</button>{/if}
+      {#if current?.guid && current.activity}
+        {#each ACTIVITY as kind (kind.key)}
+          {#if current.activity[kind.key] > 0}
+            <button type="button" onclick={() => current && activityOf(current, kind.key)}
+              title={`Open this process's ${kind.label.toLowerCase()} events in Explore`}>{kind.label} {formatCount(current.activity[kind.key])}</button>
+          {/if}
+        {/each}
+      {/if}
       {#if tree.slot.stopped}<button type="button" onclick={runAgain}>Run again</button>{/if}
     </span>
   </header>
@@ -189,7 +207,7 @@
       class:stale={tree.slot.pending && tree.slot.data !== null} aria-busy={tree.slot.pending}
       bind:this={list} bind:clientHeight={height} onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)} {onkeydown} {onfocus}>
       <div class="head" aria-hidden="true">
-        <span>Process</span><span class="pid">PID</span><span class="user">User</span><span class="host">Host</span><span class="time">Started (UTC)</span><span>Detections</span>
+        <span>Process</span><span class="pid">PID</span><span class="user">User</span><span class="host">Host</span><span class="time">Started (UTC)</span><span>Detections</span><span class="act">Activity</span>
       </div>
       <div class="spacer" style:height={`${rows.length * ROW}px`}>
         {#each shown as { row, at } (row.process.uid)}
@@ -215,6 +233,7 @@
                 <span class="sr">{matched(row.process)}</span>
               {/if}
             </span>
+            <span class="act" title="Network connections, DNS queries, files created and registry changes Sysmon records for this process">{activitySummary(row.process.activity)}</span>
           </div>
         {/each}
       </div>
@@ -233,10 +252,10 @@
   .failure { color: var(--danger); }
   .tree { position: relative; overflow: auto; min-height: 240px; border-top: 1px solid var(--rule); margin-top: 8px; }
   .tree:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
-  .head { position: sticky; top: 0; z-index: 1; height: 28px; min-width: 900px; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 64px 160px 160px 190px 120px; gap: 8px; align-items: center; padding: 0 8px; background: var(--panel); border-bottom: 1px solid var(--rule); color: var(--ink-2); font-size: var(--t-12); font-weight: 600; }
+  .head { position: sticky; top: 0; z-index: 1; height: 28px; min-width: 1060px; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 64px 160px 160px 190px 120px 160px; gap: 8px; align-items: center; padding: 0 8px; background: var(--panel); border-bottom: 1px solid var(--rule); color: var(--ink-2); font-size: var(--t-12); font-weight: 600; }
   .head .pid { text-align: right; }
-  .spacer { position: relative; min-width: 900px; }
-  .row { position: absolute; left: 0; right: 0; height: 28px; display: grid; grid-template-columns: minmax(0, 1fr) 64px 160px 160px 190px 120px; gap: 8px; align-items: center; padding: 0 8px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 50%, transparent); cursor: pointer; font-size: var(--t-13); }
+  .spacer { position: relative; min-width: 1060px; }
+  .row { position: absolute; left: 0; right: 0; height: 28px; display: grid; grid-template-columns: minmax(0, 1fr) 64px 160px 160px 190px 120px 160px; gap: 8px; align-items: center; padding: 0 8px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 50%, transparent); cursor: pointer; font-size: var(--t-13); }
   .row.active { background: color-mix(in srgb, var(--signal) 14%, transparent); }
   .row.context { opacity: 0.55; }
   .name { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; }
@@ -247,6 +266,7 @@
   .pid { font-variant-numeric: tabular-nums; text-align: right; }
   .user, .host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .time { font-family: var(--mono); white-space: nowrap; }
+  .act { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 var(--t-12) / 1 var(--mono); color: var(--ink-2); }
   .badge { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .badge i { width: 8px; height: 8px; border-radius: 1px; display: inline-block; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -256,6 +276,6 @@
     .spacer, .head { min-width: 0; }
     .head { grid-template-columns: minmax(0, 1fr) 56px 96px; }
     .row { grid-template-columns: minmax(0, 1fr) 56px 96px; }
-    .user, .host, .time { display: none; }
+    .user, .host, .time, .act { display: none; }
   }
 </style>

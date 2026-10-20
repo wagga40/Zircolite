@@ -18,6 +18,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { name: 'hour', description: 'Events in an hour of the day, in UTC, 0 to 23. >=, >, <= and < compare hours.', example: 'hour:>=22' },
   { name: 'host', description: 'Events from a host, whichever field holds its name.', example: 'host:DC01', fields: ['Computer', 'ComputerName', 'Hostname', 'host'] },
   { name: 'user', description: 'Events naming an account, whichever field holds it.', example: 'user:administrator', fields: ['TargetUserName', 'SubjectUserName', 'User', 'UserName', 'AccountName'] },
+  { name: 'uids', description: 'Events by their ids in this package (_zl_uid), up to 1,000, separated by commas, as the SQL console opens them.', example: 'uids:4294967297' },
 ];
 
 export const SYNTAX: readonly { pattern: string; meaning: string }[] = [

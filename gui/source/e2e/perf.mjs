@@ -202,9 +202,17 @@ try {
     report.stack_two_fields = await pair.textContent();
     report.stack_two_ms = await timed(() => pair.click(), answered('#stacking-table'));
   }
-  const logonTables = ['#logons-table', '#explicit-table', '#sessions-table', '#rdp-table'];
+  // In the order the view asks for them: one connection answers them one after the other, so each time is
+  // when that table filled in.
+  const logonTables = ['#lateral-table', '#logons-table', '#explicit-table', '#rdp-table', '#sessions-table'];
+  const logonsStarted = performance.now();
+  report.logons_tables_ms = {};
   report.logons_ms = await timed(() => nav('Logons'), async () => {
-    for (const table of logonTables) if (await page.locator(table).count()) await answered(table)();
+    for (const table of logonTables) {
+      if (!(await page.locator(table).count())) continue;
+      await answered(table)();
+      report.logons_tables_ms[table.slice(1)] = Math.round(performance.now() - logonsStarted);
+    }
   });
   await nav('Explore');
   build = 0;

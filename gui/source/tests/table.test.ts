@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Field } from '../src/engine/schema';
 import { SNAPSHOT_SQL } from '../src/explore/export';
-import { columnTracks, COUNT_SQL, dropGap, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, resolveSort, ROW, SORT_PREFIX, tableMinWidth, wheelDelta, wheelPosition, wheelScroll, widthOf } from '../src/explore/table';
+import { centerScroll, columnTracks, COUNT_SQL, dropGap, ensureVisible, positionSql, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, resolveSort, ROW, SORT_PREFIX, tableMinWidth, wheelDelta, wheelPosition, wheelScroll, widthOf } from '../src/explore/table';
 import { type Fixture, openFixture, schema } from './fixture';
 
 let db: Fixture;
@@ -59,6 +59,14 @@ describe('result list', () => {
     expect(idsSql('TRUE', false, field('Image'))).toContain(`lower(left("Image", ${SORT_PREFIX}))`);
     await db.rows(idsSql(`_zl_uid IN (SELECT _zl_uid FROM events WHERE "Computer" ILIKE 'ws02')`, false, field('Image')));
     expect(await order()).toEqual([OFF, CMD, PS]);
+  });
+
+  it('finds an event\'s place in the list', async () => {
+    await db.rows(idsSql('TRUE', false));
+    expect(await db.rows(positionSql(PS))).toEqual([{ _zl_pos: 3 }]);
+    await db.rows(idsSql(`"Computer" = 'DC01'`, false));
+    expect(await db.rows(positionSql(PS))).toEqual([]);
+    expect(() => positionSql(-1)).toThrow();
   });
 
   it('exports in the order shown', async () => {
@@ -215,5 +223,21 @@ describe('column layout', () => {
     expect(dropGap(centers, 150)).toBe(1);
     expect(dropGap(centers, 450)).toBe(2);
     expect(dropGap(centers, 900)).toBe(3);
+  });
+});
+
+describe('centring a row', () => {
+  it('puts the row in the middle of the viewport, within the list', () => {
+    expect(centerScroll(100, 1000, 280)).toBe(100 * ROW + ROW / 2 - 140);
+    expect(centerScroll(0, 1000, 280)).toBe(0);
+    expect(centerScroll(999, 1000, 280)).toBe(1000 * ROW - 280);
+    expect(centerScroll(3, 2, 280)).toBe(0);
+  });
+
+  it('maps a row past the height cap onto the capped scroll range', () => {
+    const total = 2_000_000;
+    const top = centerScroll(total / 2, total, 280);
+    const slice = geometry(total, 280, top);
+    expect(Math.abs(slice.first + 5 - total / 2)).toBeLessThanOrEqual(1);
   });
 });

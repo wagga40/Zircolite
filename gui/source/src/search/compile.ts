@@ -9,6 +9,8 @@ import { SearchError } from './tokens';
 type Term = Extract<Node, { kind: 'term' }>;
 
 const NUMBER = /^-?\d+(\.\d+)?$/;
+/** Event ids one uids: term holds; a link carrying more would outgrow what browsers keep in a URL. */
+export const UIDS_LIMIT = 1000;
 const HIT_RULES = 'SELECT h._zl_uid FROM hits h JOIN rules r ON r.rule_idx = h.rule_idx';
 // Zircolite stores tactics hyphenated, and maps the retired Defense Evasion to Stealth.
 const TACTIC_ALIASES: Record<string, string> = { 'defense-evasion': 'stealth' };
@@ -185,6 +187,16 @@ const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema, options: Comp
     if (!/^T\d{4}(\.\d{3})?$/.test(id)) throw new SearchError('A technique looks like T1234 or T1234.001', t.start, t.end);
     return `_zl_uid IN (SELECT h._zl_uid FROM hits h JOIN (SELECT rule_idx, unnest(techniques) AS t FROM rules) r ` +
       `ON r.rule_idx = h.rule_idx WHERE r.t = ${str(id)} OR r.t LIKE ${str(`${id}.%`)})`;
+  },
+  uids: (t) => {
+    exactOnly(t);
+    oneOnly(t, 'uids', 'list of ids');
+    const ids = t.value.split(',');
+    if (!ids.every((id) => /^\d+$/.test(id) && Number.isSafeInteger(Number(id)))) {
+      throw new SearchError('uids: takes event ids, whole numbers separated by commas', t.start, t.end);
+    }
+    if (ids.length > UIDS_LIMIT) throw new SearchError('uids: takes at most 1,000 event ids', t.start, t.end);
+    return `_zl_uid IN (${[...new Set(ids.map(Number))].join(', ')})`;
   },
   host: anyField(SHORTCUTS.find((s) => s.name === 'host')?.fields ?? [], 'host'),
   user: anyField(SHORTCUTS.find((s) => s.name === 'user')?.fields ?? [], 'user'),

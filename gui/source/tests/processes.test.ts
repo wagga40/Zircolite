@@ -9,8 +9,8 @@ import { FIELDS, type Fixture, openFixture, TACTICS } from './fixture';
 let next = 0;
 function proc(fields: Partial<Process>): Process {
   return {
-    uid: ++next, t: 0, host: 'H', guid: null, parentUid: null, pid: null, ppid: null, image: null, parentImage: null,
-    commandLine: null, user: null, lvl: null, hits: 0, context: false, parent: null, children: [], ...fields,
+    uid: ++next, t: 0, host: 'H', guid: null, rawGuid: null, parentUid: null, pid: null, ppid: null, image: null, parentImage: null,
+    commandLine: null, user: null, lvl: null, hits: 0, activity: null, context: false, parent: null, children: [], ...fields,
   };
 }
 
@@ -28,6 +28,7 @@ function raw(fields: Partial<RawProcess>): RawProcess {
   return {
     _zl_uid: 1, _zl_t: 0, sysmon: false, host: 'H', guid: null, pid: null, ppid: null, newpid: null, image: null, newimage: null,
     pimage: null, pname: null, cmd: null, user: null, subject: null, target: null, lvl: null, hits: 0, _zl_parent: null, context: false,
+    network: null, dns: null, files: null, registry: null,
     ...fields,
   };
 }

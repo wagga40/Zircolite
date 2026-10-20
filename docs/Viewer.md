@@ -89,6 +89,27 @@ Process, Network, File and registry, and Other. Each value has + (filter for it)
 (filter it out) and **Copy**. **Show JSON** and **Copy JSON** give the whole event, and
 **Events on _host_ within 5 minutes** shows what happened around it.
 
+A value holding encoded text gets a **Decode** button, which lists what it decodes to:
+- a PowerShell encoded command (`-enc` and the other prefixes of `-EncodedCommand`);
+- Base64, including gzip- or deflate-packed payloads as droppers write them;
+- URL escapes;
+- hex.
+
+A decoding is offered only when it reads as text, and it shows as plain text, never as a page;
+the first 64 KiB are kept. An encoded command must decode to UTF-16 text, as PowerShell writes it,
+so another tool's `-e` argument (`gpg -e`, `schtasks /ec`) is not read as one. A packed payload
+that breaks off, or ends in bytes that do not unpack, shows what it unpacked to up to there,
+marked **cut short**. Decoded text can be decoded again, two levels deep, for Base64 inside
+Base64.
+
+Logs come from the attacker's host, so each value is bounded: at most 16 decodings, 4 MiB of
+unpacked payloads, and the first 512 KiB searched. Encoded commands are tried first. When a
+limit is reached, the decodings say which one.
+
+**Show in all events** clears the search, the time range and **Detections only**, returns to
+time order, and scrolls the events table to the event, centred. It shows what happened just
+before and after the event, whatever filter found it; Back restores the filters.
+
 ## The views
 
 ### Overview
@@ -221,6 +242,15 @@ events in Explore. Up to 1,000 rows show.
 
 Windows logons under the current filters, for following an account across hosts:
 
+- **Lateral movement**: who reached which host. A link runs from a source address to the host that
+  recorded a network (3) or Remote Desktop (10) logon (Security 4624), or from the host that used
+  explicit credentials (4648) to the target server. Each link counts its events and accounts, with
+  the three accounts that used it most, and first and last times. Logons from the host itself
+  (`-`, `::1`, `127.0.0.1`) and credentials used for the host itself (`localhost`, or the host's
+  own name or short name) are left out. A graph above the table draws the table's first 60 links,
+  sources on the left, hosts on the right, the line's width growing with its events; a host that
+  reached others as well is drawn on both sides, since nothing in a logon tells which address is
+  which host. A link, in the graph or the table, opens exactly its events.
 - **Logons and failures**: Security 4624 and 4625, grouped by host, account, logon type and
   source address and workstation, failures first. Each row counts successes, failures,
   distinct sessions (`TargetLogonId`) and first and last times. Logon types are named
@@ -236,14 +266,23 @@ Windows logons under the current filters, for following an account across hosts:
   only** off: the events on that host that carry its logon ID (`TargetLogonId`, `SubjectLogonId`,
   or Sysmon's `LogonId`). The activity runs from logon to logoff, to the next logon with the ID, or
   to the end of the logs while the session is open.
+
+  **Special privileges** lists what Security 4672 gave the session, such as `SeDebugPrivilege`,
+  the mark of an administrator logon; filter the column with `*` to keep privileged sessions only.
+  Windows writes 4672 with the logon or a few seconds before it, so a 4672 counts for a session
+  when it comes at most 5 seconds before its logon and 2 seconds after, on the same host with the
+  same logon ID. The activity of a privileged session starts at its 4672, and a session with no
+  logoff ends where the next logon with its ID begins, 4672 included. The column is left out when
+  the package has no `SubjectLogonId` or `PrivilegeList` field.
 - **Remote Desktop**: authentications (TerminalServices-RemoteConnectionManager 1149),
   LocalSessionManager logons, shell starts, disconnections and reconnections (21, 22, 24, 25), and
   Security session reconnections and disconnections (4778, 4779). Each kind is its own row,
   because each records the account and source in fields of its own.
 
 **Remote logon types only** keeps types 3 and 10; **Hide computer accounts** leaves out names
-ending in `$`. Both apply to the logons and the sessions, are off by default so nothing is hidden
-unless asked, and are disabled when the package lacks `LogonType` or `TargetUserName`. A table
+ending in `$`. Both apply to the logons and the sessions, and hiding computer accounts to the
+lateral movement links too. They are off by default so nothing is hidden unless asked, and are
+disabled when the package lacks `LogonType` or `TargetUserName`. A table
 whose fields the package lacks says so in its place. Each column sorts and
 filters like [Entities](#entities), and a row opens exactly its events in Explore. Fields the
 package lacks are left out. Without a `Channel` field, events are told apart by their event ID
@@ -262,6 +301,17 @@ A start links to its parent by `ParentProcessGuid` when it names one. Otherwise 
 is the latest earlier start of the parent PID on the same host (`ParentProcessId` in Sysmon,
 `ProcessId` in event 4688). Links are made across every start in the package, so a filter
 never changes who started what.
+
+The **Activity** column counts what Sysmon recorded under each process's `ProcessGuid`, in every
+event of the package:
+- network connections (event 3);
+- DNS queries (22);
+- files created (11);
+- registry changes (12 to 14).
+
+Selecting a process adds a button per kind it has, which opens exactly those events in Explore,
+in place of the search. The event view shows the same counts, under **Process activity**, for
+any Sysmon event with a `ProcessGuid`.
 
 ### SQL
 
@@ -294,6 +344,7 @@ A console for one query at a time over the package's tables; see
 | `hour:` | `hour:>=22` | Events in an hour of the day (UTC), 0 to 23 |
 | `host:` | `host:DC01` | Events from a host, whichever host field holds it |
 | `user:` | `user:administrator` | Events naming an account, whichever user field holds it |
+| `uids:` | `uids:4294967297,4294967301` | Events by their ids in the package (`_zl_uid`), up to 1,000, as the SQL console opens them |
 
 - Field names ignore case; an unknown one is refused with the nearest names. Values may
   hold colons, so paths, times and IPv6 addresses need no quotes.
@@ -336,6 +387,9 @@ ORDER BY e._zl_time
   `PRAGMA` — is refused, and the package's tables cannot change.
 - Values come back as text, so 64-bit integers stay exact. At most 10,000 rows show;
   **Export CSV** saves them.
+- A result with a `_zl_uid` column opens its events. Each id is a link to its event, and
+  **Open in Explore** lists the result's events with a `uids:` search. It opens up to 1,000 events,
+  and only when every row of the result is shown.
 - Each result column sorts on a click and has a filter cell with the [column filter](#explore)
   syntax: numbers compare as numbers, everything else as the text shown. Filters and sorts
   run in the engine over every row of the query, not only the 10,000 shown, and a new query

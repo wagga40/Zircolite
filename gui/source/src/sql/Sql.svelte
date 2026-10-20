@@ -5,6 +5,7 @@
   import { ident } from '../engine/sql';
   import { csvLine } from '../explore/export';
   import type { QueryState } from '../state/query.svelte';
+  import { view } from '../state/view.svelte';
   import { run, runAgain, stopAll } from '../state/run.svelte';
   import { download } from '../ui/download';
   import { formatCount } from '../ui/format';
@@ -13,7 +14,7 @@
   import { windowOf } from '../ui/virtual';
   import FilterCell from '../ui/FilterCell.svelte';
   import { applyLocalCell, cellHint, localCellText, type LocalSort, localSchema, localWhere, sortClause } from '../ui/localFilters';
-  import { type Column, columnWidths, consoleColumns, numericType, type Result, runQuery, SQL_ROW_LIMIT, TABLES_SQL } from './console';
+  import { type Column, columnWidths, consoleColumns, eventIds, numericType, type Result, runQuery, SQL_ROW_LIMIT, TABLES_SQL } from './console';
   import { sqlDraft } from './draft.svelte';
 
   let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
@@ -118,6 +119,17 @@
   const numeric = $derived(data ? data.columns.map((c) => numericType(c.type)) : []);
   const total = $derived(widths.reduce((sum, w) => sum + w, 0));
 
+  // A result naming events by _zl_uid opens them: one in the event view, all of them in Explore.
+  const ids = $derived(data ? eventIds(data) : null);
+
+  function openInExplore(): void {
+    if (!ids || !('uids' in ids)) return;
+    view.q = `uids:${ids.uids.join(',')}`;
+    view.t = null;
+    view.d = false;
+    view.route = 'explore';
+  }
+
   function exportCsv(): void {
     if (!data) return;
     download('zircolite-query.csv', ['\uFEFF', csvLine(data.columns.map((c) => c.name)), ...data.rows.map((row) => csvLine(row, numeric))], 'text/csv;charset=utf-8');
@@ -138,6 +150,10 @@
         <span class="hint">Ctrl or ⌘ with Enter runs it.</span>
         {#if result.slot.pending}<button type="button" onclick={() => stopAll(db)}>Stop</button>{/if}
         <button type="button" disabled={!data || data.rows.length === 0} onclick={exportCsv}>Export CSV</button>
+        {#if ids}
+          <button type="button" disabled={'problem' in ids || result.slot.pending} onclick={openInExplore}
+            title={'problem' in ids ? ids.problem : 'Open the events of these rows in Explore'}>Open in Explore</button>
+        {/if}
       </div>
     </div>
     <details class="tables">
@@ -195,7 +211,11 @@
       <div class="spacer" style:height={`${data.rows.length * ROW}px`} style:width={`${total}ch`}>
         {#each data.rows.slice(win.first, win.first + win.count) as row, i (win.first + i)}
           <div class="row" role="row" aria-rowindex={win.first + i + 2} style:top={`${(win.first + i) * ROW}px`} style:width={`${total}ch`}>
-            {#each row as cell, j (j)}<span role="cell" class:num={numeric[j]} class:null={cell === null} style:width={`${widths[j]}ch`} title={cell ?? 'NULL'} aria-label={cell === null ? 'null value' : undefined}>{cell ?? 'NULL'}</span>{/each}
+            {#each row as cell, j (j)}
+              <span role="cell" class:num={numeric[j]} class:null={cell === null} style:width={`${widths[j]}ch`} title={cell ?? 'NULL'} aria-label={cell === null ? 'null value' : undefined}>
+                {#if ids?.column === j && cell !== null && /^\d+$/.test(cell)}<button type="button" class="event" aria-label={`Open event ${cell}`} onclick={() => (view.uid = Number(cell))}>{cell}</button>{:else}{cell ?? 'NULL'}{/if}
+              </span>
+            {/each}
           </div>
         {/each}
       </div>
@@ -228,6 +248,7 @@
   .row { position: absolute; left: 0; display: flex; height: 28px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 50%, transparent); }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
   .null { color: var(--ink-2); font-style: italic; }
+  .event { padding: 0; background: none; border: 0; color: var(--signal); font: inherit; cursor: pointer; text-decoration: underline dotted; }
   .stale { opacity: 0.5; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   @media (max-width: 1100px) {
