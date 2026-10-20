@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LEVELS } from '../src/engine/levels';
 import { compile } from '../src/search/compile';
 import { hasFullText, parse } from '../src/search/parse';
-import { SHORTCUTS } from '../src/search/shortcuts';
+import { SHORTCUTS, SYNTAX } from '../src/search/shortcuts';
 import { SearchError, tokenize } from '../src/search/tokens';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -228,6 +228,91 @@ describe('rulekey', () => {
 
   it('refuses a level comparison', () => {
     expect(() => compile(parse('rulekey:>x'), schema)).toThrowError(/only level and hour compare/);
+  });
+});
+
+describe('field contains', () => {
+  it('reads a scan that starts with a wildcard from one shared table when asked', () => {
+    const matches = { matches: true };
+    expect(compile(parse('CommandLine:*whoami*'), schema)).toBe(`"CommandLine" ILIKE '%whoami%'`);
+    expect(compile(parse('CommandLine:*whoami*'), schema, matches)).toBe(`_zl_uid IN (SELECT _zl_uid FROM events WHERE "CommandLine" ILIKE '%whoami%')`);
+    expect(compile(parse('EventID:*62*'), schema, matches)).toBe(`_zl_uid IN (SELECT _zl_uid FROM events WHERE CAST("EventID" AS VARCHAR) ILIKE '%62%')`);
+    expect(compile(parse('Image:*\\cmd.exe'), schema, matches)).toBe(`_zl_uid IN (SELECT _zl_uid FROM events WHERE "Image" ILIKE '%\\\\cmd.exe' ESCAPE '\\')`);
+    expect(compile(parse('Image:C:*'), schema, matches)).toBe(`"Image" ILIKE 'C:%'`);
+    expect(compile(parse('EventID:4624'), schema, matches)).toBe('"EventID" = 4624');
+  });
+
+  it.each([
+    'CommandLine:*whoami*', '-CommandLine:*whoami*', 'Image:*\\cmd.exe', 'Image:*50_off*', 'Image:*5_off*', 'CommandLine:*100%*',
+    'CommandLine:*"it\'s"*', 'Computer:*s0*', '-Computer:*s0* Image:*system32*', 'host:*S0*', 'EventID:*6*',
+  ])('finds the same events either way: %s', async (query) => {
+    expect(await db.uids(compile(parse(query), schema, { matches: true }))).toEqual(await run(query));
+  });
+});
+
+describe('a wildcard beside a quoted value', () => {
+  const quotedValue = (query: string) => tokenize(query).filter((t) => t.kind === 'quoted').map((t) => [t.text, t.starBefore ?? false, t.starAfter ?? false]);
+
+  it.each<[string, (string | boolean)[][]]>([
+    ['CommandLine:*"net user"*', [['net user', true, true]]],
+    ['Image:"C:\\\\Program Files\\\\"*', [['C:\\Program Files\\', false, true]]],
+    ['F:*"x y"', [['x y', true, false]]],
+    ['(F:*"a b"*)', [['a b', true, true]]],
+    ['F:*"a" G:b', [['a', true, false]]],
+    ['"x"* y', [['x', false, false]]],
+  ])('reads %s', (query, expected) => {
+    expect(quotedValue(query)).toEqual(expected);
+  });
+
+  it.each([
+    ['Image:*"C:\\Windows*', ['Image', ':', '*"C:\\Windows*']],
+    ['F:*"x"y', ['F', ':', '*"x"y']],
+  ])('keeps %s an unquoted value, as before', (query, texts) => {
+    expect(tokenize(query).map((t) => t.text)).toEqual(texts);
+  });
+
+  it('carries the wildcards on the term', () => {
+    expect(parse('F:*"a b"*')).toEqual({
+      kind: 'term', field: 'F', fieldQuoted: false, op: '=', value: 'a b', quoted: true, starBefore: true, starAfter: true, start: 0, end: 9,
+    });
+  });
+
+  it.each<[string, number[]]>([
+    ['CommandLine:*"enc SQBF"*', [PS]],
+    ['CommandLine:*"cmd.exe /c"*', [CMD]],
+    ['CommandLine:*"whoami"*', [CMD]],
+    ['CommandLine:*"it\'s"', [PS]],
+    ['Image:"C:\\\\Windows\\\\System32\\\\"*', [CMD, PS]],
+    ['Image:*"\\\\System32\\\\"*', [CMD, PS]],
+    ['CommandLine:*"100% it"*', [PS]],
+    ['CommandLine:*"0_o"*', []],
+    ['EventID:*"62"*', [A]],
+    ['-CommandLine:*"enc SQBF"*', [A, B, CMD, OFF, PROC]],
+    ['rule:*"Encoded Power"*', [PS]],
+    ['host:*"S0"*', [CMD, PS, OFF]],
+    ['tactic:*"initial acc"*', [A]],
+  ])('%s', async (query, expected) => {
+    expect(await run(query)).toEqual(expected);
+  });
+
+  it('is in the syntax help, and every help example compiles', () => {
+    expect(SYNTAX.some((row) => row.pattern.includes('*"'))).toBe(true);
+    for (const row of SYNTAX) expect(() => compile(parse(row.pattern), schema), row.pattern).not.toThrow();
+  });
+
+  it('still matches quote marks written as escapes', () => {
+    expect(compile(parse('Image:*"\\"a\\""*'), schema)).toContain("'%\"a\"%'");
+  });
+
+  it.each([
+    ['EventID:>*"5"', /compares numbers/],
+    ['rulekey:*"r-enc"*', /rulekey: matches one key exactly/],
+    ['technique:*"T1059"', /technique: matches/],
+    ['weekday:"mon"*', /weekday: matches/],
+    ['hour:*"5"', /hour: matches/],
+    ['level:*"high"', /level: matches/],
+  ])('refuses %s', (query, message) => {
+    expect(() => compile(parse(query), schema)).toThrowError(message);
   });
 });
 

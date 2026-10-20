@@ -245,6 +245,92 @@ async function phase4(page, state, steps, expectedStarts) {
   }
   steps.push('entities list exactly their events');
 
+  // Entities' own column filters: a count floor keeps exactly the values at or above it, and the order turns.
+  await route('entities');
+  await page.getByRole('button', { name: 'Hosts', exact: true }).click();
+  const hostTable = page.locator('#entities-table');
+  if ((await hostTable.count()) > 0 && ((await poll(page, () => number(hostTable, 'data-rows'), 'the hosts')) ?? 0) > 1) {
+    const counts = () => page.locator('#entities-table button.value').evaluateAll((buttons) => buttons.map((b) => Number(b.getAttribute('data-events'))));
+    const all = await counts();
+    const floor = all[1];
+    const eventsCell = page.getByLabel('Filter Events', { exact: true });
+    await eventsCell.fill(`>=${floor}`);
+    await eventsCell.press('Enter');
+    const kept = all.filter((count) => count >= floor).length;
+    await poll(page, async () => (await number(hostTable, 'data-rows')) === kept, `the ${kept} hosts with at least ${floor} events`);
+    check((await counts()).every((count) => count >= floor), 'the Events filter kept hosts with fewer events');
+    await page.locator('#entities-table th button.sort', { hasText: 'Events' }).click();
+    await poll(page, async () => {
+      const shown = await counts();
+      return shown.length === kept && shown.every((count, i) => i === 0 || shown[i - 1] <= count);
+    }, 'the hosts in ascending order of events');
+    await eventsCell.fill('');
+    await eventsCell.press('Enter');
+    steps.push('entities filter and sort by their own columns');
+  }
+
+  // Stacking: the rarest combination of each preset, and of a stack with its missing values, lists exactly its events.
+  await route('stacking');
+  const stackTable = page.locator('#stacking-table');
+  const presets = page.locator('[aria-label="Stack"] button');
+  const presetCount = await presets.count();
+  for (let i = 0; i < Math.min(presetCount, 3); i++) {
+    if (i > 0) {
+      await route('stacking');
+      await presets.nth(i).click();
+    }
+    const name = await presets.nth(i).textContent();
+    const rows = await poll(page, async () => (await presets.nth(i).getAttribute('aria-pressed')) === 'true' && number(stackTable, 'data-rows'), `the ${name} stack`);
+    if (!rows) {
+      steps.push(`stacking: no event has ${name}`);
+      continue;
+    }
+    await clickAndCount(page.locator('#stacking-table button.value').first(), `the rarest ${name}`);
+  }
+  if (presetCount > 0) {
+    await route('stacking');
+    await page.getByRole('button', { name: 'Include missing values' }).click();
+    await poll(page, () => number(stackTable, 'data-rows'), 'the stack with missing values');
+    const missing = page.locator('#stacking-table td.missing button.value').first();
+    if ((await missing.count()) > 0) await clickAndCount(missing, 'the events without the stacked field');
+    await route('stacking');
+    await page.getByRole('button', { name: 'Include missing values' }).click();
+  }
+  steps.push(presetCount > 0 ? 'stacking: the rarest rows list exactly their events' : 'stacking: no preset fits this package');
+
+  // Logons: the first row of each table lists exactly its events, successes and failures together.
+  for (const [id, what] of [['logons-table', 'logons'], ['explicit-table', 'explicit credentials'], ['rdp-table', 'Remote Desktop events']]) {
+    await route('logons');
+    const table = page.locator(`#${id}`);
+    if ((await table.count()) === 0) {
+      steps.push(`logons: this package has no ${what}`);
+      continue;
+    }
+    const rows = await poll(page, () => number(table, 'data-rows'), what);
+    if (!rows) {
+      steps.push(`logons: no ${what}`);
+      continue;
+    }
+    await clickAndCount(page.locator(`#${id} button.value`).first(), `the first row of ${what}`);
+    steps.push(`logons: the first row of ${what} lists exactly its events`);
+  }
+
+  // Sessions: a session's activity opens with its logon id and its time range, holds at least the logon itself,
+  // and replaces the search that found the session: that search would cut the activity down to the logons.
+  await route(`logons?q=${encodeURIComponent('EventID:4624')}&d=1`);
+  const sessionTable = page.locator('#sessions-table');
+  if ((await sessionTable.count()) > 0 && await poll(page, () => number(sessionTable, 'data-rows'), 'the sessions')) {
+    const logonId = await sessionTable.locator('tbody tr').first().locator('td').nth(4).textContent();
+    await sessionTable.locator('button.value').first().click();
+    const listed = await reopened(page, state);
+    const hash = decodeURIComponent(new URL(page.url()).hash);
+    check(hash.includes(logonId) && hash.includes('t='), `a session's activity opened as ${hash}`);
+    check(!hash.includes('EventID:4624') && !hash.includes('d=1'), `a session's activity kept the search that found it: ${hash}`);
+    check(listed.count >= 1, 'a session\'s activity lists not even its logon');
+    steps.push('logons: a session opens its activity');
+    await route('explore?q=');
+  }
+
   // Processes: the tree counts every process start, and a start opens as its event.
   await route('processes');
   const tree = page.locator('#process-tree');
@@ -286,6 +372,21 @@ async function phase4(page, state, steps, expectedStarts) {
   await runSql('SELECT count(*) AS n FROM events');
   check((await firstCell()) === manifest.totals.events, 'the events changed after the console refused a DROP');
   steps.push('the SQL console counts the events and refuses to change them');
+
+  // The result columns filter and sort in the engine, over every row of the query, not the 10,000 shown.
+  await runSql('SELECT range AS n FROM range(20000)');
+  await firstCell();
+  const nCell = page.getByLabel('Filter n', { exact: true });
+  await nCell.fill('>=15000');
+  await nCell.press('Enter');
+  await poll(page, async () => (await number(page.locator('#sql-result'), 'data-rows')) === 5000, '5,000 filtered rows');
+  const firstN = () => page.locator('#sql-result [role="cell"]').first().textContent();
+  await page.getByRole('button', { name: 'Sort by n' }).click();
+  await poll(page, async () => (await firstN()) === '15000', 'the smallest n first');
+  await page.getByRole('button', { name: 'Sort by n' }).click();
+  await poll(page, async () => (await firstN()) === '19999', 'the largest n first');
+  check((await number(page.locator('#sql-result'), 'data-rows')) === 5000, 'sorting changed how many rows the filter keeps');
+  steps.push('the SQL results filter and sort in the engine');
 
   // Timeline: a lane holds exactly the events of its tactic in the window drawn.
   await route('timeline');

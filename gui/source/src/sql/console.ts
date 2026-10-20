@@ -1,5 +1,6 @@
 import { isSuperseded } from '../engine/queries';
 import { str } from '../engine/sql';
+import type { LocalColumn } from '../ui/localFilters';
 
 /*
  * Why the console needs no filter on the person's text: it reaches the engine only as one string
@@ -23,10 +24,33 @@ export function describeSql(text: string): string {
   return `DESCRIBE SELECT * FROM query(${str(text)})`;
 }
 
-/** Every column as text, named by position: 64-bit values stay exact, and two columns of one name stay two. */
-export function resultSql(text: string, columns: number, limit = SQL_ROW_LIMIT + 1): string {
-  const names = Array.from({ length: columns }, (_, i) => `c${i}`);
-  return `SELECT ${names.map((n) => `CAST(${n} AS VARCHAR) AS ${n}`).join(', ')} FROM query(${str(text)}) AS _zl_q(${names.join(', ')}) LIMIT ${limit}`;
+/** The result columns' own filters and order, as SQL over their positional names; empty for none. */
+export interface Narrowing {
+  filter: string;
+  order: string;
+}
+
+/** The result columns as the filter cells read them: a number column compares, any other is text, as shown. */
+export function consoleColumns(columns: Column[]): LocalColumn[] {
+  return columns.map((column, i) => ({ name: `c${i}`, type: numericType(column.type) ? 'number' : 'text' }));
+}
+
+/**
+ * Every column as text, named by position: 64-bit values stay exact, and two
+ * columns of one name stay two. With a narrowing, the query is filtered and
+ * ordered in the engine over all its rows, numbers as numbers and everything
+ * else as the text the table shows, before the limit.
+ */
+export function resultSql(text: string, columns: Column[] | number, limit = SQL_ROW_LIMIT + 1, narrow: Narrowing | null = null): string {
+  const types = typeof columns === 'number' ? Array.from({ length: columns }, () => '') : columns.map((column) => column.type);
+  const names = types.map((_, i) => `c${i}`);
+  const shown = names.map((n) => `CAST(${n} AS VARCHAR) AS ${n}`).join(', ');
+  const source = `query(${str(text)}) AS _zl_q(${names.join(', ')})`;
+  if (narrow === null || (narrow.filter === 'TRUE' && !narrow.order)) return `SELECT ${shown} FROM ${source} LIMIT ${limit}`;
+  const typed = names.map((n, i) => (numericType(types[i]) ? n : `CAST(${n} AS VARCHAR) AS ${n}`)).join(', ');
+  const order = narrow.order ? ` ORDER BY ${narrow.order}` : '';
+  // Filtered, ordered and cut below the text cast, where an ORDER BY name means the typed column, not the shown text.
+  return `SELECT ${shown} FROM (SELECT * FROM (SELECT ${typed} FROM ${source}) _zl_r WHERE ${narrow.filter}${order} LIMIT ${limit}) _zl_s`;
 }
 
 /** A query the console will not run, with why. */
@@ -71,7 +95,7 @@ async function switchOffLogging(rows: Rows): Promise<void> {
  * `reset`, which must reach the page's connection outside the console's own scope: a run stopped,
  * superseded or left behind by its view may have switched logging on before it ended.
  */
-export async function runQuery(rows: Rows, input: string, reset: Rows = rows): Promise<Result> {
+export async function runQuery(rows: Rows, input: string, reset: Rows = rows, narrow: Narrowing | null = null): Promise<Result> {
   const text = trimStatement(input);
   if (!text) throw new SqlRefused('the query is empty');
   try {
@@ -84,7 +108,7 @@ export async function runQuery(rows: Rows, input: string, reset: Rows = rows): P
     const columns = described.map((d) => ({ name: String(d.column_name), type: String(d.column_type) }));
     let raw: Record<string, unknown>[];
     try {
-      raw = await rows(resultSql(text, columns.length));
+      raw = await rows(resultSql(text, columns, SQL_ROW_LIMIT + 1, narrow));
     } catch (error) {
       throw explain(error);
     }
@@ -112,11 +136,14 @@ export function numericType(type: string): boolean {
   return /^(TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT|UTINYINT|USMALLINT|UINTEGER|UBIGINT|UHUGEINT|FLOAT|DOUBLE|DECIMAL(\(\d+,\s*\d+\))?)$/.test(type);
 }
 
+/** Wide enough for a column's filter cell to show a short comparison, such as >=1000. */
+const MIN_WIDTH = 12;
+
 /** Column widths in characters, from the header and every row shown, so they do not move while scrolling. */
 export function columnWidths(columns: Column[], rows: (string | null)[][]): number[] {
   return columns.map((column, i) => {
     let longest = column.name.length;
     for (const row of rows) longest = Math.max(longest, (row[i] ?? 'NULL').length);
-    return Math.min(60, Math.max(8, longest + 2));
+    return Math.min(60, Math.max(MIN_WIDTH, longest + 2));
   });
 }

@@ -22,7 +22,7 @@ export class QueryState {
     if (!view.q) return { tree: null, sql: null, error: null };
     try {
       const tree = parse(view.q);
-      return { tree, sql: compile(tree, this.schema, { textIndex: this.onIndex }), error: null };
+      return { tree, sql: compile(tree, this.schema, { textIndex: this.onIndex, matches: true }), error: null };
     } catch (problem) {
       if (problem instanceof SearchError) return { tree: null, sql: 'FALSE', error: problem };
       throw problem;
@@ -39,6 +39,21 @@ export class QueryState {
   whereWithoutTime = $derived(combineWhere([this.compiled.sql, view.d ? DETECTIONS_PREDICATE : null]));
 
   slow = $derived.by(() => slowSearchNote(this.compiled.tree, this.events, this.onIndex));
+
+  /**
+   * The filters with another search in place of the committed one: a column
+   * menu counts values under every filter but its own column's.
+   */
+  whereFor(q: string): string {
+    let sql: string | null = null;
+    try {
+      sql = q ? compile(parse(q), this.schema, { textIndex: this.onIndex, matches: true }) : null;
+    } catch (problem) {
+      if (!(problem instanceof SearchError)) throw problem;
+      sql = 'FALSE';
+    }
+    return combineWhere([sql, timePredicate(view.t), view.d ? DETECTIONS_PREDICATE : null]);
+  }
 
   constructor(
     readonly schema: Schema,

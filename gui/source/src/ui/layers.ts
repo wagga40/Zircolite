@@ -1,7 +1,7 @@
 import { view } from '../state/view.svelte';
 import { ui } from './ui.svelte';
 
-export type Layer = 'dialog' | 'help' | 'fields' | 'drawer' | 'menu';
+export type Layer = 'dialog' | 'help' | 'fields' | 'column' | 'drawer' | 'menu';
 
 export interface OpenLayers {
   dialog: boolean;
@@ -11,6 +11,8 @@ export interface OpenLayers {
   drawer: boolean;
   /** The Fields panel as an overlay; on a wide screen it is part of the page, not a layer. */
   fields: boolean;
+  /** A table column's filter and sort menu, a popover over the table and the drawer beside it. */
+  column: boolean;
 }
 
 /**
@@ -22,6 +24,7 @@ export function topLayer(open: OpenLayers): Layer | null {
   if (open.dialog) return 'dialog';
   if (open.help) return 'help';
   if (open.fields) return 'fields';
+  if (open.column) return 'column';
   if (open.drawer) return 'drawer';
   if (open.menu) return 'menu';
   return null;
@@ -35,5 +38,6 @@ export function pageTopLayer(): Layer | null {
     menu: (document.querySelector('details.export-menu[open]')?.getClientRects().length ?? 0) > 0,
     drawer: view.uid !== null,
     fields: ui.fieldsOpen && matchMedia('(max-width: 720px)').matches,
+    column: document.querySelector('[data-column-menu]') !== null,
   });
 }

@@ -7,38 +7,41 @@
   import type { QueryState } from '../state/query.svelte';
   import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
-  import { formatCount, isoTime } from '../ui/format';
+  import { formatCount } from '../ui/format';
   import { Panel } from '../ui/panel.svelte';
   import { ownScope } from '../ui/scope';
-  import { ENTITY_KINDS, ENTITY_LIMIT, entitiesSql, entityFields, type EntityKind, type EntityKindName, type EntityOrder, type EntityRow, entityTerm } from './entities';
+  import LocalTable from '../ui/LocalTable.svelte';
+  import { type LocalSort, localSchema, localWhere, sortClause, type TableColumn } from '../ui/localFilters';
+  import { ENTITY_COLUMNS, ENTITY_KINDS, ENTITY_LIMIT, ENTITY_ORDER, entitiesSql, entityFields, type EntityKind, type EntityKindName, type EntityRow, entityTerm } from './entities';
 
   let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
   // svelte-ignore state_referenced_locally
   const db = ownScope(page, 'entities');
 
   let kind = $state<EntityKind>(ENTITY_KINDS[0]);
-  let filter = $state('');
-  let applied = $state('');
-  let order = $state<EntityOrder>('events');
+  // The table's own column filters, in the search grammar over its columns; the page's search is untouched.
+  let filters = $state('');
+  let sort = $state<LocalSort | null>(null);
+  const columns = localSchema([...ENTITY_COLUMNS]);
   const fields = $derived(entityFields(kind, schema));
   const list = new Panel<{ kind: EntityKindName; rows: EntityRow[] }>();
-
-  // Typing a filter asks once it pauses, not on every key.
-  $effect(() => {
-    const text = filter.trim();
-    const timer = setTimeout(() => (applied = text), 250);
-    return () => clearTimeout(timer);
-  });
+  const tableColumns = $derived<TableColumn<EntityRow>[]>([
+    { column: ENTITY_COLUMNS[0], label: kind.label },
+    { column: ENTITY_COLUMNS[1], label: 'Events' },
+    { column: ENTITY_COLUMNS[2], label: 'With detections' },
+    { column: ENTITY_COLUMNS[3], label: 'First seen (UTC)' },
+    { column: ENTITY_COLUMNS[4], label: 'Last seen (UTC)' },
+  ]);
 
   $effect(() => {
     void run.generation;
     const where = query.where;
     const chosen = fields;
-    const text = applied;
-    const by = order;
+    const filter = localWhere(filters, columns);
+    const order = sortClause(sort, ENTITY_ORDER);
     const asked = kind.kind;
     if (chosen.length === 0) return;
-    list.load(async () => ({ kind: asked, rows: await db.rows<EntityRow>(entitiesSql(chosen, where, text, by), { lane: 'list' }) }));
+    list.load(async () => ({ kind: asked, rows: await db.rows<EntityRow>(entitiesSql(chosen, where, filter, order), { lane: 'list' }) }));
   });
 
   // Another kind's values never sit under this kind's header: after a switch the table waits empty.
@@ -51,7 +54,7 @@
     if (list.slot.stopped) return 'Stopped';
     if (list.slot.failure) return '';
     if (answer === null) return `Counting ${kind.noun}`;
-    if (rows.length === 0) return applied ? `No ${kind.noun} contain "${applied}"` : `No ${kind.noun} among these events`;
+    if (rows.length === 0) return filters ? `No ${kind.noun} pass the column filters` : `No ${kind.noun} among these events`;
     return `${formatCount(total)} ${kind.noun}${filtered ? ' under the current filters' : ''}`;
   });
 
@@ -79,52 +82,17 @@
     <p class="note">This package has no field for {kind.noun} (looked for {kind.fields.join(', ')}).</p>
   {:else}
     <p class="note">Fields: {fields.map((f) => f.name).join(', ')}. Values are grouped ignoring case; an event counts once per value{filtered ? ', under the current filters' : ''}.</p>
-    <div class="controls">
-      <label>Filter values <input type="search" bind:value={filter} spellcheck="false" autocomplete="off" /></label>
-      <label>Sort by
-        <select bind:value={order}>
-          <option value="events">Most events</option>
-          <option value="detections">Most events with detections</option>
-          <option value="first">First seen</option>
-          <option value="last">Last seen</option>
-        </select>
-      </label>
-    </div>
     {#if list.slot.failure}
       <p class="note failure" role="alert">The {kind.noun} could not be listed: {list.slot.failure}. Change the search, or reload the page if this repeats.</p>
     {:else if list.slot.stopped}
       <p class="note" role="status">Stopped.</p>
     {:else}
       {#if total > rows.length}
-        <p class="note">Showing {formatCount(rows.length)} of {formatCount(total)} values. Type in the filter to find the others.</p>
+        <p class="note">Showing {formatCount(rows.length)} of {formatCount(total)} values. Filter a column to find the others.</p>
       {/if}
-      <div class="wrap">
-        <table id="entities-table" data-kind={kind.kind} data-rows={list.slot.pending || answer === null ? '' : rows.length}
-          class:stale={list.slot.pending && answer !== null} aria-busy={list.slot.pending}>
-          <thead>
-            <tr>
-              <th scope="col">{kind.label}</th>
-              <th scope="col" class="num">Events</th>
-              <th scope="col" class="num">With detections</th>
-              <th scope="col">First seen (UTC)</th>
-              <th scope="col">Last seen (UTC)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each rows as row, i (i)}
-              <tr>
-                <td><button type="button" class="value" data-events={row.events} disabled={list.slot.pending} title={`Show the ${formatCount(row.events)} events of ${valueLabel(row.v)}`} onclick={() => explore(row.v)}>{valueLabel(row.v)}</button></td>
-                <td class="num">{formatCount(row.events)}</td>
-                <td class="num">{formatCount(row.detections)}</td>
-                <td class="time">{row.first === null ? 'No time' : isoTime(row.first, false)}</td>
-                <td class="time">{row.last === null ? 'No time' : isoTime(row.last, false)}</td>
-              </tr>
-            {:else}
-              {#if !list.slot.pending}<tr><td colspan="5" class="note">No {kind.noun} {applied ? `contain "${applied}"` : 'among these events'}.</td></tr>{/if}
-            {/each}
-          </tbody>
-        </table>
-      </div>
+      <LocalTable id="entities-table" columns={tableColumns} {rows} pending={list.slot.pending} answered={answer !== null} bind:filters bind:sort
+        order={{ column: 'events', desc: true }} empty={`No ${kind.noun} ${filters ? 'pass the column filters' : 'among these events'}.`}
+        pivot={{ events: (row) => row.events, open: (row) => explore(row.v), title: (row) => `Show the ${formatCount(row.events)} events of ${valueLabel(row.v)}` }} />
       {#if total > ENTITY_LIMIT && rows.length === ENTITY_LIMIT}<p class="note">The table stops at {formatCount(ENTITY_LIMIT)} rows.</p>{/if}
     {/if}
   {/if}
@@ -139,17 +107,6 @@
   .kinds button[aria-pressed='true'] { border-color: var(--signal); font-weight: 600; color: var(--ink); }
   .note { margin: 6px 0; color: var(--ink-2); font-size: var(--t-13); }
   .failure { color: var(--danger); }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; font-size: var(--t-13); }
-  .controls input, .controls select { margin-left: 6px; min-height: 28px; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2px 8px; }
-  .wrap { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; font-size: var(--t-13); }
-  th { position: sticky; top: 0; background: var(--paper); text-align: left; font-weight: 600; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-  td { padding: 3px 12px 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); }
-  /* Anywhere-wrapping values collapse to a few characters in a narrow table; the wrapper scrolls instead. */
-  td:first-child { min-width: 200px; }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
-  .time { font-family: var(--mono); white-space: nowrap; }
-  .value { min-height: 24px; padding: 0; text-align: left; background: none; border: 0; color: var(--signal); font: 400 var(--t-13) / 1.4 var(--mono); cursor: pointer; overflow-wrap: anywhere; }
   output { color: var(--ink-2); font-size: var(--t-13); }
   .stale { opacity: 0.5; }
 </style>

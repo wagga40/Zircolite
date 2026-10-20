@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Field } from '../src/engine/schema';
-import { COUNT_SQL, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, ROW, wheelDelta, wheelPosition, wheelScroll } from '../src/explore/table';
+import { SNAPSHOT_SQL } from '../src/explore/export';
+import { columnTracks, COUNT_SQL, dropGap, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, resolveSort, ROW, SORT_PREFIX, tableMinWidth, wheelDelta, wheelPosition, wheelScroll, widthOf } from '../src/explore/table';
 import { type Fixture, openFixture, schema } from './fixture';
 
 let db: Fixture;
@@ -12,6 +13,7 @@ const field = (name: string): Field => {
   if (!found) throw new Error(`fixture has no ${name}`);
   return found;
 };
+const A = 1, B = 2, CMD = 3, PS = 4294967297, OFF = 4294967298, PROC = 4294967299;
 const order = async () => (await db.rows('SELECT _zl_uid FROM view_ids ORDER BY _zl_pos')).map((r) => r._zl_uid);
 
 describe('result list', () => {
@@ -20,6 +22,49 @@ describe('result list', () => {
     expect(await order()).toEqual([1, 2, 3, 4294967297, 4294967299, 4294967298]);
     await db.rows(idsSql('TRUE', true));
     expect(await order()).toEqual([4294967299, 4294967297, 3, 2, 1, 4294967298]);
+  });
+
+  it('keeps the time order\'s query text, so cached answers stay valid', () => {
+    expect(idsSql('TRUE', true, null)).toBe(
+      'CREATE OR REPLACE TEMP TABLE view_ids AS SELECT (row_number() OVER (ORDER BY _zl_time DESC NULLS LAST, _zl_uid DESC) - 1)::BIGINT AS _zl_pos, _zl_uid FROM events WHERE TRUE',
+    );
+  });
+
+  it.each<[string, boolean, number[]]>([
+    ['Image', false, [OFF, CMD, PS, A, B, PROC]],
+    ['Image', true, [PS, CMD, OFF, A, B, PROC]],
+    ['Computer', false, [A, B, PROC, CMD, PS, OFF]],
+    ['EventID', false, [CMD, PS, OFF, A, B, PROC]],
+    ['EventID', true, [PROC, B, A, OFF, CMD, PS]],
+  ])('sorts by %s (descending: %s), missing values last and ties in time order', async (name, desc, expected) => {
+    await db.rows(idsSql('TRUE', desc, field(name)));
+    expect(await order()).toEqual(expected);
+  });
+
+  it('resolves a sort from the link, falling back to time for a column the package lacks', () => {
+    expect(resolveSort(null, schema)).toBeNull();
+    expect(resolveSort('_zl_level', schema)).toBe('level');
+    expect(resolveSort('image', schema)).toBe(field('Image'));
+    expect(resolveSort('Nope', schema)).toBeNull();
+  });
+
+  it('sorts by level', async () => {
+    await db.rows(idsSql('TRUE', false, 'level'));
+    expect(await order()).toEqual([A, CMD, PS, B, PROC, OFF]);
+    await db.rows(idsSql('TRUE', true, 'level'));
+    expect(await order()).toEqual([PS, CMD, A, B, PROC, OFF]);
+  });
+
+  it('sorts text by its first characters, ignoring case, inside the filter', async () => {
+    expect(idsSql('TRUE', false, field('Image'))).toContain(`lower(left("Image", ${SORT_PREFIX}))`);
+    await db.rows(idsSql(`_zl_uid IN (SELECT _zl_uid FROM events WHERE "Computer" ILIKE 'ws02')`, false, field('Image')));
+    expect(await order()).toEqual([OFF, CMD, PS]);
+  });
+
+  it('exports in the order shown', async () => {
+    await db.rows(idsSql('TRUE', true, field('EventID')));
+    await db.rows(SNAPSHOT_SQL);
+    expect((await db.rows('SELECT _zl_uid FROM export_ids ORDER BY _zl_pos')).map((r) => r._zl_uid)).toEqual([PROC, B, A, OFF, CMD, PS]);
   });
 
   it('counts results and those with detections', async () => {
@@ -144,5 +189,31 @@ describe('wheel details', () => {
   it('starts again from the real position after another kind of scroll', () => {
     const next = wheelPosition(1000.4, 5000, 0, 1_868_682, 560);
     expect(next).toBe(5000);
+  });
+});
+
+describe('column layout', () => {
+  const columns = [field('Image'), field('Computer'), field('EventID')];
+
+  it('gives a sized column its width and the others a share of the room', () => {
+    expect(columnTracks(columns, { image: 320 })).toBe('224px 112px 320px minmax(160px, 1fr) minmax(160px, 1fr)');
+    expect(tableMinWidth(columns, { image: 320 })).toBe(224 + 112 + 320 + 160 + 160);
+  });
+
+  it('shows a width being dragged before it is kept', () => {
+    expect(columnTracks(columns, { Image: 320 }, { key: 'computer', width: 90 })).toBe('224px 112px 320px 90px minmax(160px, 1fr)');
+  });
+
+  it('finds a width whatever the case of the name in the link', () => {
+    expect(widthOf({ IMAGE: 300 }, field('Image'))).toBe(300);
+    expect(widthOf({}, field('Image'))).toBeNull();
+  });
+
+  it('drops a dragged column into the gap nearest the pointer', () => {
+    const centers = [100, 300, 500];
+    expect(dropGap(centers, 0)).toBe(0);
+    expect(dropGap(centers, 150)).toBe(1);
+    expect(dropGap(centers, 450)).toBe(2);
+    expect(dropGap(centers, 900)).toBe(3);
   });
 });

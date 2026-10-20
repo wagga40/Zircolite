@@ -9,28 +9,35 @@
   import { download } from '../ui/download';
   import { formatCount, isoTime, levelName } from '../ui/format';
   import { typing } from '../ui/keys';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { pageTopLayer } from '../ui/layers';
   import { ui } from '../ui/ui.svelte';
+  import { columnState, withoutColumn } from '../search/filters';
+  import ColumnMenu from '../ui/ColumnMenu.svelte';
+  import { asciiLower } from '../engine/sql';
+  import { clampWidth } from '../state/hash';
+  import { familyColumns, familyLabel, familyOf, familyProbeSql, moveColumn, placeColumn, toggleColumn } from './columns';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
-  import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW, wheelDelta, wheelPosition } from './table';
+  import ColumnValues from './ColumnValues.svelte';
+  import { applyFilter } from './header';
+  import ResultHeader from './ResultHeader.svelte';
+  import { columnTracks, COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, resolveSort, ROW, tableMinWidth, wheelDelta, wheelPosition, widthOf } from './table';
 
-  let { db, exportDb, schema, manifest, where, columns, slow }: {
+  let { db, exportDb, schema, manifest, where, whereFor, columns, slow }: {
     db: Db;
     /** Outlives the view, so an export finishes and downloads after the person moves to another view; Stop still ends it. */
     exportDb: Db;
     schema: Schema;
     manifest: Manifest;
     where: string;
+    /** The filters with another search in place of the committed one. */
+    whereFor: (q: string) => string;
     columns: Field[];
     /** Said in place of "Searching" when the search is known to take long. */
     slow: string | null;
   } = $props();
 
   const CACHED_PAGES = 40;
-  const TIME_WIDTH = 224;
-  const LEVEL_WIDTH = 112;
-  const COLUMN_WIDTH = 160;
 
   let scroller = $state<HTMLDivElement>();
   let height = $state(0);
@@ -47,6 +54,10 @@
   let exporting = $state<{ done: number; total: number } | null>(null);
   let exportNote = $state<string | null>(null);
   let menuOpen = $state(false);
+  // The column whose filter and sort menu is open, and the funnel it opened from. Raw: the field is compared
+  // by identity with the shown columns and the sort, and a deep proxy of it would equal neither.
+  let columnMenu = $state.raw<{ field: Field; anchor: HTMLElement } | null>(null);
+  let cellProblem = $state<string | null>(null);
   let menu = $state<HTMLDetailsElement>();
   let cancelButton = $state<HTMLButtonElement>();
   let csvButton = $state<HTMLButtonElement>();
@@ -61,6 +72,78 @@
   $effect(() => {
     if (menuOpen && (view.uid !== null || ui.fieldsOpen)) closeMenu();
   });
+
+  function closeColumnMenu(): void {
+    const opened = columnMenu;
+    columnMenu = null;
+    // Focus goes back to the funnel only from inside the menu; a press elsewhere keeps its own target.
+    const at = document.activeElement;
+    if (opened && (!at || at === document.body || at.closest('[data-column-menu]'))) {
+      void tick().then(() => document.querySelector<HTMLElement>(`[data-column-funnel="${CSS.escape(opened.field.key)}"]`)?.focus());
+    }
+  }
+
+  // An event opening or changing beside the table, or the Fields sheet opening, takes the menu with it; a menu
+  // opened beside an event already open stays.
+  $effect(() => {
+    void view.uid;
+    void ui.fieldsOpen;
+    untrack(() => (columnMenu = null));
+  });
+
+  // So does its column going away.
+  $effect(() => {
+    if (!columnMenu) return;
+    const key = columnMenu.field.key;
+    if (!columns.some((field) => field.key === key)) columnMenu = null;
+  });
+
+  function columnNames(): string[] {
+    return view.cols ?? columns.map((field) => field.name);
+  }
+
+  function moveField(field: Field, delta: -1 | 1): void {
+    view.cols = moveColumn(columnNames(), field.name, delta);
+  }
+
+  function placeField(field: Field, gap: number): void {
+    view.cols = placeColumn(columnNames(), field.name, gap);
+  }
+
+  /** Keeps a column's width in the link, or forgets it with null; the shown columns become the user's own list. */
+  function keepWidth(field: Field, width: number | null): void {
+    const names = columnNames();
+    const next = Object.fromEntries(Object.entries(view.widths).filter(([name]) => asciiLower(name) !== field.key));
+    if (width !== null) next[names.find((name) => asciiLower(name) === field.key) ?? field.name] = clampWidth(width);
+    if (view.cols === null) view.cols = names;
+    view.widths = next;
+  }
+
+  function resize(field: Field, width: number | null, phase: 'live' | 'done' | 'cancel'): void {
+    if (phase === 'live' && width !== null) {
+      liveWidth = { key: field.key, width: clampWidth(width) };
+      return;
+    }
+    liveWidth = null;
+    if (phase === 'done') keepWidth(field, width);
+  }
+
+  function hideField(field: Field): void {
+    if (sortKey === field) view.sort = null;
+    view.cols = toggleColumn(columnNames(), field.name);
+  }
+
+  /** What a column's values are counted under: every filter but the column's own, so several can be picked. */
+  function valuesWhere(field: Field): string {
+    return columnState(view.q, field.name).kind === 'invalid' ? 'FALSE' : whereFor(withoutColumn(view.q, field.name));
+  }
+
+  function applyColumn(field: Field, filter: Parameters<typeof applyFilter>[2]): string | null {
+    const result = applyFilter(view.q, field.name, filter, schema);
+    if ('problem' in result) return result.problem;
+    view.q = result.query;
+    return null;
+  }
 
   $effect(() => {
     if (!menuOpen) return;
@@ -85,12 +168,15 @@
   // Unrounded wheel position, kept so 1 px trackpad deltas past the height cap are not rounded away.
   let wheelAt: number | null = null;
 
+  const sortKey = $derived(resolveSort(view.sort, schema));
   const viewport = $derived(Math.max(0, height - HEAD));
   const slice = $derived(geometry(total, viewport, scrollTop));
   const positions = $derived(Array.from({ length: slice.count }, (_, i) => slice.first + i));
   const signature = $derived(columns.map((field) => field.key).join('\u0000'));
-  const template = $derived(`${TIME_WIDTH}px ${LEVEL_WIDTH}px ${columns.map(() => `minmax(${COLUMN_WIDTH}px, 1fr)`).join(' ')}`);
-  const minWidth = $derived(TIME_WIDTH + LEVEL_WIDTH + columns.length * COLUMN_WIDTH);
+  // A width being dragged: only the grid's tracks change while it moves, and the link once it is let go.
+  let liveWidth = $state<{ key: string; width: number } | null>(null);
+  const template = $derived(columnTracks(columns, view.widths, liveWidth));
+  const minWidth = $derived(tableMinWidth(columns, view.widths, liveWidth));
 
   function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -109,11 +195,14 @@
     void run.generation;
     // A new list is a new question; a stop belongs to the list it cancelled.
     run.stopped = false;
-    const sql = idsSql(where, view.desc);
+    const sql = idsSql(where, view.desc, sortKey);
     const mine = ++build;
     busy = true;
     failure = null;
     pageFailure = false;
+    // The previous list's page and family probe are moot now, and would hold the one connection ahead of this list.
+    db.cancel('page');
+    db.cancel('family');
     void (async () => {
       try {
         await db.exec(sql, { lane: 'results' });
@@ -148,7 +237,15 @@
     })();
   });
 
-  // A failed page is asked for again when the visible pages change, once per change; scrolling within them does not retry.
+  // The one kind of event the results hold, read from the search or, failing that, asked of a small result list.
+  const FAMILY_PROBE_LIMIT = 200_000;
+  const named = $derived(familyOf(view.q, manifest.families));
+  let probed = $state<Manifest['families'][number] | null>(null);
+  const family = $derived(named ?? probed);
+  const familySet = $derived(family ? familyColumns(family, schema) : []);
+  const familyShown = $derived(familySet.length === columns.length && familySet.every((field, i) => columns[i] === field));
+
+    // A failed page is asked for again when the visible pages change, once per change; scrolling within them does not retry.
   const visiblePages = $derived(slice.count === 0 ? '' : `${Math.floor(slice.first / PAGE)}-${Math.floor((slice.first + slice.count - 1) / PAGE)}`);
   $effect(() => {
     void visiblePages;
@@ -205,7 +302,23 @@
     );
   });
 
-  // Past the height cap one wheel notch would jump thousands of rows, so the scroll is stepped by rows.
+  // Asked after the first page, on its own lane, and only of lists small enough that it costs little.
+  $effect(() => {
+    probed = null;
+    const sql = familyProbeSql(schema);
+    if (sql === null || busy || named !== null || current === 0 || current !== build || total === 0 || total > FAMILY_PROBE_LIMIT) return;
+    const mine = current;
+    db.rows<{ c: string | null; i: string | null }>(sql, { cache: false, lane: 'family' }).then(
+      (rows) => {
+        if (mine !== current || rows.length !== 1) return;
+        probed = manifest.families.find((f) => f.channel === rows[0].c && f.eventid === rows[0].i) ?? null;
+      },
+      // The offer is a convenience: a probe that fails or is stopped offers nothing.
+      () => {},
+    );
+  });
+
+    // Past the height cap one wheel notch would jump thousands of rows, so the scroll is stepped by rows.
   $effect(() => {
     const target = scroller;
     if (!target) return;
@@ -262,6 +375,7 @@
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event)) return;
     if ((event.target as Element | null)?.closest?.('dialog')) return;
     if (event.key !== 'j' && event.key !== 'k') return;
+    if ((event.target as Element | null)?.closest?.('[data-column-menu]')) return;
     // The row mark shows and Enter opens a row only while the grid has focus, and the grid sits past
     // one button per field. The open event keeps its focus, so stepping is read out where the person is.
     const at = document.activeElement;
@@ -342,6 +456,12 @@
     {/if}
     {#if busy}<button type="button" onclick={() => stopAll(db)}>Stop</button>{/if}
     <button type="button" class="toggle" aria-pressed={view.d} onclick={() => (view.d = !view.d)}>Detections only</button>
+    {#if family && familySet.length > 0 && !familyShown}
+      <button type="button" onclick={() => (view.cols = familySet.map((field) => field.name))} title={familySet.map((field) => field.name).join(', ')}>Columns for {familyLabel(family)}</button>
+    {/if}
+    {#if view.cols !== null}
+      <button type="button" onclick={() => { view.cols = null; view.widths = {}; }}>Default columns</button>
+    {/if}
     <span class="grow"></span>
     {#if exporting}
       <span class="progress" aria-live="polite">Exporting {formatCount(exporting.done)} of {formatCount(exporting.total)}</span>
@@ -364,13 +484,17 @@
   </div>
   {#if exportNote}<p class="note" role="status">{exportNote}</p>{/if}
   {#if failure}<p class="note failure" role="alert">The results could not be read: {failure}. Change the search, or reload the page if this repeats.</p>{/if}
+  {#if cellProblem}<p class="note failure" role="alert">{cellProblem}</p>{/if}
 
   <div
     id="result-grid"
     class="scroller"
     bind:this={scroller}
     bind:clientHeight={height}
-    onscroll={() => (scrollTop = scroller?.scrollTop ?? 0)}
+    onscroll={() => {
+      scrollTop = scroller?.scrollTop ?? 0;
+      if (columnMenu) columnMenu = null;
+    }}
     role="grid"
     tabindex="0"
     aria-label="Events"
@@ -379,14 +503,10 @@
     aria-busy={busy}
     aria-activedescendant={total > 0 && active >= slice.first && active < slice.first + slice.count ? `row-${active}` : undefined}
     onkeydown={ongridkey}
+    style:--cols={template}
   >
-    <div class="row head" role="row" aria-rowindex={1} style:grid-template-columns={template} style:min-width={`${minWidth}px`}>
-      <div role="columnheader" aria-sort={view.desc ? 'descending' : 'ascending'}>
-        <button type="button" class="sort" onclick={() => (view.desc = !view.desc)}>Time (UTC) {view.desc ? '↓' : '↑'}</button>
-      </div>
-      <div role="columnheader">Level</div>
-      {#each columns as field (field.key)}<div role="columnheader" class:num={field.type !== 'VARCHAR'} title={field.name}>{field.name}</div>{/each}
-    </div>
+    <ResultHeader {columns} {schema} {sortKey} {minWidth} menuFor={columnMenu?.field.key ?? null} onresize={resize} onplace={placeField}
+      onmenu={(field, anchor) => (columnMenu = columnMenu?.field === field ? null : { field, anchor })} onproblem={(problem) => (cellProblem = problem)} />
     <div class="rows-space" style:height={`${slice.height}px`} style:min-width={`${minWidth}px`}>
       <div class="rows" style:transform={`translateY(${slice.top}px)`}>
         {#each positions as position (position)}
@@ -403,7 +523,6 @@
             role="row"
             aria-rowindex={position + 2}
             aria-selected={row !== undefined && row._zl_uid === view.uid}
-            style:grid-template-columns={template}
             onclick={() => open(position)}
           >
             {#if row}
@@ -422,9 +541,27 @@
       </div>
     </div>
     {#if !busy && total === 0 && !failure}
-      <p class="empty">No events match. Remove a filter or change the search.</p>
+      <p class="empty" style:top={`${HEAD + 24}px`}>No events match. Remove a filter or change the search.</p>
     {/if}
   </div>
+  {#if columnMenu}
+    {@const field = columnMenu.field}
+    {@const at = columns.indexOf(field)}
+    <ColumnMenu title={field.name} numeric={field.type !== 'VARCHAR'} anchor={columnMenu.anchor} current={columnState(view.q, field.name)}
+      sort={sortKey === field ? (view.desc ? 'descending' : 'ascending') : null}
+      onsort={(desc) => { view.sort = field.name; view.desc = desc; }}
+      onapply={(filter) => applyColumn(field, filter)} onclose={closeColumnMenu}>
+      {#snippet values(apply: (filter: Parameters<typeof applyFilter>[2]) => void)}
+        <ColumnValues {db} {field} where={valuesWhere(field)} current={columnState(view.q, field.name)} onapply={apply} />
+      {/snippet}
+      {#snippet column()}
+        <button type="button" disabled={at <= 0} onclick={() => moveField(field, -1)}>Move left</button>
+        <button type="button" disabled={at < 0 || at >= columns.length - 1} onclick={() => moveField(field, 1)}>Move right</button>
+        <button type="button" onclick={() => { hideField(field); closeColumnMenu(); }}>Hide column</button>
+        {#if widthOf(view.widths, field) !== null}<button type="button" onclick={() => keepWidth(field, null)}>Reset width</button>{/if}
+      {/snippet}
+    </ColumnMenu>
+  {/if}
 </div>
 
 <style>
@@ -442,15 +579,13 @@
   .note { margin: 6px 16px; font-size: var(--t-13); color: var(--ink-2); }
   .failure { color: var(--danger); }
   .scroller { position: relative; flex: 1; min-height: 0; overflow: auto; outline-offset: -2px; }
-  .row { display: grid; height: 28px; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); cursor: pointer; }
+  /* One --cols on the grid sizes every row, so dragging a width rewrites one style, not one per row. */
+  .row { display: grid; grid-template-columns: var(--cols); height: 28px; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); cursor: pointer; }
   .row > div { padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 var(--t-13) / 28px var(--mono); }
   .row .num { text-align: right; }
   .row:hover { background: color-mix(in srgb, var(--signal) 6%, transparent); }
   .row.selected { background: color-mix(in srgb, var(--signal) 15%, transparent); }
   .scroller:focus-visible .row.active { box-shadow: inset 2px 0 0 var(--signal); }
-  .head { position: sticky; top: 0; z-index: 2; height: 32px; background: var(--panel); cursor: default; border-bottom: 1px solid var(--rule); }
-  .head > div { font: 600 var(--t-12) / 32px var(--sans); color: var(--ink-2); }
-  .sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
   .rows-space { position: relative; }
   .rows { position: absolute; inset: 0 0 auto 0; transition: opacity var(--motion); }
   /* Rows of the previous filter stay until the new list is ready. */
@@ -459,7 +594,7 @@
   .row > .level { display: flex; align-items: center; gap: 6px; font-family: var(--sans); }
   .level i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; }
   .loading { color: var(--ink-2); }
-  .empty { position: absolute; top: 56px; left: 16px; margin: 0; color: var(--ink-2); }
+  .empty { position: absolute; left: 16px; margin: 0; color: var(--ink-2); }
   .exports { display: inline-flex; gap: 8px; }
   .export-menu { display: none; position: relative; }
   .export-menu summary { min-height: 28px; padding: 3px 10px; border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; list-style: none; }

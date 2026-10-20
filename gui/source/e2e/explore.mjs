@@ -177,6 +177,102 @@ async function scenario(page, steps) {
   check(csvRecords(csv) === r.count + 1, `the CSV holds ${csvRecords(csv) - 1} events; the results ${r.count}`);
   steps.push('CSV export');
 
+  // Column filters write ordinary terms into the search, so every count they give can be checked against one.
+  await search(page, state, '');
+  await page.goto(`${url}#/explore?cols=Computer,Channel,EventID`);
+  const cell = (name) => page.getByLabel(`Filter ${name}`, { exact: true });
+  const applyCell = async (name, text) => {
+    await cell(name).fill(text);
+    await cell(name).press('Enter');
+    return results(page, state);
+  };
+  await cell('Computer').waitFor();
+  r = await applyCell('Computer', `=${facetValue}`);
+  check(r.count === facetCount, `the Computer cell =${facetValue} lists ${r.count}; its facet counted ${facetCount}`);
+  check(new URL(page.url()).hash.includes('q=Computer'), 'the cell filter is not in the search');
+  r = await applyCell('Computer', '');
+  check(r.count === expected, `clearing the Computer cell lists ${r.count}, not ${expected}`);
+  const contains = await applyCell('Channel', 'sysmon');
+  const leftOut = await applyCell('Channel', '!sysmon');
+  check(contains.count > 0 && contains.count + leftOut.count === expected,
+    `Channel containing sysmon (${contains.count}) and its negation (${leftOut.count}) do not add up to ${expected}`);
+  r = await applyCell('Channel', '');
+  steps.push('a filter cell counts what its search counts, and its negation partitions');
+
+  const funnel = page.locator('[data-column-funnel="channel"]');
+  const columnMenu = page.locator('[data-column-menu]');
+  const values = columnMenu.locator('li[data-value]');
+  await funnel.click();
+  await values.nth(1).waitFor();
+  const picks = [];
+  for (const i of [0, 1]) {
+    picks.push({ value: await values.nth(i).getAttribute('data-value'), count: Number(await values.nth(i).getAttribute('data-count')) });
+    await values.nth(i).locator('input[type=checkbox]').check();
+  }
+  await columnMenu.getByRole('button', { name: 'Show only these' }).click();
+  r = await results(page, state);
+  check(r.count === picks[0].count + picks[1].count, `two picked channels list ${r.count}; their counts add up to ${picks[0].count + picks[1].count}`);
+  check((await chips.count()) === 1 && /^Channel: .+ or .+/.test(await chips.first().locator('span').first().textContent()), 'two picked values do not show as one chip');
+  await funnel.click();
+  await values.nth(2).waitFor();
+  check((await values.count()) > 2, 'the menu counts only the picked values: it ignores the column\'s own filter no longer');
+  await page.keyboard.press('Escape');
+  await columnMenu.waitFor({ state: 'detached' });
+  await chips.first().getByRole('button').click();
+  r = await results(page, state);
+  check(r.count === expected && !page.url().includes('q='), 'removing the OR chip did not remove the whole group');
+  steps.push('menu values: counts ignore the column\'s filter, picks add up, one chip');
+
+  const numeric = await page.locator('[data-field-key="eventid"]').evaluate((cell) => cell.classList.contains('num'));
+  const firstIds = async () => {
+    const rows = page.locator('#result-grid [role=row][aria-rowindex]');
+    await poll(page, async () => (await rows.nth(3).locator('[role=gridcell]').first().textContent()) !== 'Loading', 'the first rows');
+    const ids = [];
+    for (const i of [1, 2, 3]) ids.push(await rows.nth(i).locator('[role=gridcell]').nth(4).textContent());
+    return ids;
+  };
+  const ordered = (ids, desc) => ids.every((id, i) => {
+    if (i === 0) return true;
+    const [a, b] = desc ? [id, ids[i - 1]] : [ids[i - 1], id];
+    return numeric ? Number(a) <= Number(b) : a.toLowerCase() <= b.toLowerCase();
+  });
+  const sortButton = page.locator('[data-field-key="eventid"] button.sort');
+  await sortButton.click();
+  r = await results(page, state);
+  check(r.count === expected && page.url().includes('sort=EventID'), `sorting by EventID lists ${r.count} events, or is not in the link`);
+  check(ordered(await firstIds(), false), 'the events are not in ascending EventID order');
+  await sortButton.click();
+  r = await results(page, state);
+  check(ordered(await firstIds(), true), 'the events are not in descending EventID order');
+  await page.locator('#result-grid button.sort', { hasText: 'Time (UTC)' }).click();
+  r = await results(page, state);
+  check(!page.url().includes('sort='), 'clicking Time did not go back to time order');
+  steps.push('sort by a column keeps the count and orders the rows');
+
+  await page.getByRole('separator', { name: 'Resize Computer' }).focus();
+  await page.keyboard.press('Shift+ArrowRight');
+  await funnel.click();
+  await columnMenu.getByRole('button', { name: 'Move left' }).click();
+  await page.keyboard.press('Escape');
+  const layout = new URL(page.url()).hash.match(/cols=([^&]*)/)?.[1] ?? '';
+  check(/^Channel,Computer~\d+,EventID$/.test(decodeURIComponent(layout)), `the link holds cols=${decodeURIComponent(layout)} after a resize and a move`);
+  await page.reload();
+  await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
+  await results(page, { build: 0 });
+  state.build = Number(await page.locator('#result-count').getAttribute('data-build'));
+  const order = await page.locator('#result-grid [data-field-key]').evaluateAll((cells) => cells.map((cell) => cell.getAttribute('data-field-key')));
+  check(order.join(',') === 'channel,computer,eventid', `the columns came back as ${order.join(',')} after a reload`);
+  steps.push('column widths and order survive a reload');
+
+  await applyCell('Computer', 'a');
+  await applyCell('Computer', 'b');
+  await page.goBack();
+  await results(page, state);
+  check((await cell('Computer').inputValue()) === 'a', `Back left the Computer cell at "${await cell('Computer').inputValue()}"`);
+  // The default columns again, with the search left for the next step to clear.
+  await page.goto(`${url}#/explore?q=${encodeURIComponent('Computer:*a*')}`);
+  steps.push('Back restores a filter cell');
+
   await search(page, state, '');
   await page.locator('#result-grid').focus();
   await page.keyboard.press('j');
@@ -220,6 +316,17 @@ async function scenario(page, steps) {
   await input.press('Escape');
   await drawer.waitFor({ state: 'detached' });
   steps.push('one Escape closes one layer');
+
+  // A column menu opens beside an open event and sits over it: one Escape closes the menu, the next the event.
+  await openDrawer();
+  await page.locator('[data-column-funnel]').first().click();
+  await page.locator('[data-column-menu]').waitFor();
+  await page.keyboard.press('Escape');
+  await page.locator('[data-column-menu]').waitFor({ state: 'detached' });
+  await drawerStayed('one Escape closed both the column menu and the event view');
+  await page.keyboard.press('Escape');
+  await drawer.waitFor({ state: 'detached' });
+  steps.push('one Escape closes the column menu over an open event');
 
   await page.locator('#result-grid').focus();
   await page.keyboard.press('End');

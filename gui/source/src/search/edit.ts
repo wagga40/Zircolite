@@ -2,7 +2,7 @@ import type { Schema } from '../engine/schema';
 import { asciiLower } from '../engine/sql';
 import { type Node, parse } from './parse';
 import { findShortcut, SHORTCUTS } from './shortcuts';
-import { tokenize } from './tokens';
+import { type Token, tokenize } from './tokens';
 
 export interface Chip {
   label: string;
@@ -24,10 +24,35 @@ export function chips(input: string): Chip[] {
   return items.flatMap((item) => {
     const negated = item.kind === 'not';
     const inner = item.kind === 'not' ? item.item : item;
-    if (inner.kind !== 'term' || inner.field === null) return [];
-    const op = inner.op === '=' ? '' : inner.op;
-    return [{ label: `${inner.field}: ${op}${inner.value}`, negated, start: item.start, end: item.end }];
+    const label = inner.kind === 'term' ? termLabel(inner) : inner.kind === 'or' ? groupLabel(inner.items) : null;
+    return label === null ? [] : [{ label, negated, start: item.start, end: item.end }];
   });
+}
+
+type Term = Extract<Node, { kind: 'term' }>;
+
+function termLabel(term: Term): string | null {
+  if (term.field === null) return null;
+  const op = term.op === '=' ? '' : term.op;
+  // A * beside quotes means nothing without the quotes, so that value is shown as written.
+  const value = term.starBefore || term.starAfter
+    ? `${term.starBefore ? '*' : ''}${quoteValue(term.value)}${term.starAfter ? '*' : ''}`
+    : term.value;
+  return `${term.field}: ${op}${value}`;
+}
+
+const GROUP_SHOWN = 3;
+
+/** One label for an OR of exact terms on one field, the shape a column's value list writes. */
+function groupLabel(items: Node[]): string | null {
+  const terms = items.filter((item): item is Term => item.kind === 'term' && item.field !== null && item.op === '=');
+  if (terms.length !== items.length) return null;
+  const [first] = terms;
+  const key = asciiLower(first.field as string);
+  if (!terms.every((t) => asciiLower(t.field as string) === key && t.fieldQuoted === first.fieldQuoted)) return null;
+  const values = terms.map((t) => t.value);
+  const shown = values.length <= GROUP_SHOWN ? values.join(' or ') : `${values.slice(0, 2).join(', ')} and ${values.length - 2} more`;
+  return `${first.field}: ${shown}`;
 }
 
 /** Cut one span out of the query, tidying only the spaces around the cut. */
@@ -35,6 +60,31 @@ export function removeSpan(input: string, start: number, end: number): string {
   const before = input.slice(0, start).replace(/\s+$/, '');
   const after = input.slice(end).replace(/^\s+/, '');
   return before && after ? `${before} ${after}` : `${before}${after}`;
+}
+
+/**
+ * Cut whole terms out of the query. Each cut takes one AND keyword beside it
+ * with it, the one before when it is free, as "A AND" alone does not parse.
+ */
+export function removeSpans(input: string, spans: [number, number][]): string {
+  let keywords: Token[] = [];
+  let tokens: Token[] = [];
+  try {
+    tokens = tokenize(input);
+    keywords = tokens.filter((t) => t.kind === 'and');
+  } catch {
+    // Text that does not tokenize is cut as given; the search bar reports its error.
+  }
+  const taken = new Set<Token>();
+  const cuts = spans.map(([start, end]) => {
+    const before = [...tokens].reverse().find((t) => t.end <= start);
+    const after = tokens.find((t) => t.start >= end);
+    const keyword = [before, after].find((t) => t !== undefined && keywords.includes(t) && !taken.has(t));
+    if (keyword === undefined) return [start, end];
+    taken.add(keyword);
+    return [Math.min(start, keyword.start), Math.max(end, keyword.end)];
+  });
+  return cuts.sort((a, b) => b[0] - a[0]).reduce((text, [start, end]) => removeSpan(text, start, end), input);
 }
 
 /**
@@ -58,7 +108,7 @@ export function quoteValue(value: string): string {
 const PLAIN_FIELD = /^[A-Za-z0-9_.@-]+$/;
 
 /** A field name as the parser must read it back: quoted when it would otherwise parse as something else. */
-function fieldToken(field: string): string {
+export function fieldToken(field: string): string {
   const plain = PLAIN_FIELD.test(field) && !field.startsWith('-') && field !== 'OR' && field !== 'AND';
   return plain && !findShortcut(field) ? field : quoteValue(field);
 }

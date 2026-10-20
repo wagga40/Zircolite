@@ -387,7 +387,17 @@ build, and the only part of `gui/` that ships.
   Each request names a **lane**, and a newer request supersedes the older one in its lane;
   **Stop** cancels every lane. SQL is built only from checked identifiers and escaped
   literals. Full-text matches are computed once per pattern into a temporary table, in
-  slices a Stop can interrupt.
+  slices a Stop can interrupt. A field match that starts with a wildcard
+  (`CommandLine:*powershell*`) gets the same treatment when its column holds at least 64 MiB
+  in `events.parquet`, as `parquet_metadata` reports it: the list, the strip and the counts
+  then read one table instead of each scanning the column. Its scan reads a plain contains
+  through `lower() LIKE`, which DuckDB answers with `contains()`. A smaller column is matched
+  in place with `ILIKE`, because building and joining a table costs more than the scans it saves.
+  On 1.87M events, `Message:*error*` went from 45 s to 12 s and `CommandLine:*powershell*` from
+  1.6 s to 0.8 s.
+- **Sorting.** The result list (`view_ids`) is ordered by time, or by a column or the level.
+  The sort key is computed below the window. Text sorts by its first 128 characters, ignoring
+  case: on whole values, sorting a long column such as `Message` ran DuckDB-WASM out of memory.
 - **The console.** User SQL reaches DuckDB only as a string literal passed to the `query()`
   table function, which accepts exactly one SELECT, so a second statement is a parse error.
 - **Text, never markup.** `tests/test_viewer_source.py` fails on `{@html}`, `innerHTML`,

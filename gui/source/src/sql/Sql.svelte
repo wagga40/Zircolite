@@ -11,13 +11,17 @@
   import { Panel } from '../ui/panel.svelte';
   import { ownScope } from '../ui/scope';
   import { windowOf } from '../ui/virtual';
-  import { columnWidths, numericType, type Result, runQuery, SQL_ROW_LIMIT, TABLES_SQL } from './console';
+  import FilterCell from '../ui/FilterCell.svelte';
+  import { applyLocalCell, cellHint, localCellText, type LocalSort, localSchema, localWhere, sortClause } from '../ui/localFilters';
+  import { type Column, columnWidths, consoleColumns, numericType, type Result, runQuery, SQL_ROW_LIMIT, TABLES_SQL } from './console';
   import { sqlDraft } from './draft.svelte';
 
   let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
   // svelte-ignore state_referenced_locally
   const db = ownScope(page, 'sql');
   const ROW = 28;
+  // The header holds each column's name over its filter cell.
+  const HEAD = 62;
 
   const result = new Panel<Result>(false);
   const tables = new Panel<{ table: string; columns: { name: string; type: string }[] }[]>();
@@ -35,14 +39,53 @@
     });
   });
 
-  function execute(): void {
+  // The query last run, whose results the column filters narrow; a new query starts with none.
+  let ran = $state<{ text: string; columns: Column[] } | null>(null);
+  let filters = $state('');
+  let sort = $state<LocalSort | null>(null);
+  let cellProblem = $state<string | null>(null);
+  const local = $derived(ran ? consoleColumns(ran.columns) : []);
+  const localColumns = $derived(localSchema(local));
+
+  function load(text: string): void {
     run.stopped = false;
-    const text = sqlDraft.text;
+    const narrow = filters || sort ? { filter: localWhere(filters, localColumns), order: sortClause(sort, []) } : null;
     // Never cached: the same text is asked again on purpose, and the console's queries are the person's own.
     // The logging reset runs on the page, outside this view's scope, so it still runs after a stop or once the
     // view is gone; its own lane means it replaces nothing but an earlier reset.
-    result.load(() =>
-      runQuery((sql) => db.rows(sql, { lane: 'run', cache: false }), text, (sql) => page.rows(sql, { lane: 'sql-logging', cache: false })));
+    result.load(async () => {
+      const answer = await runQuery((sql) => db.rows(sql, { lane: 'run', cache: false }), text, (sql) => page.rows(sql, { lane: 'sql-logging', cache: false }), narrow);
+      ran = { text, columns: answer.columns };
+      return answer;
+    });
+  }
+
+  function execute(): void {
+    filters = '';
+    sort = null;
+    cellProblem = null;
+    ran = null;
+    load(sqlDraft.text);
+  }
+
+  function applyCell(i: number, typed: string): string | null {
+    if (!ran) return null;
+    const applied = applyLocalCell(filters, local[i], typed, localColumns);
+    if ('problem' in applied) return applied.problem;
+    filters = applied.query;
+    load(ran.text);
+    return null;
+  }
+
+  function sortBy(i: number): void {
+    if (!ran) return;
+    const column = local[i].name;
+    sort = sort?.column === column ? { column, desc: !sort.desc } : { column, desc: false };
+    load(ran.text);
+  }
+
+  function ariaSort(i: number): 'ascending' | 'descending' | undefined {
+    return sort?.column === `c${i}` ? (sort.desc ? 'descending' : 'ascending') : undefined;
   }
 
   function onkeydown(event: KeyboardEvent): void {
@@ -69,7 +112,7 @@
   const name = (text: string) => (/^[a-z_][a-z0-9_]*$/.test(text) && !RESERVED.has(text) ? text : ident(text));
   const RESERVED = new Set(['all', 'and', 'as', 'asc', 'between', 'by', 'case', 'check', 'column', 'create', 'default', 'desc', 'distinct', 'else', 'end', 'from', 'group', 'having', 'in', 'is', 'join', 'like', 'limit', 'not', 'null', 'on', 'or', 'order', 'select', 'table', 'then', 'union', 'using', 'when', 'where', 'with']);
   const data = $derived(result.slot.data);
-  const win = $derived(windowOf(scrollTop, Math.max(0, height - ROW), data?.rows.length ?? 0, ROW));
+  const win = $derived(windowOf(scrollTop, Math.max(0, height - HEAD), data?.rows.length ?? 0, ROW));
 
   const widths = $derived(data ? columnWidths(data.columns, data.rows) : []);
   const numeric = $derived(data ? data.columns.map((c) => numericType(c.type)) : []);
@@ -122,18 +165,32 @@
   {#if result.slot.failure}
     <p class="note failure" role="alert">The query did not run: {result.slot.failure}.</p>
   {:else if result.slot.stopped}
-    <p class="note" role="status">Stopped. <button type="button" onclick={() => { runAgain(); execute(); }}>Run again</button></p>
+    <p class="note" role="status">Stopped. <button type="button" onclick={() => { runAgain(); if (ran) load(ran.text); else execute(); }}>Run again</button></p>
   {:else if data}
     <p class="note" class:stale={result.slot.pending}>
-      {data.more ? `The first ${formatCount(SQL_ROW_LIMIT)} rows; add a WHERE or LIMIT to see others.` : `${formatCount(data.rows.length)} ${data.rows.length === 1 ? 'row' : 'rows'}`}
+      {#if data.more}
+        The first {formatCount(SQL_ROW_LIMIT)} rows{filters ? ' that pass the column filters' : ''}; {filters ? 'narrow the filters' : 'add a WHERE or LIMIT'} to see others.
+      {:else}
+        {formatCount(data.rows.length)} {data.rows.length === 1 ? 'row' : 'rows'}{filters ? ' pass the column filters' : ''}
+      {/if}
     </p>
   {/if}
+  {#if cellProblem}<p class="note failure" role="alert">{cellProblem}</p>{/if}
   <div id="sql-result" class="grid" role="table" aria-label="Query result" aria-rowcount={(data?.rows.length ?? 0) + 1} aria-busy={result.slot.pending}
     data-rows={result.slot.pending || !data ? '' : data.rows.length} class:stale={result.slot.pending && data !== null}
     bind:clientHeight={height} onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}>
     {#if data}
       <div class="head" role="row" aria-rowindex="1" style:width={`${total}ch`}>
-        {#each data.columns as column, i (i)}<span role="columnheader" class:num={numeric[i]} style:width={`${widths[i]}ch`} title={`${column.name} (${column.type})`}>{column.name}</span>{/each}
+        {#each data.columns as column, i (i)}
+          <span role="columnheader" class:num={numeric[i]} style:width={`${widths[i]}ch`} aria-sort={ariaSort(i)}>
+            <button type="button" class="sort" title={`${column.name} (${column.type}): sort by it`} aria-label={`Sort by ${column.name}`}
+              disabled={!ran} onclick={() => sortBy(i)}>{column.name}{ariaSort(i) === 'descending' ? ' ↓' : ariaSort(i) === 'ascending' ? ' ↑' : ''}</button>
+            {#if ran && local[i]}
+              <FilterCell label={column.name} text={localCellText(filters, local[i])} apply={(typed) => applyCell(i, typed)}
+                onclear={() => applyCell(i, '')} onproblem={(problem) => (cellProblem = problem)} hint={cellHint(local[i].type)} />
+            {/if}
+          </span>
+        {/each}
       </div>
       <div class="spacer" style:height={`${data.rows.length * ROW}px`} style:width={`${total}ch`}>
         {#each data.rows.slice(win.first, win.first + win.count) as row, i (win.first + i)}
@@ -162,9 +219,11 @@
   .insert { min-height: 24px; padding: 0; background: none; border: 0; color: var(--signal); font: 400 var(--t-12) / 1.4 var(--mono); cursor: pointer; text-align: left; }
   .count { color: var(--ink-2); font-size: var(--t-12); }
   .grid { font: 400 var(--t-13) / 28px var(--mono); position: relative; overflow: auto; min-height: 200px; border-top: 1px solid var(--rule); }
-  .head { position: sticky; top: 0; z-index: 1; display: flex; height: 28px; background: var(--panel); border-bottom: 1px solid var(--rule); }
-  .head span, .row span { flex: none; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; font: 400 var(--t-13) / 28px var(--mono); }
-  .head span { font-weight: 600; }
+  .head { position: sticky; top: 0; z-index: 1; display: flex; height: 62px; background: var(--panel); border-bottom: 1px solid var(--rule); }
+  .head > span, .row span { flex: none; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; font: 400 var(--t-13) / 28px var(--mono); }
+  .head > span { display: grid; grid-template-rows: 30px 28px; align-items: center; }
+  .head .sort { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; background: none; border: 0; font: 600 var(--t-13) / 28px var(--mono);
+    color: var(--ink); cursor: pointer; text-align: inherit; }
   .spacer { position: relative; }
   .row { position: absolute; left: 0; display: flex; height: 28px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 50%, transparent); }
   .num { text-align: right; font-variant-numeric: tabular-nums; }

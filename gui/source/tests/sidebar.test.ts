@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Schema } from '../src/engine/schema';
-import { defaultColumns, shownColumns, toggleColumn } from '../src/explore/columns';
-import { filterFields, percent, topValuesSql, valueLabel } from '../src/explore/sidebar';
+import { defaultColumns, familyColumns, familyLabel, familyOf, familyProbeSql, moveColumn, placeColumn, shownColumns, toggleColumn } from '../src/explore/columns';
+import { columnValuesSql, filterFields, percent, topValuesSql, valueLabel } from '../src/explore/sidebar';
 import { compile } from '../src/search/compile';
 import { appendTerm } from '../src/search/edit';
 import { parse } from '../src/search/parse';
@@ -63,6 +63,35 @@ describe('top values', () => {
   });
 });
 
+describe('column values', () => {
+  it('lists every value ignoring case, with the count of distinct values and of results', async () => {
+    expect(await db.rows(columnValuesSql(field('Computer'), 'TRUE'))).toEqual([
+      { v: 'DC01', n: 3, spellings: 1, distinct: 2, total: 6 }, { v: 'WS02', n: 3, spellings: 2, distinct: 2, total: 6 },
+    ]);
+  });
+
+  it('puts the rarest first on request', async () => {
+    expect((await db.rows(columnValuesSql(field('EventID'), 'TRUE', { order: 'rare' }))).map((r) => [r.v, r.n])).toEqual([
+      ['400', 1], ['4624', 1], ['4634', 1], ['4688', 1], ['1', 2],
+    ]);
+  });
+
+  it('finds values containing a text, in any case, and counts only those', async () => {
+    expect(await db.rows(columnValuesSql(field('Image'), 'TRUE', { search: 'SYSTEM32' }))).toEqual([
+      { v: 'C:\\Windows\\System32\\cmd.exe', n: 1, spellings: 1, distinct: 2, total: 2 },
+      { v: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', n: 1, spellings: 1, distinct: 2, total: 2 },
+    ]);
+    expect(await db.rows(columnValuesSql(field('Image'), 'TRUE', { search: "50_o" }))).toHaveLength(1);
+    expect(await db.rows(columnValuesSql(field('Image'), 'TRUE', { search: "5%o" }))).toEqual([]);
+  });
+
+  it('applies the filter and the limit', async () => {
+    expect(await db.rows(columnValuesSql(field('Computer'), `"Channel" = 'Security'`, { limit: 1 }))).toEqual([
+      { v: 'DC01', n: 3, spellings: 1, distinct: 1, total: 3 },
+    ]);
+  });
+});
+
 describe('field list', () => {
   it('formats coverage without overstating it', () => {
     expect([percent(0, 10), percent(1, 1000), percent(370, 1000), percent(999, 1000), percent(1000, 1000), percent(5, 0)])
@@ -103,5 +132,66 @@ describe('columns', () => {
   it('toggles a column by name, ignoring case', () => {
     expect(toggleColumn(['Channel', 'Computer'], 'computer')).toEqual(['Channel']);
     expect(toggleColumn(['Channel'], 'Image')).toEqual(['Channel', 'Image']);
+  });
+
+  it('moves a column one place, ignoring case and staying inside the list', () => {
+    expect(moveColumn(['A', 'B', 'C'], 'b', -1)).toEqual(['B', 'A', 'C']);
+    expect(moveColumn(['A', 'B', 'C'], 'B', 1)).toEqual(['A', 'C', 'B']);
+    expect(moveColumn(['A', 'B', 'C'], 'A', -1)).toEqual(['A', 'B', 'C']);
+    expect(moveColumn(['A', 'B', 'C'], 'C', 1)).toEqual(['A', 'B', 'C']);
+    expect(moveColumn(['A', 'B'], 'Z', 1)).toEqual(['A', 'B']);
+  });
+
+  it('places a column at an index, as a drag drops it', () => {
+    expect(placeColumn(['A', 'B', 'C', 'D'], 'A', 2)).toEqual(['B', 'A', 'C', 'D']);
+    expect(placeColumn(['A', 'B', 'C', 'D'], 'D', 0)).toEqual(['D', 'A', 'B', 'C']);
+    expect(placeColumn(['A', 'B', 'C', 'D'], 'B', 4)).toEqual(['A', 'C', 'D', 'B']);
+    expect(placeColumn(['A', 'B', 'C', 'D'], 'B', 1)).toEqual(['A', 'B', 'C', 'D']);
+    expect(placeColumn(['A', 'B', 'C', 'D'], 'B', 2)).toEqual(['A', 'B', 'C', 'D']);
+  });
+});
+
+describe('event family columns', () => {
+  const SYSMON = 'Microsoft-Windows-Sysmon/Operational';
+  const families = [
+    { channel: 'Security', eventid: '4624', columns: ['Channel', 'EventID', 'Computer', 'TargetUserName'] },
+    { channel: 'Security', eventid: '4688', columns: ['Channel', 'EventID', 'Computer', 'TargetUserName'] },
+    { channel: SYSMON, eventid: '1', columns: ['Channel', 'EventID', 'Computer', 'level', 'CommandLine', 'Image', `it's "odd"`] },
+    { channel: 'Windows PowerShell', eventid: '1', columns: ['Channel', 'EventID', 'Computer', 'Image'] },
+  ];
+
+  it.each<[string, string | null]>([
+    ['EventID:4624', 'Security 4624'],
+    ['x eventid:"4688" y', 'Security 4688'],
+    ['EventID:1', null],
+    [`EventID:1 Channel:"${SYSMON}"`, `${SYSMON} 1`],
+    ['EventID:1 channel:"windows powershell"', 'Windows PowerShell 1'],
+    ['-EventID:4624', null],
+    ['EventID:46*', null],
+    ['EventID:4624 OR x', null],
+    ['EventID:4624 EventID:4688', null],
+    ['EventID:9999', null],
+    ['Image:"open', null],
+  ])('reads %j as %j', (query, expected) => {
+    const family = familyOf(query, families);
+    expect(family ? `${family.channel} ${family.eventid}` : null).toBe(expected);
+  });
+
+  it('offers the family\'s telling columns, host first, without the columns every event has', () => {
+    expect(familyColumns(families[2], schema).map((f) => f.name)).toEqual(['Computer', 'Image', 'CommandLine', `it's "odd"`]);
+    expect(familyColumns(families[0], schema).map((f) => f.name)).toEqual(['Computer', 'TargetUserName']);
+  });
+
+  it('names a family briefly', () => {
+    expect(familyLabel({ channel: SYSMON, eventid: '1' })).toBe('Sysmon/Operational 1');
+    expect(familyLabel({ channel: null, eventid: '7' })).toBe('event 7');
+  });
+
+  it('asks the result list which families it holds', async () => {
+    await db.rows(`CREATE OR REPLACE TEMP TABLE view_ids AS SELECT row_number() OVER () AS _zl_pos, _zl_uid FROM events WHERE "Computer" = 'DC01'`);
+    expect(await db.rows(familyProbeSql(schema) as string)).toHaveLength(2);
+    await db.rows(`CREATE OR REPLACE TEMP TABLE view_ids AS SELECT row_number() OVER () AS _zl_pos, _zl_uid FROM events WHERE "EventID" = 4624`);
+    expect(await db.rows(familyProbeSql(schema) as string)).toEqual([{ c: 'Security', i: '4624' }]);
+    expect(familyProbeSql(new Schema([], []))).toBeNull();
   });
 });

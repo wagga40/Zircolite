@@ -1,21 +1,87 @@
-import type { Field } from '../engine/schema';
-import { ident } from '../engine/sql';
+import type { Field, Schema } from '../engine/schema';
+import { LEVEL_SORT } from '../state/hash';
+import { asciiLower, ident } from '../engine/sql';
 
 export const ROW = 28;
-/** The sticky header row, which sits inside the scroller above the rows. */
-export const HEAD = 32;
+/** The sticky header, column names over the filter row, which sits inside the scroller above the rows. */
+export const HEAD = 62;
 export const PAGE = 200;
 /** Under every browser's limit on an element's height; Firefox's, near 17.9M px, is the lowest. */
 export const HEIGHT_CAP = 8_000_000;
 
+/**
+ * Text sorts by this many leading characters. Sorting on whole values holds
+ * every one of them at once, and long rendered messages fill the engine's
+ * memory long before a million of them are in order.
+ */
+export const SORT_PREFIX = 128;
+
+/** The column a list is ordered by besides time: a field, or each event's highest detection level. */
+export type SortKey = Field | 'level';
+
 /** The ordered result list every page, count and export reads, rebuilt once per filter change. */
-export function idsSql(where: string, desc: boolean): string {
+export function idsSql(where: string, desc: boolean, sort: SortKey | null = null): string {
   const order = desc ? 'DESC' : 'ASC';
   // NULLS LAST in both directions keeps events without a time at the end, listed rather than lost.
+  if (sort === null) {
+    return (
+      `CREATE OR REPLACE TEMP TABLE view_ids AS SELECT (row_number() OVER (ORDER BY _zl_time ${order} NULLS LAST, ` +
+      `_zl_uid ${order}) - 1)::BIGINT AS _zl_pos, _zl_uid FROM events WHERE ${where}`
+    );
+  }
+  // The key is computed below the window, which then holds only it: written inside the ORDER BY,
+  // the window would keep each event's whole value. The filter stays alone with events, where
+  // its bare _zl_uid cannot be ambiguous.
+  const filtered = `SELECT _zl_uid, _zl_time FROM events WHERE ${where}`;
+  const keyed =
+    sort === 'level'
+      ? `SELECT e._zl_uid, e._zl_time, l._zl_lvl AS k FROM (${filtered}) e LEFT JOIN event_levels l ON l._zl_uid = e._zl_uid`
+      : `SELECT _zl_uid, _zl_time, ${sortValue(sort)} AS k FROM events WHERE ${where}`;
   return (
-    `CREATE OR REPLACE TEMP TABLE view_ids AS SELECT (row_number() OVER (ORDER BY _zl_time ${order} NULLS LAST, ` +
-    `_zl_uid ${order}) - 1)::BIGINT AS _zl_pos, _zl_uid FROM events WHERE ${where}`
+    `CREATE OR REPLACE TEMP TABLE view_ids AS SELECT (row_number() OVER (ORDER BY k ${order} NULLS LAST, ` +
+    `_zl_time ASC NULLS LAST, _zl_uid ASC) - 1)::BIGINT AS _zl_pos, _zl_uid FROM (${keyed})`
   );
+}
+
+/** The sort a link asks for; a column the package does not have orders by time, as no sort does. */
+export function resolveSort(sort: string | null, schema: Schema): SortKey | null {
+  if (sort === null) return null;
+  if (sort === LEVEL_SORT) return 'level';
+  return schema.find(sort) ?? null;
+}
+
+function sortValue(field: Field): string {
+  const column = ident(field.name);
+  return field.type === 'VARCHAR' ? `lower(left(${column}, ${SORT_PREFIX}))` : column;
+}
+
+export const TIME_WIDTH = 224;
+export const LEVEL_WIDTH = 112;
+/** A column without a width of its own shares the room left, never narrower than this. */
+export const COLUMN_WIDTH = 160;
+
+/** A column's width from the link, whatever the case of the name it was kept under. */
+export function widthOf(widths: Record<string, number>, field: Field): number | null {
+  const key = Object.keys(widths).find((name) => asciiLower(name) === field.key);
+  return key === undefined ? null : widths[key];
+}
+
+/** The grid's column tracks; `live` is a width being dragged, shown before it is kept. */
+export function columnTracks(columns: Field[], widths: Record<string, number>, live: { key: string; width: number } | null = null): string {
+  const tracks = columns.map((field) => {
+    const width = live?.key === field.key ? live.width : widthOf(widths, field);
+    return width === null ? `minmax(${COLUMN_WIDTH}px, 1fr)` : `${width}px`;
+  });
+  return [`${TIME_WIDTH}px`, `${LEVEL_WIDTH}px`, ...tracks].join(' ');
+}
+
+export function tableMinWidth(columns: Field[], widths: Record<string, number>, live: { key: string; width: number } | null = null): number {
+  return columns.reduce((sum, field) => sum + ((live?.key === field.key ? live.width : widthOf(widths, field)) ?? COLUMN_WIDTH), TIME_WIDTH + LEVEL_WIDTH);
+}
+
+/** Where a dragged column lands: the gap before the first column whose middle is right of the pointer. */
+export function dropGap(centers: number[], x: number): number {
+  return centers.filter((center) => center < x).length;
 }
 
 export const COUNT_SQL =

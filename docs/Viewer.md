@@ -114,11 +114,59 @@ its group keys, metric and evidence events.
 
 ### Explore
 
-Every event that matches the filters, in a table sorted by time (click **Time (UTC)** to
-reverse it). The **Fields** panel lists every field with its coverage; open one for its ten
-most frequent values, each with + and −, or show it as a column. **Export CSV** writes the
-shown columns for up to 500,000 events, defusing spreadsheet formulas; **Export JSON** writes
-every field for up to 100,000 events, one object per line.
+Every event that matches the filters, in a table sorted by time. The **Fields** panel lists
+every field with its coverage; open one for its ten most frequent values, each with + and −,
+or show it as a column. **Export CSV** writes the shown columns, in the order shown, for up to
+500,000 events, defusing spreadsheet formulas; **Export JSON** writes every field for up to
+100,000 events, one object per line.
+
+**Column filters.** Under each column name is a filter cell; type, then press `Enter`:
+
+| In a cell | Keeps events whose value |
+|-----------|--------------------------|
+| `powershell`, `net user` | contains the text, in any case |
+| `4624` | is exactly the number, in every column |
+| `=cmd.exe` | is exactly the text, in any case |
+| `C:\Windows\*`, `*\cmd.exe`, `a*b` | matches the wildcards |
+| `"a*b"` | contains the text as written, `*` included |
+| `>4600`, `>=1 <10` | compares as a number (numeric columns) |
+| `*` / `!*` | has a value / has none |
+| `!x`, `!=x`, `!>5` | does not match; events without the field stay in |
+
+A whole number is an exact match even in a column the package stores as text, as it stores
+`EventID` when its sources mixed numbers and text; `*4624*` finds the digits anywhere. `!` leaves
+matches out because `-` starts values analysts look for, such as `-enc`. `Esc` puts back what the cell held; an empty cell
+removes the column's filter.
+
+The funnel beside a column name opens its menu, which has:
+
+- the sort, both ways;
+- a form with the operators for the column's type: contains, equals, starts with, ends with,
+  matches a pattern, has a value or none for text; =, >, ≥, <, ≤ or between for numbers;
+- **Not**, **Apply** and **Clear**;
+- the column's values. They are counted under every filter except the column's own, so several
+  can be ticked, then kept with **Show only these** or dropped with **Leave these out**. **Rarest
+  first** lists the least frequent values first, where unusual activity tends to be.
+
+The Level column's cell picks a level and up.
+
+Every column filter is ordinary search text (`CommandLine:*"net user"*`,
+`(Channel:Security OR Channel:System)`), so it shows in the search box and as a chip. It is
+kept in the link, Back undoes it, and every view applies it. A column whose terms no single
+filter describes, such as two contains, shows them read-only; edit them in the search bar, or
+clear them from the cell.
+
+**Sorting and columns.** Click a column's name to sort by it, and again to reverse; click
+**Time (UTC)** to go back to time order. Ties stay in time order. Text sorts by its first 128
+characters, ignoring case. Drag a column's name to move it, or use **Move left** and **Move right**
+in its menu. Drag the edge of its header to resize it; with the keyboard, focus the edge and
+use the arrow keys. `Delete` or a double click gives the column back its share of the width.
+The order, widths and sort are kept in the link.
+
+When the results hold one kind of event, such as Security 4624 or Sysmon 1, **Columns for…**
+shows the fields that tell those events apart, the host first. The search's own EventID and
+Channel name the kind; otherwise the viewer looks when the results hold up to 200,000 events.
+**Default columns** goes back.
 
 ### Timeline
 
@@ -143,7 +191,10 @@ list as active are shown apart, never dropped: **revoked** (with the replacement
 
 Hosts, users, IP addresses, processes, hashes and domains among the filtered events, with
 their event counts, detection counts and first and last times. Values are grouped ignoring
-case; up to 500 rows show, and **Filter values** finds the rest.
+case; up to 500 rows show, busiest first. Each column sorts on a click and has a filter cell
+with the [column filter](#explore) syntax, such as `>=10` under Events or `admin` under Users.
+Times are typed in UTC: `>=2021-06-03` or `<2021-06-03 08:00`. These filters narrow the table
+only, never the search, and the count above the table counts what they keep.
 
 | Kind | Fields |
 |------|--------|
@@ -153,6 +204,50 @@ case; up to 500 rows show, and **Filter values** finds the rest.
 | Processes | `Image`, `NewProcessName`, `ParentImage`, `ProcessName` |
 | Hashes | `SHA256`, `SHA1`, `MD5`, `IMPHASH` |
 | Domains | `QueryName`, `DestinationHostname` |
+
+### Stacking
+
+Least-frequency analysis: each value of one to three fields among the filtered events, rarest
+first, with its events, hosts, events with detections, and first and last times. What few
+events on few hosts carry is where unusual activity tends to be. Presets are offered when the
+package has their fields: `Image`, `CommandLine`, `ParentImage + Image`, `Image + User`,
+`ServiceName + ImagePath`, `TaskName`, `QueryName`, `DestinationIp + DestinationPort` and
+`TargetFilename`. **Add a field** stacks any other. Values are grouped ignoring case. Events
+without a stacked field are left out unless **Include missing values** is on, which lists them
+as `(missing)`. Each column sorts and filters like [Entities](#entities). A row opens exactly its
+events in Explore. Up to 1,000 rows show.
+
+### Logons
+
+Windows logons under the current filters, for following an account across hosts:
+
+- **Logons and failures**: Security 4624 and 4625, grouped by host, account, logon type and
+  source address and workstation, failures first. Each row counts successes, failures,
+  distinct sessions (`TargetLogonId`) and first and last times. Logon types are named
+  (`3 Network`, `10 RemoteInteractive`). Failure reasons are named from `SubStatus`, or from
+  `Status` when `SubStatus` is `0x0` (`bad password`, `no such user`, `locked out`...).
+- **Explicit credentials**: Security 4648, recorded on the host where a process used another
+  account's credentials, with the target server and the process.
+- **Sessions**: each successful logon with its logoff (4634 or 4647) on the same host and logon
+  ID, and its length in minutes. A logon ID is used again after a reboot, so a logoff after the
+  next logon with that ID belongs to the next session. A session with no logoff before that next
+  logon reads "no logoff". The page's filters choose the logons, never the logoffs. Clicking a
+  session's host opens its activity in Explore, in place of the search and with **Detections
+  only** off: the events on that host that carry its logon ID (`TargetLogonId`, `SubjectLogonId`,
+  or Sysmon's `LogonId`). The activity runs from logon to logoff, to the next logon with the ID, or
+  to the end of the logs while the session is open.
+- **Remote Desktop**: authentications (TerminalServices-RemoteConnectionManager 1149),
+  LocalSessionManager logons, shell starts, disconnections and reconnections (21, 22, 24, 25), and
+  Security session reconnections and disconnections (4778, 4779). Each kind is its own row,
+  because each records the account and source in fields of its own.
+
+**Remote logon types only** keeps types 3 and 10; **Hide computer accounts** leaves out names
+ending in `$`. Both apply to the logons and the sessions, are off by default so nothing is hidden
+unless asked, and are disabled when the package lacks `LogonType` or `TargetUserName`. A table
+whose fields the package lacks says so in its place. Each column sorts and
+filters like [Entities](#entities), and a row opens exactly its events in Explore. Fields the
+package lacks are left out. Without a `Channel` field, events are told apart by their event ID
+alone, and Remote Desktop kinds outside Security are not listed.
 
 ### Processes
 
@@ -181,6 +276,7 @@ A console for one query at a time over the package's tables; see
 | `"net user"` | Any field contains the phrase |
 | `EventID:4624` | A field equals a value, in any case |
 | `Image:*\cmd.exe` | `*` matches any characters, outside quotes |
+| `CommandLine:*"net user"*` | A `*` right beside the quotes matches any characters there, so a field can contain a phrase |
 | `EventID:>4600` | Numeric fields compare with `>`, `>=`, `<` and `<=` |
 | `-Channel:Security` | Leave matches out; events without the field stay in |
 | `a OR b` | Either term. Terms side by side must both match |
@@ -202,7 +298,8 @@ A console for one query at a time over the package's tables; see
 - Field names ignore case; an unknown one is refused with the nearest names. Values may
   hold colons, so paths, times and IPv6 addresses need no quotes.
 - Inside quotes, `\"` is a quote and `\\` a backslash; other backslashes stay as typed, so
-  Windows paths work. `*` is a wildcard only outside quotes.
+  Windows paths work. `*` is a wildcard only outside quotes, so `Field:*"x"*` contains `x`;
+  to find quote marks, escape them inside the quotes: `Field:*"\"x\""*`.
 - Bare words read the full-text index once it has loaded in the background. Without it they
   scan every column, which is slow on large packages; a field search such as
   `CommandLine:*mimikatz*` is faster.
@@ -239,6 +336,10 @@ ORDER BY e._zl_time
   `PRAGMA` — is refused, and the package's tables cannot change.
 - Values come back as text, so 64-bit integers stay exact. At most 10,000 rows show;
   **Export CSV** saves them.
+- Each result column sorts on a click and has a filter cell with the [column filter](#explore)
+  syntax: numbers compare as numbers, everything else as the text shown. Filters and sorts
+  run in the engine over every row of the query, not only the 10,000 shown, and a new query
+  starts without them.
 - The page's filters do not apply here: write them in SQL. `Ctrl`/`⌘` + `Enter` runs the
   query, and **Tables** lists every column.
 

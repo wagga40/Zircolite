@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { str } from '../src/engine/sql';
 import { compile } from '../src/search/compile';
-import { appendRaw, appendTerm, chips, completionAt, editable, fieldSuggestions, fieldTerm, lookupField, quoteValue, removeSpan, shownQuery } from '../src/search/edit';
+import { appendRaw, appendTerm, chips, completionAt, editable, fieldSuggestions, fieldTerm, lookupField, quoteValue, removeSpan, removeSpans, shownQuery } from '../src/search/edit';
 import { parse } from '../src/search/parse';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -55,6 +55,53 @@ describe('chips and removeSpan', () => {
 
   it('returns no chips for a query that does not parse', () => {
     expect(chips('host:"open')).toEqual([]);
+  });
+
+  it('shows a same-field OR group as one chip', () => {
+    const query = 'a (Image:"cmd.exe" OR image:"powershell.exe") -(User:x OR User:y)';
+    expect(chips(query)).toEqual([
+      { label: 'Image: cmd.exe or powershell.exe', negated: false, start: 2, end: 45 },
+      { label: 'User: x or y', negated: true, start: 46, end: 65 },
+    ]);
+  });
+
+  it('labels a wildcard beside quotes as written', () => {
+    expect(chips('CommandLine:*"net user"* Image:"C:\\\\x\\\\"* a:"b c"').map((c) => c.label)).toEqual([
+      'CommandLine: *"net user"*', 'Image: "C:\\\\x\\\\"*', 'a: b c',
+    ]);
+  });
+
+  it('shortens a long OR group', () => {
+    expect(chips('(F:a OR F:b OR F:c OR F:d OR F:e)')[0].label).toBe('F: a, b and 3 more');
+    expect(chips('(F:a OR F:b OR F:c)')[0].label).toBe('F: a or b or c');
+  });
+
+  it.each([
+    ['(Image:a OR User:b)'],
+    ['(Image:a OR Image:>3)'],
+    ['(Image:a OR "Image":b)'],
+    ['(Image:a OR Image:b x)'],
+  ])('gives no chip to the group %j', (query) => {
+    expect(chips(query)).toEqual([]);
+  });
+});
+
+describe('removeSpans', () => {
+  it.each<[string, [number, number][], string]>([
+    ['A AND Image:x', [[6, 13]], 'A'],
+    ['Image:x AND A', [[0, 7]], 'A'],
+    ['A AND B AND C', [[6, 7]], 'A AND C'],
+    ['A AND B AND C', [[6, 7], [12, 13]], 'A'],
+    ['A AND B AND C', [[0, 1], [6, 7]], 'C'],
+    ['A B C', [[2, 3]], 'A C'],
+    ['A AND "x AND y"', [[6, 15]], 'A'],
+  ])('cuts %j at %j', (query, spans, expected) => {
+    expect(removeSpans(query, spans)).toBe(expected);
+    expect(() => parse(expected)).not.toThrow();
+  });
+
+  it('cuts plainly when the query does not tokenize', () => {
+    expect(removeSpans('A AND b:"open', [[0, 1]])).toBe('AND b:"open');
   });
 });
 

@@ -75,15 +75,21 @@ describe('value suggestions', () => {
 });
 
 describe('Escape layers', () => {
-  const none = { dialog: false, help: false, menu: false, drawer: false, fields: false };
+  const none = { dialog: false, help: false, menu: false, drawer: false, fields: false, column: false };
 
   it('names the topmost open layer: dialog, help, the Fields sheet, drawer, then the Export menu', () => {
-    expect(topLayer({ dialog: true, help: true, menu: true, drawer: true, fields: true })).toBe('dialog');
+    expect(topLayer({ dialog: true, help: true, menu: true, drawer: true, fields: true, column: true })).toBe('dialog');
     expect(topLayer({ ...none, help: true, drawer: true, fields: true })).toBe('help');
     expect(topLayer({ ...none, menu: true, drawer: true, fields: true })).toBe('fields');
     expect(topLayer({ ...none, menu: true, drawer: true })).toBe('drawer');
     expect(topLayer({ ...none, menu: true })).toBe('menu');
     expect(topLayer({ ...none, fields: true })).toBe('fields');
+  });
+
+  it('puts a column menu over the drawer and the Export menu, under the Fields sheet', () => {
+    expect(topLayer({ ...none, column: true, drawer: true, menu: true })).toBe('column');
+    expect(topLayer({ ...none, column: true, fields: true })).toBe('fields');
+    expect(topLayer({ ...none, column: true, help: true })).toBe('help');
   });
 
   it('leaves Escape to the strip only when no layer is open', () => {

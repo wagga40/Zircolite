@@ -1,7 +1,7 @@
-export type Route = 'overview' | 'detections' | 'explore' | 'timeline' | 'attack' | 'entities' | 'processes' | 'sql';
+export type Route = 'overview' | 'detections' | 'explore' | 'timeline' | 'attack' | 'entities' | 'stacking' | 'logons' | 'processes' | 'sql';
 
 /** The views, in the order the nav rail lists them. */
-export const ROUTES: readonly Route[] = ['overview', 'detections', 'explore', 'timeline', 'attack', 'entities', 'processes', 'sql'];
+export const ROUTES: readonly Route[] = ['overview', 'detections', 'explore', 'timeline', 'attack', 'entities', 'stacking', 'logons', 'processes', 'sql'];
 
 export interface ViewHash {
   route: Route;
@@ -13,9 +13,28 @@ export interface ViewHash {
   cols: string[] | null;
   uid: number | null;
   desc: boolean;
+  /** The column the events are ordered by; null orders them by time. */
+  sort: string | null;
+  /** Widths in pixels of shown columns, kept in the link beside each column's name. */
+  widths: Record<string, number>;
 }
 
-export const EMPTY: ViewHash = { route: 'overview', q: '', t: null, d: false, cols: null, uid: null, desc: false };
+export const EMPTY: ViewHash = { route: 'overview', q: '', t: null, d: false, cols: null, uid: null, desc: false, sort: null, widths: {} };
+
+/** The sort key of the Level column, which is no log field. */
+export const LEVEL_SORT = '_zl_level';
+
+export const MIN_WIDTH = 60;
+export const MAX_WIDTH = 1200;
+
+export function clampWidth(width: number): number {
+  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(width)));
+}
+
+// encodeURIComponent leaves ~ alone, and ~ separates a column's name from its width.
+function columnName(name: string): string {
+  return encodeURIComponent(wellFormed(name)).replaceAll('~', '%7E');
+}
 
 /**
  * JavaScript dates end at ±8.64e15 ms. The strip and the timeline lay bins
@@ -37,9 +56,13 @@ export function encode(state: ViewHash): string {
   if (state.q) parts.push(`q=${encodeURIComponent(wellFormed(state.q))}`);
   if (state.t) parts.push(`t=${state.t[0]}~${state.t[1]}`);
   if (state.d) parts.push('d=1');
-  if (state.cols) parts.push(`cols=${state.cols.map((c) => encodeURIComponent(wellFormed(c))).join(',')}`);
+  if (state.cols) {
+    const widths = state.widths;
+    parts.push(`cols=${state.cols.map((c) => `${columnName(c)}${Object.hasOwn(widths, c) ? `~${widths[c]}` : ''}`).join(',')}`);
+  }
   if (state.uid !== null) parts.push(`uid=${state.uid}`);
   if (state.desc) parts.push('desc=1');
+  if (state.sort) parts.push(`sort=${encodeURIComponent(wellFormed(state.sort))}`);
   const path = `#/${state.route}`;
   return parts.length ? `${path}?${parts.join('&')}` : path;
 }
@@ -67,12 +90,21 @@ export function decode(hash: string): ViewHash {
       } else if (key === 'd') {
         state.d = raw === '1';
       } else if (key === 'cols') {
-        state.cols = raw === '' ? [] : raw.split(',').filter((c) => c !== '').map(decodeURIComponent);
+        const widths: Record<string, number> = {};
+        state.cols = raw === '' ? [] : raw.split(',').filter((c) => c !== '').map((part) => {
+          const sized = /^(.*)~(\d+)$/.exec(part);
+          const name = decodeURIComponent(sized ? sized[1] : part);
+          if (sized) widths[name] = clampWidth(Number(sized[2]));
+          return name;
+        });
+        state.widths = widths;
       } else if (key === 'uid') {
         const uid = Number(raw);
         if (INTEGER.test(raw) && Number.isSafeInteger(uid) && uid >= 0) state.uid = uid;
       } else if (key === 'desc') {
         state.desc = raw === '1';
+      } else if (key === 'sort') {
+        state.sort = decodeURIComponent(raw) || null;
       }
     } catch {
       // A malformed part from a hand-edited link is ignored; the rest still applies.

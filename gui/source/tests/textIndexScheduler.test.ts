@@ -17,7 +17,7 @@ let sent: string[] = [];
 let before: ((sql: string) => void | Promise<void>) | null = null;
 let after: ((sql: string) => void) | null = null;
 
-function scheduler(): QueryScheduler {
+function scheduler(options: { largeColumn?: number; sliceBytes?: number } = { largeColumn: 0, sliceBytes: 1 }): QueryScheduler {
   const sender: Sender = {
     async send(sql: string) {
       sent.push(sql);
@@ -32,7 +32,7 @@ function scheduler(): QueryScheduler {
       return false;
     },
   };
-  return new QueryScheduler(sender);
+  return new QueryScheduler(sender, options);
 }
 
 const statements = (pattern: RegExp) => sent.filter((sql) => pattern.test(sql));
@@ -54,6 +54,7 @@ beforeAll(async () => {
      FROM range(20000) t(i)`,
     'DROP TABLE fulltext',
     `COPY (SELECT _zl_uid, ${text} AS _zl_text FROM events ORDER BY _zl_uid) TO '${dir.replaceAll("'", "''")}/text.parquet' (FORMAT parquet, ROW_GROUP_SIZE 2048)`,
+    `COPY (SELECT * FROM events ORDER BY _zl_uid) TO '${dir.replaceAll("'", "''")}/events.parquet' (FORMAT parquet, ROW_GROUP_SIZE 2048)`,
     `SET file_search_path = '${dir.replaceAll("'", "''")}'`,
     "CREATE VIEW fulltext AS SELECT * FROM read_parquet('text.parquet')",
   ]);
@@ -62,6 +63,42 @@ beforeAll(async () => {
 afterAll(() => {
   fx.close();
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+describe('field matches through the scheduler, on a real engine', () => {
+  const matched = (query: string) => compile(parse(query), schema, { matches: true });
+
+  it.each([
+    'CommandLine:*whoami*', 'TargetUserName:*100%*', 'TargetUserName:*50_off*', 'Image:*\\PowerShell.exe', 'CommandLine:*"x\' OR 1"*',
+    '-CommandLine:*whoami*', 'Image:*shell* OR CommandLine:*whoami*', 'Computer:*s0* -TargetUserName:*user1*', 'EventID:*62*',
+    `"it's \\"odd\\"":*à*`, 'host:*c0*', 'Image:*a*e*', 'CommandLine:*"cmd /c"* Computer:DC01',
+  ])('finds exactly what the scan finds for %s', async (query) => {
+    sent = [];
+    const rows = await scheduler().rows<{ _zl_uid: number }>(`SELECT _zl_uid FROM events WHERE ${matched(query)} ORDER BY _zl_uid`);
+    expect(rows.map((row) => row._zl_uid)).toEqual(await fx.uids(plain(query)));
+    expect(statements(/_zl_fm_\d+/).length).toBeGreaterThan(0);
+    expect(statements(/^SELECT _zl_uid FROM events WHERE .*_zl_uid IN \(SELECT _zl_uid FROM events WHERE/)).toHaveLength(0);
+  });
+
+  it('matches small columns in place, with the same answers', async () => {
+    sent = [];
+    const query = 'CommandLine:*whoami* OR Image:*shell*';
+    const rows = await scheduler({}).rows<{ _zl_uid: number }>(`SELECT _zl_uid FROM events WHERE ${matched(query)} ORDER BY _zl_uid`);
+    expect(rows.map((row) => row._zl_uid)).toEqual(await fx.uids(plain(query)));
+    expect(statements(/_zl_fm_/)).toEqual([]);
+  });
+
+  it('reads the events file in slices, once for every query that shares a match', async () => {
+    sent = [];
+    const s = scheduler();
+    const where = matched('CommandLine:*whoami*');
+    await s.rows(`SELECT count(*) AS n FROM events WHERE ${where}`, { lane: 'strip' });
+    await s.rows(`SELECT _zl_uid FROM events WHERE ${where}`, { lane: 'table' });
+    expect(statements(/^CREATE OR REPLACE TEMP TABLE _zl_fm_/)).toHaveLength(1);
+    expect(statements(/^INSERT INTO _zl_fm_/).length).toBeGreaterThan(2);
+    expect(statements(/stats_min_value.*parquet_metadata\('events.parquet'\)/)).toHaveLength(1);
+    expect(statements(/total_uncompressed_size.*parquet_metadata\('events.parquet'\)/)).toHaveLength(1);
+  });
 });
 
 describe('the index through the scheduler, on a real engine', () => {

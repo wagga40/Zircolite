@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Superseded } from '../src/engine/queries';
 import { csvLine } from '../src/explore/export';
-import { columnWidths, LOGGING_SQL, numericType, resultSql, runQuery, SqlRefused, TABLES_SQL, trimStatement } from '../src/sql/console';
+import { columnWidths, consoleColumns, LOGGING_SQL, type Narrowing, numericType, resultSql, runQuery, SqlRefused, TABLES_SQL, trimStatement } from '../src/sql/console';
+import { applyLocalCell, localSchema, localWhere, sortClause } from '../src/ui/localFilters';
 import { type Fixture, openFixture } from './fixture';
 
 let db: Fixture;
@@ -124,7 +125,7 @@ describe('what the console shows', () => {
     for (const type of ['BIGINT', 'DOUBLE', 'DECIMAL(18,3)', 'UHUGEINT']) expect(numericType(type), type).toBe(true);
     for (const type of ['INTEGER[]', 'DOUBLE[]', 'VARCHAR', 'STRUCT(a INTEGER)']) expect(numericType(type), type).toBe(false);
     const columns = [{ name: 'title', type: 'VARCHAR' }, { name: 'n', type: 'BIGINT' }, { name: 'x', type: 'VARCHAR' }];
-    expect(columnWidths(columns, [['Remote Thread Creation', '1', 'y'.repeat(200)], [null, '22', 'z']])).toEqual([24, 8, 60]);
+    expect(columnWidths(columns, [['Remote Thread Creation', '1', 'y'.repeat(200)], [null, '22', 'z']])).toEqual([24, 12, 60]);
   });
 
   it('keeps a negative number a number in the CSV, and guards a negative string', async () => {
@@ -132,5 +133,68 @@ describe('what the console shows', () => {
     const mask = result.columns.map((c) => numericType(c.type));
     expect(mask).toEqual([true, false]);
     expect(csvLine(result.rows[0], mask)).toBe("-5,'-5\r\n");
+  });
+});
+
+describe('filters and sorts on the results', () => {
+  /** What typing in the result columns' cells asks of the engine. */
+  async function narrowed(text: string, cells: [number, string][], sort: { column: number; desc: boolean } | null = null): Promise<Narrowing> {
+    const plain = await runQuery(send, text);
+    const columns = consoleColumns(plain.columns);
+    const schema = localSchema(columns);
+    let filters = '';
+    for (const [i, typed] of cells) {
+      const result = applyLocalCell(filters, columns[i], typed, schema);
+      if ('problem' in result) throw new Error(result.problem);
+      filters = result.query;
+    }
+    return { filter: localWhere(filters, schema), order: sortClause(sort && { column: `c${sort.column}`, desc: sort.desc }, []) };
+  }
+
+  it('reads numbers as numbers and everything else as text', () => {
+    expect(consoleColumns([{ name: 'n', type: 'BIGINT' }, { name: 't', type: 'TIMESTAMP' }, { name: 'l', type: 'VARCHAR[]' }])).toEqual([
+      { name: 'c0', type: 'number' }, { name: 'c1', type: 'text' }, { name: 'c2', type: 'text' },
+    ]);
+  });
+
+  it('wraps the query once, keeping its text one literal', () => {
+    const columns = [{ name: 'a', type: 'INTEGER' }, { name: 'b', type: 'VARCHAR' }];
+    expect(resultSql("SELECT 1 AS a, 'x' AS b", columns, 5, { filter: '"c0" >= 1', order: '"c1" DESC NULLS LAST' })).toBe(
+      'SELECT CAST(c0 AS VARCHAR) AS c0, CAST(c1 AS VARCHAR) AS c1 FROM (SELECT * FROM (SELECT c0, CAST(c1 AS VARCHAR) AS c1 ' +
+      "FROM query('SELECT 1 AS a, ''x'' AS b') AS _zl_q(c0, c1)) _zl_r WHERE \"c0\" >= 1 ORDER BY \"c1\" DESC NULLS LAST LIMIT 5) _zl_s",
+    );
+  });
+
+  it('filters and sorts in the engine', async () => {
+    const text = 'SELECT "Computer", "EventID" FROM events';
+    const result = await runQuery(send, text, send, await narrowed(text, [[0, 'dc']], { column: 1, desc: true }));
+    expect(result.rows).toEqual([['DC01', '4688'], ['DC01', '4634'], ['DC01', '4624']]);
+  });
+
+  it('sorts numbers as numbers, though it shows them as text', async () => {
+    const text = 'SELECT range AS n FROM range(12)';
+    expect((await runQuery(send, text, send, await narrowed(text, [], { column: 0, desc: true }))).rows.slice(0, 3)).toEqual([['11'], ['10'], ['9']]);
+  });
+
+  it('finds rows past the ten thousand first, which a filter over the shown rows would miss', async () => {
+    const text = 'SELECT range AS n FROM range(20000)';
+    const result = await runQuery(send, text, send, await narrowed(text, [[0, '>=15000']]));
+    expect(result.rows).toHaveLength(5000);
+    expect(result.rows[0]).toEqual(['15000']);
+    expect(result.more).toBe(false);
+  });
+
+  it('filters timestamps and lists as the text the table shows', async () => {
+    const text = "SELECT TIMESTAMP '2021-06-03 06:00:00' AS t, ['a', 'b'] AS l UNION ALL SELECT TIMESTAMP '2022-01-01 00:00:00', ['c']";
+    expect((await runQuery(send, text, send, await narrowed(text, [[0, '2021-06']]))).rows).toEqual([['2021-06-03 06:00:00', '[a, b]']]);
+    expect((await runQuery(send, text, send, await narrowed(text, [[1, 'c']]))).rows).toHaveLength(1);
+  });
+
+  it('keeps a filter value a value', async () => {
+    const before = await events();
+    const text = 'SELECT "Computer" FROM events';
+    const result = await runQuery(send, text, send, await narrowed(text, [[0, "'); DROP TABLE events; --"]]));
+    expect(result.rows).toEqual([]);
+    expect(await events()).toBe(before);
   });
 });

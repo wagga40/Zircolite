@@ -21,6 +21,32 @@ export function topValuesSql(field: Field, where: string, limit = 10): string {
   );
 }
 
+export interface ValueOptions {
+  /** Most common first, or rarest first: the least frequent values are where unusual activity hides. */
+  order?: 'common' | 'rare';
+  /** Only values containing this text, in any case. */
+  search?: string;
+  limit?: number;
+}
+
+/**
+ * A column's values for its menu: grouped ignoring case as the search
+ * compares them, with how many distinct values and results there are in all,
+ * so the menu can say how much of the list it shows.
+ */
+export function columnValuesSql(field: Field, where: string, options: ValueOptions = {}): string {
+  const column = ident(field.name);
+  const { order = 'common', search = '', limit = 100 } = options;
+  const literal = str(`%${likeEscape(search)}%`);
+  const matching = search ? ` WHERE v ILIKE ${literal}${escapeClause(literal)}` : '';
+  return (
+    `WITH f AS (SELECT CAST(${column} AS VARCHAR) AS v FROM events WHERE ${column} IS NOT NULL AND (${where})), ` +
+    'g AS (SELECT min(v) AS v, count(*)::DOUBLE AS n, count(DISTINCT v)::DOUBLE AS spellings FROM f GROUP BY lower(v)) ' +
+    `SELECT v, n, spellings, count(*) OVER ()::DOUBLE AS distinct, sum(n) OVER ()::DOUBLE AS total FROM g${matching} ` +
+    `ORDER BY n ${order === 'rare' ? 'ASC' : 'DESC'}, lower(v), v LIMIT ${limit}`
+  );
+}
+
 /** How a value reads in the list and in button labels, so the two never differ. */
 export function valueLabel(value: string): string {
   return value === '' ? 'empty text' : value;

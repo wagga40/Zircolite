@@ -15,6 +15,12 @@ const TACTIC_ALIASES: Record<string, string> = { 'defense-evasion': 'stealth' };
 
 export interface CompileOptions {
   textIndex?: boolean;
+  /**
+   * Write a field match that starts with a wildcard as a set of events, which
+   * the scheduler answers once into a table: such a match scans the whole
+   * column, and the list, the strip and the counts would each scan it again.
+   */
+  matches?: boolean;
 }
 
 export function compile(tree: Node | null, schema: Schema, options: CompileOptions = {}): string {
@@ -39,13 +45,13 @@ function node(n: Node, schema: Schema, options: CompileOptions): string {
 function term(t: Term, schema: Schema, options: CompileOptions): string {
   if (t.field === null) return fullText(t, schema, options);
   const shortcut = t.fieldQuoted ? undefined : findShortcut(t.field);
-  if (shortcut) return SHORTCUT_COMPILERS[shortcut.name](t, schema);
+  if (shortcut) return SHORTCUT_COMPILERS[shortcut.name](t, schema, options);
   const field = schema.find(t.field);
   if (!field) {
     const near = schema.suggest(t.field);
     throw new SearchError(`No field named ${t.field}${near.length ? `; did you mean ${near.join(', ')}?` : ''}`, t.start, t.end);
   }
-  return fieldMatch(field, t);
+  return fieldMatch(field, t, options);
 }
 
 function exactOnly(t: Term): void {
@@ -54,22 +60,33 @@ function exactOnly(t: Term): void {
 
 function pattern(t: Term, contains: boolean): string {
   const escaped = likeEscape(t.value);
-  const body = t.quoted ? escaped : escaped.replaceAll('*', '%');
+  const body = `${t.starBefore ? '%' : ''}${t.quoted ? escaped : escaped.replaceAll('*', '%')}${t.starAfter ? '%' : ''}`;
   return str(contains ? `%${body}%` : body);
 }
 
-function fieldMatch(field: Field, t: Term): string {
+function starred(t: Term): boolean {
+  return t.starBefore === true || t.starAfter === true;
+}
+
+/** Shortcuts that name one thing take no wildcard; a * beside quotes would otherwise be dropped unseen. */
+function oneOnly(t: Term, name: string, thing: string): void {
+  if (starred(t)) throw new SearchError(`${name}: matches one ${thing} exactly; a * does not apply to it`, t.start, t.end);
+}
+
+function fieldMatch(field: Field, t: Term, options: CompileOptions = {}): string {
   const column = ident(field.name);
   const numeric = field.type !== 'VARCHAR';
   if (t.op !== '=') {
+    if (starred(t)) throw new SearchError(`${t.op} compares numbers, and a * does not compare`, t.start, t.end);
     if (!numeric) throw new SearchError(`${t.op} compares numbers, and ${field.name} holds text`, t.start, t.end);
     if (!NUMBER.test(t.value)) throw new SearchError(`${t.op} compares numbers; ${field.name} needs a number, not "${t.value}"`, t.start, t.end);
     return `${column} ${t.op} ${t.value}`;
   }
-  if (numeric && NUMBER.test(t.value)) return `${column} = ${t.value}`;
+  if (numeric && NUMBER.test(t.value) && !starred(t)) return `${column} = ${t.value}`;
   const text = numeric ? `CAST(${column} AS VARCHAR)` : column;
   const literal = pattern(t, false);
-  return `${text} ILIKE ${literal}${escapeClause(literal)}`;
+  const predicate = `${text} ILIKE ${literal}${escapeClause(literal)}`;
+  return options.matches && literal.startsWith("'%") ? `_zl_uid IN (SELECT _zl_uid FROM events WHERE ${predicate})` : predicate;
 }
 
 function fullText(t: Term, schema: Schema, options: CompileOptions): string {
@@ -92,27 +109,28 @@ function fullText(t: Term, schema: Schema, options: CompileOptions): string {
 function tacticNames(t: Term, tactics: readonly string[]): string[] {
   if (tactics.length === 0) throw new SearchError('This package lists no ATT&CK tactics', t.start, t.end);
   const known = `tactics are: ${tactics.join(', ')}`;
-  const wanted = t.value.trim().toLowerCase().replace(/[\s_]+/g, '-');
-  if (!t.quoted && wanted.includes('*')) {
+  const name = t.value.trim().toLowerCase().replace(/[\s_]+/g, '-');
+  const wanted = `${t.starBefore ? '*' : ''}${name}${t.starAfter ? '*' : ''}`;
+  if ((!t.quoted || starred(t)) && wanted.includes('*')) {
     const pattern = new RegExp(`^${wanted.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
     const found = tactics.filter((tactic) => pattern.test(tactic));
     if (found.length === 0) throw new SearchError(`No tactic matches ${t.value}; ${known}`, t.start, t.end);
     return found;
   }
-  const name = TACTIC_ALIASES[wanted] ?? wanted;
-  if (!tactics.includes(name)) throw new SearchError(`No tactic named ${t.value}; ${known}`, t.start, t.end);
-  return [name];
+  const tactic = TACTIC_ALIASES[wanted] ?? wanted;
+  if (!tactics.includes(tactic)) throw new SearchError(`No tactic named ${t.value}; ${known}`, t.start, t.end);
+  return [tactic];
 }
 
 function anyField(names: readonly string[], label: string) {
-  return (t: Term, schema: Schema): string => {
+  return (t: Term, schema: Schema, options: CompileOptions): string => {
     const found = new Map<string, Field>();
     for (const name of names) {
       const field = schema.find(name);
       if (field) found.set(field.key, field);
     }
     if (found.size === 0) throw new SearchError(`This package has no ${label} field (looked for ${names.join(', ')})`, t.start, t.end);
-    return `(${[...found.values()].map((field) => fieldMatch(field, t)).join(' OR ')})`;
+    return `(${[...found.values()].map((field) => fieldMatch(field, t, options)).join(' OR ')})`;
   };
 }
 
@@ -125,7 +143,7 @@ function weekdayNumber(value: string): number | null {
   return i < 0 ? null : i + 1;
 }
 
-const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = {
+const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema, options: CompileOptions) => string> = {
   rule: (t) => {
     exactOnly(t);
     const p = pattern(t, false);
@@ -133,9 +151,11 @@ const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = 
   },
   rulekey: (t) => {
     exactOnly(t);
+    oneOnly(t, 'rulekey', 'key');
     return `_zl_uid IN (${HIT_RULES} WHERE r.key = ${str(t.value)})`;
   },
   level: (t) => {
+    oneOnly(t, 'level', 'level');
     const rank = LEVELS.indexOf(t.value.toLowerCase() as (typeof LEVELS)[number]);
     if (rank < 0) throw new SearchError(`level is one of ${LEVELS.join(', ')}`, t.start, t.end);
     return `_zl_uid IN (SELECT _zl_uid FROM event_levels WHERE _zl_lvl ${t.op} ${rank})`;
@@ -148,16 +168,19 @@ const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = 
   },
   weekday: (t) => {
     exactOnly(t);
+    oneOnly(t, 'weekday', 'weekday');
     const day = weekdayNumber(t.value);
     if (day === null) throw new SearchError('weekday is monday to sunday, mon to sun, or 1 (Monday) to 7 (Sunday)', t.start, t.end);
     return `isodow(_zl_time) = ${day}`;
   },
   hour: (t) => {
+    oneOnly(t, 'hour', 'hour');
     if (!/^\d{1,2}$/.test(t.value) || Number(t.value) > 23) throw new SearchError('hour is a whole hour from 0 to 23, in UTC', t.start, t.end);
     return `hour(_zl_time) ${t.op} ${Number(t.value)}`;
   },
   technique: (t) => {
     exactOnly(t);
+    oneOnly(t, 'technique', 'technique');
     const id = t.value.toUpperCase();
     if (!/^T\d{4}(\.\d{3})?$/.test(id)) throw new SearchError('A technique looks like T1234 or T1234.001', t.start, t.end);
     return `_zl_uid IN (SELECT h._zl_uid FROM hits h JOIN (SELECT rule_idx, unnest(techniques) AS t FROM rules) r ` +
