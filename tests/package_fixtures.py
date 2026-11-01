@@ -18,13 +18,16 @@ def quote(name: str) -> str:
 
 
 def make_logs(rows: list[dict[str, Any]], *, types: dict[str, str] | None = None,
-              columns: list[str] | None = None) -> sqlite3.Connection:
+              columns: list[str] | None = None, path: Path | None = None) -> sqlite3.Connection:
     """A working database shaped like Zircolite's: row_id first, TEXT NOCASE columns.
 
     ``types`` overrides a column's declaration; an empty string declares no
     affinity, so integers and reals keep their type as they do in saved databases.
+    ``path`` puts it in a file in WAL mode, as ``--working-db disk`` does.
     """
-    connection = sqlite3.connect(":memory:")
+    connection = sqlite3.connect(":memory:" if path is None else str(path))
+    if path is not None:
+        connection.execute("PRAGMA journal_mode = WAL")
     names = columns or list(dict.fromkeys(key for row in rows for key in row))
     declared = ", ".join(
         f"{quote(name)} {(types or {}).get(name, 'TEXT COLLATE NOCASE')}".rstrip() for name in names)

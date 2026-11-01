@@ -139,6 +139,24 @@ def test_unified_matches_per_file(corpus, tmp_path, test_logger, expected, args)
     assert content(ctx) == expected
 
 
+def test_unified_on_disk_spooled_in_parallel_matches_per_file(corpus, tmp_path, test_logger, expected, args,
+                                                              monkeypatch):
+    from zircolite import package_spool
+
+    # Ranges of one row each, read by processes from the working database file.
+    monkeypatch.setattr(package_spool, "PARALLEL_MIN_ROWS", 1)
+    monkeypatch.setattr(package_spool, "_usable_cpus", lambda: 2)
+    files, config = corpus
+    ctx = context(tmp_path, config, test_logger)
+    ctx.working_db, ctx.working_db_dir = "disk", str(tmp_path)
+    process_unified_streaming(ctx, files, "json", None, args())
+    (record,) = ctx.package_parts
+    # The suffix depends on the compression the spool picked (.ndjson, .ndjson.gz, .ndjson.zst).
+    assert [Path(path).name.split(".", 1)[0] for path in record.event_files] == [
+        f"part-0000000-r{index:03d}-0000" for index in range(4)]
+    assert content(ctx) == expected
+
+
 @pytest.mark.parametrize("executor", ["thread", "process"])
 def test_parallel_matches_per_file(corpus, tmp_path, test_logger, expected, args, executor):
     files, config = corpus

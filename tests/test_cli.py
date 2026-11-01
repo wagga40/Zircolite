@@ -3946,6 +3946,50 @@ class TestCLIRegressionFixes:
 
         assert not logger.warning.called
 
+    @pytest.mark.parametrize(("working_db", "package", "warned"), [
+        ("memory", True, True),
+        ("disk", True, False),
+        ("disk", False, True),
+    ])
+    def test_warn_ignored_db_flags_reports_no_parallel_unless_the_package_copy_splits(
+            self, working_db, package, warned):
+        """Only a --package copy of a database on disk runs in several processes, which --no-parallel stops."""
+        import logging
+        from unittest.mock import MagicMock
+
+        from zircolite.run_config import DEFAULTS
+        logger = MagicMock(spec=logging.Logger)
+        args = argparse.Namespace(
+            unified_db=False, no_auto_mode=False, no_parallel=True,
+            add_index=[], remove_index=[],
+            keepflat=False, dbfile=None, strict=False,
+            archive_password=None, no_event_filter=False, logs_encoding=None,
+            after=DEFAULTS['after'], before=DEFAULTS['before'], package=package, working_db=working_db,
+        )
+        zircolite_script._warn_ignored_db_flags(args, logger)
+
+        assert logger.warning.called is warned
+        if warned:
+            assert "--no-parallel" in logger.warning.call_args[0][0]
+
+    @pytest.mark.parametrize(("no_parallel", "workers", "expected"), [
+        (False, None, None),
+        (False, 3, 3),
+        (False, 0, None),
+        (False, -2, 1),
+        (True, None, 1),
+        (True, 3, 1),
+    ])
+    def test_package_processes_follow_the_parallel_flags(self, tmp_path, test_logger, no_parallel, workers,
+                                                         expected):
+        """The processes copying a package part obey --no-parallel and --parallel-workers."""
+        args = argparse.Namespace(package_dir=str(tmp_path), timefield="SystemTime", timestamp_format=None,
+                                  no_parallel=no_parallel, parallel_workers=workers)
+
+        spool = zircolite_script._prepare_package(args, [], test_logger)
+
+        assert spool.max_processes == expected
+
 
 class TestTestRulesOrphanCases:
     """A test case naming a rule that is not in the ruleset must fail the run."""
@@ -4492,6 +4536,23 @@ class TestCorrelationsNeedOneDatabase:
         assert result["event_count"] == 2
         assert {e["event"]["OriginalLogfile"] for e in result["matches"][0]["evidence"]} == {"0.json", "1.json"}
         assert "correlation rule(s) need every file in one database" in log
+
+    @pytest.mark.parametrize(("working_db", "package", "warned"), [
+        ("memory", True, True),
+        ("disk", True, False),
+        ("disk", False, True),
+    ])
+    def test_parallel_workers_is_reported_ignored_unless_it_bounds_the_package_copy(
+            self, tmp_path, working_db, package, warned):
+        """The unified database leaves -w no file workers to bound, only a --package copy from disk."""
+        extra = ["-w", "2", "--working-db", working_db]
+        if package:
+            extra += ["--package", "--package-dir", str(tmp_path)]
+
+        results, log = self._run(tmp_path, *extra)
+
+        assert len(results) == 1
+        assert ("--parallel-workers ignored" in log) is warned
 
     @pytest.mark.parametrize("fmt,stamps", [
         ("unix", (1704067200, 1704067201)),

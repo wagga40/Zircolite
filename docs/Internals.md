@@ -283,13 +283,42 @@ only the standard library and orjson. Each working database is one **part**.
   3.14 and later every file is zstd level 1 (`compression.zstd`): a 64 MiB file of events
   shrinks some thirty times in a few hundredths of a second, and duckdb reads it as fast as
   plain text. Before 3.14, a free-space check before each file leaves a 6 GiB reserve plus
-  one file per concurrent writer (larger for an oversized record); below that threshold,
-  or if free space cannot be measured, the file uses gzip level 1. A part can contain
+  one file per concurrent writer, each process of a parallel copy included (larger for an
+  oversized record); below that threshold, or if free space cannot be measured, the file
+  uses gzip level 1. A part can contain
   plain and compressed files alike. Each record has
   `_zl_part`, `_zl_rid`, `_zl_time` (microseconds, parsed as
   `--after`/`--before` parse it) and `_zl_spelling` where needed. The same pass records each
   column's types and non-null count, the columns of each `(Channel, EventID)` family and the
-  time range, so stage two never scans for them.
+  time range, so stage two never scans for them. A row fills a few dozen of the hundreds of
+  columns, and building the values of a fetched row in the `sqlite3` module is most of the
+  cost, so when `row_id` is the rowid the rows are read 2,000 at a time, each batch
+  selecting only the columns the batch before filled, plus a flag SQLite sets when a row
+  has a value elsewhere; such a row is read again in full, and a batch with more than a
+  quarter of them makes the next one select every column. Nor is a row walked column by
+  column: its family and NULL count pick the columns the last such row filled, which are
+  exactly its values when none of them is NULL; otherwise the row is walked once and becomes
+  the new guess. On 2.06 million events of 261 columns, on a busy 10-core M1 Max, one pass
+  took 30 to 41 s, against 64 to 90 s for a walk of every column of every row.
+- **Parallel copy.** What remains is still one process's work. In the main process, a part
+  of at least 200,000 rows whose working database is a committed file (`--working-db disk`)
+  is cut into four `row_id` ranges per process, over one `spawn` process per usable CPU
+  (the cgroup v2 quota of a container, such as `docker run --cpus`, counts), up to eight.
+  `--parallel-workers` lowers that cap, and `--no-parallel` keeps every part in one pass.
+  Each reads with its own read-only connection and spools its ranges to files of
+  its own. The files are listed in range order, so stage two reads the rows in `row_id`
+  order, and the ranges' census merges in that order: types OR, counts add, families keep
+  the order a single pass meets them. When ranges fail, the first one's error is raised:
+  the error a single pass meets first. A part stays in one pass when a fresh read-only
+  connection would not see the same rows and columns (an in-memory database, an open
+  transaction, a `row_id` that is not the rowid, a temporary `logs`), when it is spooled
+  inside a worker or beside other writers, and when the processes cannot start (no named
+  semaphores, as without `/dev/shm`) or die, in which case their files are removed first.
+  The processes ignore Ctrl+C. A first Ctrl+C only asks the run to stop, so the copy runs
+  to its end; a second one interrupts the main process, which cancels the ranges not yet
+  started, waits for those running and lists every file written, so the discard removes
+  them all. Eight processes copied the 2.06 million events above in 6 to 7 s, holding
+  some 680 MiB together.
 - **Hits.** `PartWriter.sink` is the result sink every rule's result passes through. Matches
   become `rule_idx,part,row_id` lines; alerts become NDJSON, and their evidence events count
   as hits of the correlation. The sink keeps the first `PackageError`, `OSError`,
