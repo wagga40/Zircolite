@@ -105,11 +105,7 @@ declares the dependencies and `pdm.lock` is the tracked lock file.
 |------|---------|-----|
 | [PDM](https://pdm-project.org/latest/) | `pdm install` | `pdm run python3 zircolite.py …` |
 | [uv](https://docs.astral.sh/uv/) | `uv sync` | `uv run python3 zircolite.py …` |
-
-Poetry 2.2+ reads the same file but cannot resolve it for now: the Windows and Sysmon
-pySigma pipelines still declare `pysigma<2`, which the SQLite backend outgrew, and Poetry
-has no way to override a dependency's requirement. PDM and uv apply the override in
-`pyproject.toml`.
+| [Poetry](https://python-poetry.org/) 2.2+ | `poetry install` | `poetry run python3 zircolite.py …` |
 
 ```shell
 git clone https://github.com/wagga40/Zircolite.git
@@ -119,8 +115,8 @@ pdm run python3 zircolite.py --events sample.evtx
 ```
 
 Each tool manages its own virtual environment: activate it, or prefix commands as in the
-table. Both install the `dev` group (tests, linters, PyInstaller); `pdm install --prod` or
-`uv sync --no-dev` leave it out. Once the environment is active, `python3 -m zircolite`
+table. Each installs the `dev` group (tests, linters, PyInstaller); `pdm install --prod`,
+`uv sync --no-dev` or `poetry install --without dev` leave it out. Once the environment is active, `python3 -m zircolite`
 works from any directory.
 
 Python 3.15 and free-threaded builds such as `python3.14t` are not supported yet: duckdb

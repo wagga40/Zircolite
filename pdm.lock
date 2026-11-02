@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.1"
-content_hash = "sha256:09d7185581e6801b9f718c41fef3847e60465fd53b740432b7398cd0d214a12d"
+content_hash = "sha256:04ee1aa6b99708eeca10d2b2921b7e37ce6d6f86de3802219a05f15623a990c3"
 
 [[metadata.targets]]
 requires_python = "==3.14.*"
@@ -647,30 +647,15 @@ files = [
 ]
 
 [[package]]
-name = "diskcache"
-version = "5.6.3"
-requires_python = ">=3"
+name = "diskcache-community"
+version = "5.8.1"
+requires_python = ">=3.9"
 summary = "Disk Cache -- Disk and file backed persistent cache."
 groups = ["default"]
 marker = "python_version == \"3.14\" or python_version == \"3.13\" or python_version == \"3.11\" or python_version == \"3.12\""
 files = [
-    {file = "diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19"},
-    {file = "diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc"},
-]
-
-[[package]]
-name = "diskcache-stubs"
-version = "5.6.3.6.20240818"
-requires_python = ">=3"
-summary = "diskcache stubs"
-groups = ["default"]
-marker = "python_version == \"3.14\" or python_version == \"3.13\" or python_version == \"3.11\" or python_version == \"3.12\""
-dependencies = [
-    "typing-extensions>=4.4.0",
-]
-files = [
-    {file = "diskcache_stubs-5.6.3.6.20240818-py3-none-any.whl", hash = "sha256:e1db90940b344140730976abe79f57f5b43ca296cbb43fa95da0c69b12d5de4f"},
-    {file = "diskcache_stubs-5.6.3.6.20240818.tar.gz", hash = "sha256:b6eb43899e906b3167a20ac09a9a226f30267a306a96542ea720ebbfc3282796"},
+    {file = "diskcache_community-5.8.1-py3-none-any.whl", hash = "sha256:4c18c3fec2451154f768764f0f3e97fdddfb2bb4fcff8754fc28fcc88ca1b2ea"},
+    {file = "diskcache_community-5.8.1.tar.gz", hash = "sha256:b780ed4b8381487c53cc778599f745784391c4c7af23c528ece049e008be6197"},
 ]
 
 [[package]]
@@ -1932,14 +1917,13 @@ files = [
 
 [[package]]
 name = "pysigma"
-version = "2.0.1"
+version = "2.0.2"
 requires_python = "<4.0,>=3.11"
 summary = "Sigma rule processing and conversion tools"
 groups = ["default"]
 marker = "python_version == \"3.14\" or python_version == \"3.13\" or python_version == \"3.11\" or python_version == \"3.12\""
 dependencies = [
-    "diskcache-stubs>=5.6.3",
-    "diskcache<6.0.0,>=5.6.3",
+    "diskcache-community<6.0.0,>=5.8.1",
     "google-re2>=1.0",
     "jinja2<4.0.0,>=3.1.6",
     "jq<2.0,>=1.12",
@@ -1950,8 +1934,8 @@ dependencies = [
     "types-pyyaml<7.0.0.0,>=6.0.12.20260815",
 ]
 files = [
-    {file = "pysigma-2.0.1-py3-none-any.whl", hash = "sha256:7769a8f22177e732094312fb4c3a08f9fdd8af152a5905a4c549ff59dc7708e6"},
-    {file = "pysigma-2.0.1.tar.gz", hash = "sha256:7bb0188e1cfae1bec56da1f5703a091df158925caf32cf033594bab60b97f49f"},
+    {file = "pysigma-2.0.2-py3-none-any.whl", hash = "sha256:8fb128597a5d3812219d4dd17c76426bc480ea9875325c5eeeac114d6d8ebbec"},
+    {file = "pysigma-2.0.2.tar.gz", hash = "sha256:c8fac45d24adfa14aeebcbab95929066116b2dbcc0816498066af56dda039832"},
 ]
 
 [[package]]
@@ -1971,32 +1955,32 @@ files = [
 
 [[package]]
 name = "pysigma-pipeline-sysmon"
-version = "2.0.0"
-requires_python = "<4.0,>=3.10"
+version = "3.0.0"
+requires_python = "<4.0,>=3.11"
 summary = "pySigma Sysmon processing pipelines"
 groups = ["default"]
 marker = "python_version == \"3.14\" or python_version == \"3.13\" or python_version == \"3.11\" or python_version == \"3.12\""
 dependencies = [
-    "pysigma<2.0.0,>=1.0.0",
+    "pysigma<3.0.0,>=2.0.1",
 ]
 files = [
-    {file = "pysigma_pipeline_sysmon-2.0.0-py3-none-any.whl", hash = "sha256:84575bbde5dd891882306ca1f6ce16bdc592da2e511ac8960012af2efb9d120b"},
-    {file = "pysigma_pipeline_sysmon-2.0.0.tar.gz", hash = "sha256:a05c4f0d59602c4002bc0a1b9189508454f85ec397f5fd20294d3b56006bee54"},
+    {file = "pysigma_pipeline_sysmon-3.0.0-py3-none-any.whl", hash = "sha256:be619c2d9e360321eea4bb3b99255825d469b14662015ca36c4e1a309b1c062b"},
+    {file = "pysigma_pipeline_sysmon-3.0.0.tar.gz", hash = "sha256:5b0706bd7c3054ba68443e6944947b6dceb8c132f7847650b1114ab9788818bd"},
 ]
 
 [[package]]
 name = "pysigma-pipeline-windows"
-version = "2.0.1"
-requires_python = "<4.0,>=3.10"
+version = "3.0.0"
+requires_python = "<4.0,>=3.11"
 summary = "pySigma Windows processing pipelines"
 groups = ["default"]
 marker = "python_version == \"3.14\" or python_version == \"3.13\" or python_version == \"3.11\" or python_version == \"3.12\""
 dependencies = [
-    "pysigma<2.0,>=1.0",
+    "pysigma<3.0,>=2.0",
 ]
 files = [
-    {file = "pysigma_pipeline_windows-2.0.1-py3-none-any.whl", hash = "sha256:f62d1d5be64379dcb1584ea89cf3765732a25470b249f7ffac1fb9e2e2e19d80"},
-    {file = "pysigma_pipeline_windows-2.0.1.tar.gz", hash = "sha256:3f72bed56a4006332dca664836d35e880d7df6cad49971deaa24710711faba46"},
+    {file = "pysigma_pipeline_windows-3.0.0-py3-none-any.whl", hash = "sha256:e5adb4ed8bdc67b454101051b0a92b9de9395a3ffa3f6eb5a8a7a228e070561a"},
+    {file = "pysigma_pipeline_windows-3.0.0.tar.gz", hash = "sha256:73e8f9a11305400bc9cc3d06ded69e2e5a4a6c4e26426e85a55cb8ad1902a132"},
 ]
 
 [[package]]
@@ -2342,7 +2326,7 @@ name = "typing-extensions"
 version = "4.16.0"
 requires_python = ">=3.9"
 summary = "Backported and Experimental Type Hints for Python 3.9+"
-groups = ["default", "dev"]
+groups = ["dev"]
 marker = "python_version == \"3.14\" or python_version == \"3.13\" or python_version == \"3.11\" or python_version == \"3.12\""
 files = [
     {file = "typing_extensions-4.16.0-py3-none-any.whl", hash = "sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"},
