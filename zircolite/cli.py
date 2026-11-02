@@ -714,11 +714,16 @@ def _prepare_package(args: argparse.Namespace, rulesets: list[Any], logger: logg
         directory = Path(tempfile.mkdtemp(prefix="tmp-zircolite-package-", dir=target)).resolve()
     except OSError as exc:
         quit_on_error(f"[red]    [-] Cannot create the package: {literal(exc)}[/]", logger)
+    # The processes copying a large part hold memory too, so the flags that
+    # bound file workers bound them as well; -w 0 means auto, as it does there.
+    workers = getattr(args, "parallel_workers", None)
+    max_processes = 1 if getattr(args, "no_parallel", False) else (None if not workers else max(1, workers))
     return PackageSpool(
         directory=str(directory),
         time_field=args.timefield or "",
         timestamp_format=getattr(args, "timestamp_format", None) or "iso",
         rule_keys=rule_index(rulesets),
+        max_processes=max_processes,
     )
 
 
@@ -1210,6 +1215,15 @@ def print_stats(
 ################################################################
 # PROCESSING DISPATCH
 ################################################################
+def _package_copy_splits(args: argparse.Namespace) -> bool:
+    """Whether --package may copy a working database with several processes.
+
+    Other processes can read only a database file, so only --working-db disk
+    lets the copy split; -w and --no-parallel then still bound it.
+    """
+    return bool(getattr(args, "package", False)) and getattr(args, "working_db", None) == "disk"
+
+
 def _warn_ignored_db_flags(
     args: argparse.Namespace, logger: logging.Logger
 ) -> None:
@@ -1219,7 +1233,7 @@ def _warn_ignored_db_flags(
         ignored.append("--unified-db")
     if getattr(args, 'no_auto_mode', False):
         ignored.append("--no-auto-mode")
-    if getattr(args, 'no_parallel', False):
+    if getattr(args, 'no_parallel', False) and not _package_copy_splits(args):
         ignored.append("--no-parallel")
     if getattr(args, 'add_index', None):
         ignored.append("--add-index")
@@ -1399,7 +1413,8 @@ def _run_processing(
             ignored = [
                 flag for flag, applies in (
                     ("--executor process", getattr(args, "executor", None) == "process" and _is_explicit(args, "executor")),
-                    ("--parallel-workers", _is_explicit(args, "parallel_workers")),
+                    ("--parallel-workers",
+                     _is_explicit(args, "parallel_workers") and not _package_copy_splits(args)),
                 ) if applies
             ]
             if ignored:

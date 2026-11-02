@@ -971,8 +971,8 @@ settings for the runs that write one.
 | `--strict` | Stop at the first malformed EVTX chunk instead of skipping it |
 | `--unified-db` | One database for all files, as cross-file correlation needs |
 | `--no-auto-mode` | Turn off [automatic mode selection](Advanced.md#automatic-processing-optimization) |
-| `-P`, `--no-parallel` | Process files one at a time |
-| `-w`, `--parallel-workers` | Maximum worker count (default: auto) |
+| `-P`, `--no-parallel` | Process files one at a time; `--package` also copies each database's events in one process |
+| `-w`, `--parallel-workers` | Maximum worker count (default: auto); also caps the processes `--package` copies one database's events with ([details](Internals.md#package-pipeline)) |
 | `--executor` | Worker type: `auto` (default), `thread` or `process` |
 | `--parallel-memory-limit` | Memory use, in percent, above which new work waits (default 85) |
 | `--add-index` | Index these columns |
