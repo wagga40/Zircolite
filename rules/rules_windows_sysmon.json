@@ -3275,6 +3275,56 @@
     "title": "Firewall Rule Modified In The Windows Firewall Exception List"
   },
   {
+    "author": "heyyanu",
+    "channel": [
+      "Microsoft-Windows-AppLocker/EXE and DLL",
+      "Microsoft-Windows-AppLocker/MSI and Script",
+      "Microsoft-Windows-AppLocker/Packaged app-Deployment",
+      "Microsoft-Windows-AppLocker/Packaged app-Execution"
+    ],
+    "description": "Detects when AppLocker \"Audit only\" enforcement mode reports that an Application, DLL, Script, MSI,\nor Packaged-App would have been blocked if AppLocker \"Enforce rules\" enforcement mode was enabled.\nThis rule triggers on the AppLocker audit events and requires review of the reported path against the local AppLocker policy.\nSince this rule triggers solely on event IDs without path-based filtering, tuning and false positive\nsuppression must be handled at the AppLocker policy level by the policy author, not via Sigma filters.\nAnalysts should review the reported FullFilePath and correlate with the local AppLocker policy to\ndetermine whether the activity is expected or warrants investigation.\n",
+    "eventid": [
+      8003,
+      8006,
+      8021,
+      8024
+    ],
+    "falsepositives": [
+      "Expected during AppLocker policy testing and audit mode deployments",
+      "Legitimate system DLLs and applications not yet covered by the AppLocker policy (e.g. Windows system components, third-party software). False positives must be handled at the AppLocker policy level by the policy author, not via Sigma filters."
+    ],
+    "filename": "rules/windows/builtin/applocker/win_applocker_application_would_have_been_blocked.yml",
+    "id": "557e3bd3-7f21-495d-8d50-7c8bdfb8041c",
+    "level": "low",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "applocker"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-AppLocker/MSI and Script' OR Channel='Microsoft-Windows-AppLocker/EXE and DLL' OR Channel='Microsoft-Windows-AppLocker/Packaged app-Deployment' OR Channel='Microsoft-Windows-AppLocker/Packaged app-Execution') AND (EventID=8003 OR EventID=8006 OR EventID=8021 OR EventID=8024)"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1204.002",
+      "attack.t1059.001",
+      "attack.t1059.003",
+      "attack.t1059.005",
+      "attack.t1059.006",
+      "attack.t1059.007"
+    ],
+    "title": "AppLocker Application Would Have Been Blocked"
+  },
+  {
     "author": "frack113, Florian Roth (Nextron Systems)",
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
@@ -9409,13 +9459,14 @@
     },
     "required_fields": [
       "Channel",
+      "CommandLine",
       "EventID",
       "Image",
       "ParentImage"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\svchost.exe' ESCAPE '\\' AND (NOT COALESCE(((ParentImage LIKE '%\\\\Mrt.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\ngen.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\rpcnet.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\services.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\TiWorker.exe' ESCAPE '\\') OR ParentImage IS NULL OR (ParentImage='-' OR ParentImage='')), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\svchost.exe' ESCAPE '\\' AND (NOT COALESCE(((ParentImage LIKE '%\\\\Mrt.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\ngen.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\rpcnet.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\services.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\TiWorker.exe' ESCAPE '\\') OR (ParentImage LIKE '%\\\\svchost.exe' ESCAPE '\\' AND (CommandLine LIKE '%svchost.exe\"' ESCAPE '\\' OR CommandLine LIKE '%svchost.exe' ESCAPE '\\' OR CommandLine LIKE '%-k TSLicensing' ESCAPE '\\')) OR ParentImage IS NULL OR (ParentImage='-' OR ParentImage='')), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -11918,7 +11969,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%\\_\\_PSScriptPolicyTest\\_%' ESCAPE '\\' AND (NOT COALESCE(((Image LIKE 'C:\\\\Program Files\\\\PowerShell\\\\7-preview\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell\\_ise.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell\\_ise.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe' ESCAPE '\\') OR ((Image LIKE '%C:\\\\Program Files\\\\WindowsApps\\\\Microsoft.PowerShellPreview%' ESCAPE '\\' OR Image LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\Microsoft.PowerShellPreview%' ESCAPE '\\') AND Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\System32\\\\dsac.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\sdiagnhost.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\ServerManager.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\wsmprovhost.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\sdiagnhost.exe' ESCAPE '\\')), 0)) AND (NOT COALESCE((Image LIKE 'C:\\\\Program Files\\\\WindowsApps\\\\Microsoft.GetHelp\\_%' ESCAPE '\\' AND Image LIKE '%\\\\GetHelp.exe' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%\\_\\_PSScriptPolicyTest\\_%' ESCAPE '\\' AND (NOT COALESCE(((Image LIKE 'C:\\\\Program Files\\\\PowerShell\\\\7-preview\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell\\_ise.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell\\_ise.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe' ESCAPE '\\') OR ((Image LIKE '%C:\\\\Program Files\\\\WindowsApps\\\\Microsoft.PowerShellPreview%' ESCAPE '\\' OR Image LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\Microsoft.PowerShellPreview%' ESCAPE '\\') AND Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\System32\\\\dsac.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\sdiagnhost.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\ServerManager.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\System32\\\\wsmprovhost.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\sdiagnhost.exe' ESCAPE '\\')), 0)) AND (NOT COALESCE(((Image LIKE 'C:\\\\Program Files\\\\WindowsApps\\\\Microsoft.GetHelp\\_%' ESCAPE '\\' AND Image LIKE '%\\\\GetHelp.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\Citrix\\\\ConfigSync\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Citrix\\\\ConfigSync\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\ConfigSyncRun.exe' ESCAPE '\\')), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -22545,7 +22596,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (((EventID=4656 AND ObjectName LIKE '%\\\\lsass.exe' ESCAPE '\\' AND (AccessMask LIKE '%0x40%' ESCAPE '\\' OR AccessMask LIKE '%0x1400%' ESCAPE '\\' OR AccessMask LIKE '%0x100000%' ESCAPE '\\' OR AccessMask LIKE '%0x1410%' ESCAPE '\\' OR AccessMask LIKE '%0x1010%' ESCAPE '\\' OR AccessMask LIKE '%0x1438%' ESCAPE '\\' OR AccessMask LIKE '%0x143a%' ESCAPE '\\' OR AccessMask LIKE '%0x1418%' ESCAPE '\\' OR AccessMask LIKE '%0x1f0fff%' ESCAPE '\\' OR AccessMask LIKE '%0x1f1fff%' ESCAPE '\\' OR AccessMask LIKE '%0x1f2fff%' ESCAPE '\\' OR AccessMask LIKE '%0x1f3fff%' ESCAPE '\\')) OR (EventID=4663 AND ObjectName LIKE '%\\\\lsass.exe' ESCAPE '\\' AND (AccessList LIKE '%4484%' ESCAPE '\\' OR AccessList LIKE '%4416%' ESCAPE '\\'))) AND (NOT COALESCE((((ProcessName LIKE '%\\\\csrss.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\GamingServices.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\lsm.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\MicrosoftEdgeUpdate.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\minionhost.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\MRT.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\perfmon.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procexp.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procexp64.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procexp64a.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\svchost.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\taskmgr.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\thor.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\thor64.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\vmtoolsd.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\VsTskMgr.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\wininit.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' OR ProcessName LIKE '%RtkAudUService64' ESCAPE '\\') AND (ProcessName LIKE '%:\\\\Program Files (x86)\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Program Files\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Platform\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\SysNative\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\SysWow64\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\Temp\\\\asgard2-agent\\\\%' ESCAPE '\\')) OR ProcessName LIKE '%:\\\\Program Files%' ESCAPE '\\' OR (ProcessName LIKE '%:\\\\Windows\\\\System32\\\\taskhostw.exe' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\System32\\\\msiexec.exe' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\CCM\\\\CcmExec.exe' ESCAPE '\\') OR ((ProcessName LIKE '%:\\\\Windows\\\\Sysmon64.exe' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\Sysmon64a.exe' ESCAPE '\\') AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%:\\\\Windows\\\\Temp\\\\asgard2-agent-sc\\\\aurora\\\\%' ESCAPE '\\' AND ProcessName LIKE '%\\\\aurora-agent-64.exe' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%\\\\x64\\\\SCENARIOENGINE.EXE' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR ((ProcessName LIKE '%:\\\\Users\\\\%' ESCAPE '\\' AND ProcessName LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\is-%' ESCAPE '\\') AND ProcessName LIKE '%\\\\avira\\_system\\_speedup.tmp' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' AND ProcessName LIKE '%\\\\avira\\_speedup\\_setup\\_update.tmp' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%:\\\\Windows\\\\System32\\\\snmp.exe' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%:\\\\Windows\\\\SystemTemp\\\\%' ESCAPE '\\' AND ProcessName LIKE '%\\\\GoogleUpdate.exe' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\')), 0)) AND (NOT COALESCE(((ProcessName LIKE '%\\\\procmon64.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procmon64a.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procmon.exe' ESCAPE '\\') AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\'), 0)))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (((EventID=4656 AND ObjectName LIKE '%\\\\lsass.exe' ESCAPE '\\' AND (AccessMask LIKE '%0x40%' ESCAPE '\\' OR AccessMask LIKE '%0x1400%' ESCAPE '\\' OR AccessMask LIKE '%0x1410%' ESCAPE '\\' OR AccessMask LIKE '%0x1010%' ESCAPE '\\' OR AccessMask LIKE '%0x1438%' ESCAPE '\\' OR AccessMask LIKE '%0x143a%' ESCAPE '\\' OR AccessMask LIKE '%0x1418%' ESCAPE '\\' OR AccessMask LIKE '%0x1f0fff%' ESCAPE '\\' OR AccessMask LIKE '%0x1f1fff%' ESCAPE '\\' OR AccessMask LIKE '%0x1f2fff%' ESCAPE '\\' OR AccessMask LIKE '%0x1f3fff%' ESCAPE '\\')) OR (EventID=4663 AND ObjectName LIKE '%\\\\lsass.exe' ESCAPE '\\' AND (AccessList LIKE '%4484%' ESCAPE '\\' OR AccessList LIKE '%4416%' ESCAPE '\\'))) AND (NOT COALESCE((((ProcessName LIKE '%\\\\csrss.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\GamingServices.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\lsm.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\MicrosoftEdgeUpdate.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\minionhost.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\MRT.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\perfmon.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procexp.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procexp64.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procexp64a.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\svchost.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\taskmgr.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\thor.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\thor64.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\vmtoolsd.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\VsTskMgr.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\wininit.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' OR ProcessName LIKE '%RtkAudUService64' ESCAPE '\\') AND (ProcessName LIKE '%:\\\\Program Files (x86)\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Program Files\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Platform\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\SysNative\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\SysWow64\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\Temp\\\\asgard2-agent\\\\%' ESCAPE '\\')) OR ProcessName LIKE '%:\\\\Program Files%' ESCAPE '\\' OR (ProcessName LIKE '%:\\\\Windows\\\\System32\\\\taskhostw.exe' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\System32\\\\msiexec.exe' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\CCM\\\\CcmExec.exe' ESCAPE '\\') OR ((ProcessName LIKE '%:\\\\Windows\\\\Sysmon64.exe' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Windows\\\\Sysmon64a.exe' ESCAPE '\\') AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%:\\\\Windows\\\\Temp\\\\asgard2-agent-sc\\\\aurora\\\\%' ESCAPE '\\' AND ProcessName LIKE '%\\\\aurora-agent-64.exe' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%\\\\x64\\\\SCENARIOENGINE.EXE' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR ((ProcessName LIKE '%:\\\\Users\\\\%' ESCAPE '\\' AND ProcessName LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\is-%' ESCAPE '\\') AND ProcessName LIKE '%\\\\avira\\_system\\_speedup.tmp' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' AND ProcessName LIKE '%\\\\avira\\_speedup\\_setup\\_update.tmp' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%:\\\\Windows\\\\System32\\\\snmp.exe' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\') OR (ProcessName LIKE '%:\\\\Windows\\\\SystemTemp\\\\%' ESCAPE '\\' AND ProcessName LIKE '%\\\\GoogleUpdate.exe' ESCAPE '\\' AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\')), 0)) AND (NOT COALESCE(((ProcessName LIKE '%\\\\procmon64.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procmon64a.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\procmon.exe' ESCAPE '\\') AND AccessList LIKE '%\\%\\%4484%' ESCAPE '\\'), 0)))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -24519,55 +24570,6 @@
       "attack.t1222.001"
     ],
     "title": "Suspicious Recursive Takeown"
-  },
-  {
-    "author": "heyyanu",
-    "channel": [
-      "Microsoft-Windows-AppLocker/EXE and DLL",
-      "Microsoft-Windows-AppLocker/MSI and Script",
-      "Microsoft-Windows-AppLocker/Packaged app-Deployment",
-      "Microsoft-Windows-AppLocker/Packaged app-Execution"
-    ],
-    "description": "Detects when AppLocker \"Audit only\" enforcement mode reports that an Application, DLL, Script, MSI, or Packaged-App would have been blocked if AppLocker \"Enforce rules\" enforcement mode was enabled.\n",
-    "eventid": [
-      8003,
-      8006,
-      8021,
-      8024
-    ],
-    "falsepositives": [
-      "Expected during AppLocker policy testing and audit mode deployments"
-    ],
-    "filename": "rules/windows/builtin/applocker/win_applocker_application_would_have_been_blocked.yml",
-    "id": "557e3bd3-7f21-495d-8d50-7c8bdfb8041c",
-    "level": "medium",
-    "license": "DRL-1.1",
-    "logsource": {
-      "product": "windows",
-      "service": "applocker"
-    },
-    "required_fields": [
-      "Channel",
-      "EventID"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-AppLocker/MSI and Script' OR Channel='Microsoft-Windows-AppLocker/EXE and DLL' OR Channel='Microsoft-Windows-AppLocker/Packaged app-Deployment' OR Channel='Microsoft-Windows-AppLocker/Packaged app-Execution') AND (EventID=8003 OR EventID=8006 OR EventID=8021 OR EventID=8024)"
-    ],
-    "schema_version": 2,
-    "source": "sigmahq",
-    "source_table": "logs",
-    "status": "experimental",
-    "tags": [
-      "attack.execution",
-      "attack.t1204.002",
-      "attack.t1059.001",
-      "attack.t1059.003",
-      "attack.t1059.005",
-      "attack.t1059.006",
-      "attack.t1059.007"
-    ],
-    "title": "AppLocker Application Would Have Been Blocked"
   },
   {
     "author": "Stamatis Chatzimangou",
@@ -27189,7 +27191,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4103 AND (ContextInfo LIKE '%' ESCAPE '\\' AND (NOT COALESCE(((ContextInfo LIKE '%= powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/System32/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\') OR ContextInfo LIKE '%= C:\\\\WINDOWS\\\\System32\\\\sdiagnhost.exe -Embedding%' ESCAPE '\\' OR ContextInfo LIKE '%ConfigSyncRun.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\dsac.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\wsmprovhost.exe -Embedding%' ESCAPE '\\' OR (Payload LIKE '%Update-Help%' ESCAPE '\\' OR Payload LIKE '%Failed to update Help for the module%' ESCAPE '\\')), 0))))"
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4103 AND (ContextInfo LIKE '%' ESCAPE '\\' AND (NOT COALESCE(((ContextInfo LIKE '%= powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/System32/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\') OR ContextInfo LIKE '%= C:\\\\WINDOWS\\\\System32\\\\sdiagnhost.exe -Embedding%' ESCAPE '\\' OR ContextInfo LIKE '%ConfigSyncRun.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\dsac.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\wsmprovhost.exe -Embedding%' ESCAPE '\\' OR (Payload LIKE '%Update-Help%' ESCAPE '\\' OR Payload LIKE '%Failed to update Help for the module%' ESCAPE '\\') OR ContextInfo LIKE '%Host Name = WaPSHost%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -30912,7 +30914,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND ((ScriptBlockText LIKE '%ls%' ESCAPE '\\' OR ScriptBlockText LIKE '%get-childitem%' ESCAPE '\\' OR ScriptBlockText LIKE '%gci%' ESCAPE '\\') AND ScriptBlockText LIKE '%-recurse%' ESCAPE '\\' AND (ScriptBlockText LIKE '%.pass%' ESCAPE '\\' OR ScriptBlockText LIKE '%.kdbx%' ESCAPE '\\' OR ScriptBlockText LIKE '%.kdb%' ESCAPE '\\')))"
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText REGEXP '(?i)\\b(?:get-childitem|gci|ls|dir)\\b' AND ScriptBlockText LIKE '%-recurse%' ESCAPE '\\' AND (ScriptBlockText LIKE '%.pass%' ESCAPE '\\' OR ScriptBlockText LIKE '%.kdbx%' ESCAPE '\\' OR ScriptBlockText LIKE '%.kdb%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -32263,7 +32265,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR OriginalFileName LIKE '\\\\msiexec.exe' ESCAPE '\\') AND (CommandLine LIKE '% -z %' ESCAPE '\\' OR CommandLine LIKE '% /z %' ESCAPE '\\' OR CommandLine LIKE '% \u2013z %' ESCAPE '\\' OR CommandLine LIKE '% \u2014z %' ESCAPE '\\' OR CommandLine LIKE '% \u2015z %' ESCAPE '\\') AND CommandLine LIKE '%.dll%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR OriginalFileName LIKE '\\\\msiexec.exe' ESCAPE '\\') AND ((CommandLine LIKE '% -z %' ESCAPE '\\' OR CommandLine LIKE '% /z %' ESCAPE '\\' OR CommandLine LIKE '% \u2013z %' ESCAPE '\\' OR CommandLine LIKE '% \u2014z %' ESCAPE '\\' OR CommandLine LIKE '% \u2015z %' ESCAPE '\\') AND CommandLine LIKE '%.dll%' ESCAPE '\\')) AND (NOT COALESCE((CommandLine LIKE '%\\\\MsiExec.exe\" /Z \"C:\\\\Windows\\\\CCM\\\\MsiHandler.dll\"' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -35813,7 +35815,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (((EventID=4663 OR EventID=4656) AND (AccessMask='0x100000' OR AccessMask='0x1010' OR AccessMask='0x1400' OR AccessMask='0x1410' OR AccessMask='0x1418' OR AccessMask='0x1438' OR AccessMask='0x143a' OR AccessMask='0x1f0fff' OR AccessMask='0x1f1fff' OR AccessMask='0x1f2fff' OR AccessMask='0x1f3fff' OR AccessMask='0x40' OR AccessMask='143a' OR AccessMask='1f0fff' OR AccessMask='1f1fff' OR AccessMask='1f2fff' OR AccessMask='1f3fff') AND ObjectType='Process' AND ObjectName LIKE '%\\\\lsass.exe' ESCAPE '\\') AND (NOT COALESCE((SubjectUserName LIKE '%$' ESCAPE '\\' OR (ProcessName LIKE '%:\\\\Program Files\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Program Files (x86)\\\\%' ESCAPE '\\') OR (ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\wbem\\\\WmiPrvSE.exe' ESCAPE '\\' AND AccessMask='0x1410')), 0)) AND (NOT COALESCE((ProcessName LIKE '%\\\\SteamLibrary\\\\steamapps\\\\%' ESCAPE '\\'), 0)))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (((EventID=4663 OR EventID=4656) AND (AccessMask='0x1010' OR AccessMask='0x1400' OR AccessMask='0x1410' OR AccessMask='0x1418' OR AccessMask='0x1438' OR AccessMask='0x143a' OR AccessMask='0x1f0fff' OR AccessMask='0x1f1fff' OR AccessMask='0x1f2fff' OR AccessMask='0x1f3fff' OR AccessMask='0x40' OR AccessMask='143a' OR AccessMask='1f0fff' OR AccessMask='1f1fff' OR AccessMask='1f2fff' OR AccessMask='1f3fff') AND ObjectType='Process' AND ObjectName LIKE '%\\\\lsass.exe' ESCAPE '\\') AND (NOT COALESCE((SubjectUserName LIKE '%$' ESCAPE '\\' OR (ProcessName LIKE '%:\\\\Program Files\\\\%' ESCAPE '\\' OR ProcessName LIKE '%:\\\\Program Files (x86)\\\\%' ESCAPE '\\') OR (ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\wbem\\\\WmiPrvSE.exe' ESCAPE '\\' AND AccessMask='0x1410')), 0)) AND (NOT COALESCE((ProcessName LIKE '%\\\\SteamLibrary\\\\steamapps\\\\%' ESCAPE '\\'), 0)))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -36060,11 +36062,12 @@
       "CommandLine",
       "EventID",
       "Image",
-      "OriginalFileName"
+      "OriginalFileName",
+      "ParentImage"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\reg.exe' ESCAPE '\\' OR OriginalFileName='reg.exe') AND CommandLine LIKE '%query%' ESCAPE '\\' AND (CommandLine LIKE '%currentVersion\\\\windows%' ESCAPE '\\' OR CommandLine LIKE '%winlogon\\\\%' ESCAPE '\\' OR CommandLine LIKE '%currentVersion\\\\shellServiceObjectDelayLoad%' ESCAPE '\\' OR CommandLine LIKE '%currentVersion\\\\run%' ESCAPE '\\' OR CommandLine LIKE '%currentVersion\\\\policies\\\\explorer\\\\run%' ESCAPE '\\' OR CommandLine LIKE '%currentcontrolset\\\\services%' ESCAPE '\\')))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\reg.exe' ESCAPE '\\' OR OriginalFileName='reg.exe') AND CommandLine LIKE '% query %' ESCAPE '\\' AND (CommandLine LIKE '%currentVersion\\\\windows%' ESCAPE '\\' OR CommandLine LIKE '%winlogon\\\\%' ESCAPE '\\' OR CommandLine LIKE '%currentVersion\\\\shellServiceObjectDelayLoad%' ESCAPE '\\' OR CommandLine LIKE '%currentVersion\\\\run%' ESCAPE '\\' OR CommandLine LIKE '%currentVersion\\\\policies\\\\explorer\\\\run%' ESCAPE '\\' OR CommandLine LIKE '%currentcontrolset\\\\services%' ESCAPE '\\')) AND (NOT COALESCE((ParentImage LIKE '%\\\\Yammer.exe' ESCAPE '\\' AND CommandLine LIKE 'C:\\\\Windows\\\\system32\\\\reg.exe QUERY HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run /v Yammer' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -39011,7 +39014,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND ((TargetImage LIKE '%\\\\lsass.exe' ESCAPE '\\' AND ((GrantedAccess LIKE '%30' ESCAPE '\\' OR GrantedAccess LIKE '%50' ESCAPE '\\' OR GrantedAccess LIKE '%70' ESCAPE '\\' OR GrantedAccess LIKE '%90' ESCAPE '\\' OR GrantedAccess LIKE '%B0' ESCAPE '\\' OR GrantedAccess LIKE '%D0' ESCAPE '\\' OR GrantedAccess LIKE '%F0' ESCAPE '\\' OR GrantedAccess LIKE '%18' ESCAPE '\\' OR GrantedAccess LIKE '%38' ESCAPE '\\' OR GrantedAccess LIKE '%58' ESCAPE '\\' OR GrantedAccess LIKE '%78' ESCAPE '\\' OR GrantedAccess LIKE '%98' ESCAPE '\\' OR GrantedAccess LIKE '%B8' ESCAPE '\\' OR GrantedAccess LIKE '%D8' ESCAPE '\\' OR GrantedAccess LIKE '%F8' ESCAPE '\\' OR GrantedAccess LIKE '%1A' ESCAPE '\\' OR GrantedAccess LIKE '%3A' ESCAPE '\\' OR GrantedAccess LIKE '%5A' ESCAPE '\\' OR GrantedAccess LIKE '%7A' ESCAPE '\\' OR GrantedAccess LIKE '%9A' ESCAPE '\\' OR GrantedAccess LIKE '%BA' ESCAPE '\\' OR GrantedAccess LIKE '%DA' ESCAPE '\\' OR GrantedAccess LIKE '%FA' ESCAPE '\\' OR GrantedAccess LIKE '%0x14C2' ESCAPE '\\') OR (GrantedAccess LIKE '0x100000%' ESCAPE '\\' OR GrantedAccess LIKE '0x1418%' ESCAPE '\\' OR GrantedAccess LIKE '0x1438%' ESCAPE '\\' OR GrantedAccess LIKE '0x143a%' ESCAPE '\\' OR GrantedAccess LIKE '0x1f0fff%' ESCAPE '\\' OR GrantedAccess LIKE '0x1f1fff%' ESCAPE '\\' OR GrantedAccess LIKE '0x1f2fff%' ESCAPE '\\' OR GrantedAccess LIKE '0x1f3fff%' ESCAPE '\\' OR GrantedAccess LIKE '0x40%' ESCAPE '\\'))) AND (NOT COALESCE(((SourceImage LIKE '%:\\\\Program Files (x86)\\\\%' ESCAPE '\\' OR SourceImage LIKE '%:\\\\Program Files\\\\%' ESCAPE '\\' OR SourceImage LIKE '%:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR SourceImage LIKE '%:\\\\Windows\\\\SysWOW64\\\\%' ESCAPE '\\') OR (SourceImage LIKE '%:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\%' ESCAPE '\\' AND SourceImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\') OR ((CallTrace LIKE '%|_:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Definition Updates\\\\{%' ESCAPE '\\' AND CallTrace LIKE '%}\\\\mpengine.dll+%' ESCAPE '\\') AND GrantedAccess='0x1418') OR (CallTrace LIKE '%|c:\\\\program files\\\\windows defender\\\\mprtp.dll%' ESCAPE '\\' OR CallTrace LIKE '%|c:\\\\program files\\\\windows defender\\\\MpClient.dll%' ESCAPE '\\') OR (SourceImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND GrantedAccess='0x401')), 0)) AND (NOT COALESCE((SourceImage LIKE '%:\\\\ProgramData\\\\MALWAREBYTES\\\\MBAMSERVICE\\\\ctlrupdate\\\\mbupdatr.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\AppData\\\\Local\\\\Programs\\\\Microsoft VS Code\\\\Code.exe' ESCAPE '\\' OR (SourceImage LIKE '%:\\\\ProgramData\\\\VMware\\\\VMware Tools\\\\%' ESCAPE '\\' AND SourceImage LIKE '%\\\\vmtoolsd.exe' ESCAPE '\\') OR ((SourceImage LIKE '%\\\\PROCEXP64.EXE' ESCAPE '\\' OR SourceImage LIKE '%\\\\PROCEXP.EXE' ESCAPE '\\') AND GrantedAccess='0x40') OR (SourceImage LIKE '%\\\\MBAMInstallerService.exe' ESCAPE '\\' AND GrantedAccess='0x40') OR ((SourceImage LIKE '%\\\\aurora-agent-64.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\aurora-agent.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\thor.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\thor64.exe' ESCAPE '\\') AND GrantedAccess='0x40') OR ((SourceImage LIKE '%\\\\handle.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\handle64.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\handle64a.exe' ESCAPE '\\') AND GrantedAccess='0x40') OR (SourceImage LIKE '%\\\\AppData\\\\Local\\\\WebEx\\\\WebexHost.exe' ESCAPE '\\' AND GrantedAccess='0x401') OR SourceImage LIKE '%\\\\SteamLibrary\\\\steamapps\\\\%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND ((TargetImage LIKE '%\\\\lsass.exe' ESCAPE '\\' AND ((GrantedAccess LIKE '%30' ESCAPE '\\' OR GrantedAccess LIKE '%50' ESCAPE '\\' OR GrantedAccess LIKE '%70' ESCAPE '\\' OR GrantedAccess LIKE '%90' ESCAPE '\\' OR GrantedAccess LIKE '%B0' ESCAPE '\\' OR GrantedAccess LIKE '%D0' ESCAPE '\\' OR GrantedAccess LIKE '%F0' ESCAPE '\\' OR GrantedAccess LIKE '%18' ESCAPE '\\' OR GrantedAccess LIKE '%38' ESCAPE '\\' OR GrantedAccess LIKE '%58' ESCAPE '\\' OR GrantedAccess LIKE '%78' ESCAPE '\\' OR GrantedAccess LIKE '%98' ESCAPE '\\' OR GrantedAccess LIKE '%B8' ESCAPE '\\' OR GrantedAccess LIKE '%D8' ESCAPE '\\' OR GrantedAccess LIKE '%F8' ESCAPE '\\' OR GrantedAccess LIKE '%1A' ESCAPE '\\' OR GrantedAccess LIKE '%3A' ESCAPE '\\' OR GrantedAccess LIKE '%5A' ESCAPE '\\' OR GrantedAccess LIKE '%7A' ESCAPE '\\' OR GrantedAccess LIKE '%9A' ESCAPE '\\' OR GrantedAccess LIKE '%BA' ESCAPE '\\' OR GrantedAccess LIKE '%DA' ESCAPE '\\' OR GrantedAccess LIKE '%FA' ESCAPE '\\' OR GrantedAccess LIKE '%0x14C2' ESCAPE '\\') OR (GrantedAccess LIKE '0x1418%' ESCAPE '\\' OR GrantedAccess LIKE '0x1438%' ESCAPE '\\' OR GrantedAccess LIKE '0x143a%' ESCAPE '\\' OR GrantedAccess LIKE '0x1f0fff%' ESCAPE '\\' OR GrantedAccess LIKE '0x1f1fff%' ESCAPE '\\' OR GrantedAccess LIKE '0x1f2fff%' ESCAPE '\\' OR GrantedAccess LIKE '0x1f3fff%' ESCAPE '\\' OR GrantedAccess LIKE '0x40%' ESCAPE '\\'))) AND (NOT COALESCE(((SourceImage LIKE '%:\\\\Program Files (x86)\\\\%' ESCAPE '\\' OR SourceImage LIKE '%:\\\\Program Files\\\\%' ESCAPE '\\' OR SourceImage LIKE '%:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR SourceImage LIKE '%:\\\\Windows\\\\SysWOW64\\\\%' ESCAPE '\\') OR (SourceImage LIKE '%:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\%' ESCAPE '\\' AND SourceImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\') OR ((CallTrace LIKE '%|_:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Definition Updates\\\\{%' ESCAPE '\\' AND CallTrace LIKE '%}\\\\mpengine.dll+%' ESCAPE '\\') AND GrantedAccess='0x1418') OR (CallTrace LIKE '%|c:\\\\program files\\\\windows defender\\\\mprtp.dll%' ESCAPE '\\' OR CallTrace LIKE '%|c:\\\\program files\\\\windows defender\\\\MpClient.dll%' ESCAPE '\\') OR (SourceImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND GrantedAccess='0x401')), 0)) AND (NOT COALESCE((SourceImage LIKE '%:\\\\ProgramData\\\\MALWAREBYTES\\\\MBAMSERVICE\\\\ctlrupdate\\\\mbupdatr.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\AppData\\\\Local\\\\Programs\\\\Microsoft VS Code\\\\Code.exe' ESCAPE '\\' OR (SourceImage LIKE '%:\\\\ProgramData\\\\VMware\\\\VMware Tools\\\\%' ESCAPE '\\' AND SourceImage LIKE '%\\\\vmtoolsd.exe' ESCAPE '\\') OR ((SourceImage LIKE '%\\\\PROCEXP64.EXE' ESCAPE '\\' OR SourceImage LIKE '%\\\\PROCEXP.EXE' ESCAPE '\\') AND GrantedAccess='0x40') OR (SourceImage LIKE '%\\\\MBAMInstallerService.exe' ESCAPE '\\' AND GrantedAccess='0x40') OR ((SourceImage LIKE '%\\\\aurora-agent-64.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\aurora-agent.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\thor.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\thor64.exe' ESCAPE '\\') AND GrantedAccess='0x40') OR ((SourceImage LIKE '%\\\\handle.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\handle64.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\handle64a.exe' ESCAPE '\\') AND GrantedAccess='0x40') OR (SourceImage LIKE '%\\\\AppData\\\\Local\\\\WebEx\\\\WebexHost.exe' ESCAPE '\\' AND GrantedAccess='0x401') OR SourceImage LIKE '%\\\\SteamLibrary\\\\steamapps\\\\%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -44513,11 +44516,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "ModifyingApplication"
+      "ModifyingApplication",
+      "ModifyingUser"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Windows Firewall With Advanced Security/Firewall' AND ((EventID=2006 OR EventID=2052) AND (NOT COALESCE(((ModifyingApplication LIKE 'C:\\\\Program Files (x86)\\\\%' ESCAPE '\\' OR ModifyingApplication LIKE 'C:\\\\Program Files\\\\%' ESCAPE '\\' OR ModifyingApplication LIKE 'C:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\') OR ModifyingApplication LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' OR ModifyingApplication IS NULL OR ModifyingApplication=''), 0)) AND (NOT COALESCE((ModifyingApplication LIKE 'C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Platform\\\\%' ESCAPE '\\' AND ModifyingApplication LIKE '%\\\\MsMpEng.exe' ESCAPE '\\'), 0)))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Windows Firewall With Advanced Security/Firewall' AND ((EventID=2006 OR EventID=2052) AND (NOT COALESCE(((ModifyingApplication LIKE 'C:\\\\Program Files (x86)\\\\%' ESCAPE '\\' OR ModifyingApplication LIKE 'C:\\\\Program Files\\\\%' ESCAPE '\\' OR ModifyingApplication LIKE 'C:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\') OR ModifyingUser='S-1-5-18' OR (ModifyingApplication LIKE 'C:\\\\Windows\\\\SysWOW64\\\\msiexec.exe' ESCAPE '\\' OR ModifyingApplication LIKE 'C:\\\\Windows\\\\System32\\\\msiexec.exe' ESCAPE '\\') OR ModifyingApplication LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' OR (ModifyingApplication LIKE 'C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Platform\\\\%' ESCAPE '\\' AND ModifyingApplication LIKE '%\\\\MsMpEng.exe' ESCAPE '\\') OR ModifyingApplication IS NULL OR ModifyingApplication=''), 0)) AND (NOT COALESCE((ModifyingApplication LIKE 'C:\\\\Windows\\\\SystemTemp\\\\%' ESCAPE '\\' AND ModifyingApplication LIKE '%GoogleUpdater%' ESCAPE '\\' AND ModifyingApplication LIKE '%\\\\setup.exe' ESCAPE '\\'), 0)))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -50295,11 +50299,12 @@
     "required_fields": [
       "Channel",
       "EventID",
+      "Path",
       "ScriptBlockText"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND ScriptBlockText LIKE '%[Reflection.Assembly]::load%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%[Reflection.Assembly]::load%' ESCAPE '\\' AND (NOT COALESCE(((Path LIKE 'C:\\\\Program Files (x86)\\\\Microsoft SQL Server\\\\%' ESCAPE '\\' OR Path LIKE 'C:\\\\Program Files\\\\Microsoft SQL Server\\\\%' ESCAPE '\\') AND Path LIKE '%\\\\Tools\\\\PowerShell\\\\Modules\\\\SQLPS\\\\SqlPsPostScript.ps1' ESCAPE '\\' AND ScriptBlockText LIKE '%SQLSERVER: { Set-Location%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -55224,6 +55229,47 @@
       "attack.discovery"
     ],
     "title": "GatherNetworkInfo.VBS Reconnaissance Script Output"
+  },
+  {
+    "author": "Panos Gkatziroulis, Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects Kerberos pre-authentication failures for machine accounts, which may indicate attempts to brute-force service account passwords.\nThis rule helps identify potential Golden dMSA attacks where attackers try multiple password combinations.\nWhen hunting, look for multiple 4771 failures for machine accounts in short succession with status code 0x18 (KDC_ERR_PREAUTH_FAILED). Distinguish these from 0x19 (KDC_ERR_PREAUTH_REQUIRED), which indicates that additional pre-authentication is required rather than that a password was incorrect.\nHypothesis: An attacker is attempting to identify machine accounts with weak passwords for attacks like Golden dMSA by performing Kerberos pre-authentication brute-force against machine accounts (ending with $). Multiple failures in a short time window from the same source IP or targeting multiple machine accounts suggests credential guessing activity.\n",
+    "eventid": [
+      4771
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "rules-threat-hunting/windows/builtin/security/win_security_susp_failed_logon_for_service_account.yml",
+    "id": "f932f9f9-a6bd-45e3-9a0d-ca613fe7fc40",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Status",
+      "TargetUserName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4771 AND TargetUserName LIKE '%$' ESCAPE '\\' AND (Status='0x19' OR Status='0x18'))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.credential-access",
+      "attack.t1110.001",
+      "detection.threat-hunting"
+    ],
+    "title": "Potential Kerberos Pre-Authentication Failure for Machine Accounts"
   },
   {
     "author": "frack113",
@@ -100861,6 +100907,51 @@
       "detection.emerging-threats"
     ],
     "title": "Potential Exploitation of CVE-2024-37085 - Suspicious Creation Of ESX Admins Group"
+  },
+  {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects execution of GoldenDMSA hacktool used for Directory Service Account manipulation.\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "rules/windows/process_creation/proc_creation_win_hktl_goldendmsa.yml",
+    "id": "c41ec561-872d-469b-847c-1653ad19b45d",
+    "level": "high",
+    "license": "DRL-1.1",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\GoldenDMSA.exe' ESCAPE '\\' OR ((CommandLine LIKE '%wordlist%' ESCAPE '\\' OR CommandLine LIKE '%bruteforce%' ESCAPE '\\') AND (CommandLine LIKE '% -s %' ESCAPE '\\' AND CommandLine LIKE '%S-1-5-21-%' ESCAPE '\\' AND CommandLine LIKE '% -d %' ESCAPE '\\' AND CommandLine LIKE '% -k %' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.privilege-escalation",
+      "attack.t1098",
+      "attack.credential-access",
+      "attack.t1110.001",
+      "attack.t1558.003"
+    ],
+    "title": "HackTool - GoldenDMSA Execution"
   },
   {
     "author": "Nasreddine Bencherchali (Nextron Systems)",

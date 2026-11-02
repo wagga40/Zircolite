@@ -2263,6 +2263,53 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
+    "description": "Detects an Apache, IIS-linked PHP, PHP-CGI, PHP-FPM, or nginx worker spawning a Windows shell, interpreter, downloader, or discovery utility with a suspicious command line. This is a high-confidence post-exploitation signal consistent with PHP2Shell on Windows, but it is not specific to one CVE; SOC L1 should verify the parent chain, service account, originating web requests, and created files.\nD\u00e9tecte un worker Apache, PHP li\u00e9 \u00e0 IIS, PHP-CGI, PHP-FPM ou nginx qui lance un shell Windows, un interpr\u00e9teur, un outil de t\u00e9l\u00e9chargement ou un utilitaire de reconnaissance avec une ligne de commande suspecte. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance coh\u00e9rent avec PHP2Shell sous Windows, mais il n\u2019est pas sp\u00e9cifique \u00e0 un seul CVE ; le SOC L1 doit v\u00e9rifier la cha\u00eene parent, le compte de service, les requ\u00eates web d\u2019origine et les fichiers cr\u00e9\u00e9s.\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Authorized maintenance performed by a documented web service account",
+      "EDR or monitoring components that intentionally launch diagnostics from the web worker"
+    ],
+    "filename": "CVE-2026-109618_109619_PHP2Shell/rules/windows_php_worker_child_process_php2shell_strict.yml",
+    "id": "6a1e4d93-7b52-4f80-9c21-5e8d3a6f2047",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\php-cgi.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\php-fpm.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\httpd.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\apache.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\nginx.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\w3wp.exe' ESCAPE '\\') AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\' OR Image LIKE '%\\\\certutil.exe' ESCAPE '\\' OR Image LIKE '%\\\\curl.exe' ESCAPE '\\' OR Image LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\') AND (CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%systeminfo%' ESCAPE '\\' OR CommandLine LIKE '%cmd /c%' ESCAPE '\\' OR CommandLine LIKE '%powershell -%' ESCAPE '\\' OR CommandLine LIKE '% -enc %' ESCAPE '\\' OR CommandLine LIKE '% -e %' ESCAPE '\\' OR CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%certutil -urlcache%' ESCAPE '\\' OR CommandLine LIKE '%bitsadmin /transfer%' ESCAPE '\\' OR CommandLine LIKE '%AppData\\\\Local\\\\Temp%' ESCAPE '\\' OR CommandLine LIKE '%Windows\\\\Temp%' ESCAPE '\\') AND (NOT COALESCE((CommandLine LIKE '%\\\\monitoring\\\\php-healthcheck.cmd%' ESCAPE '\\' OR CommandLine LIKE '%\\\\monitoring\\\\php-healthcheck.ps1%' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1059.001",
+      "attack.t1505.003",
+      "cve.2026-109618",
+      "cve.2026-109619"
+    ],
+    "title": "Windows PHP Worker Spawns Suspicious Child Process After PHP2Shell Activity - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
     "description": "Detects the SharePoint IIS worker writing an active server-side script into a web-accessible SharePoint directory, a high-confidence post-exploitation effect consistent with CVE-2026-58644. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte le worker IIS de SharePoint \u00e9crivant un script serveur actif dans un r\u00e9pertoire SharePoint expos\u00e9 par IIS, effet post-exploitation haute confiance compatible avec CVE-2026-58644. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
     "eventid": [
       11

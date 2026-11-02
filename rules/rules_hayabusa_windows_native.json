@@ -5998,11 +5998,11 @@
       "Channel",
       "EventID",
       "ImagePath",
-      "Service"
+      "ServiceName"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='System' AND EventID=7045) AND (Service='PSEXESVC' OR ImagePath LIKE '%PSEXESVC%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE (Channel='System' AND EventID=7045) AND (ServiceName='PSEXESVC' OR ImagePath LIKE '%PSEXESVC%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "hayabusa",

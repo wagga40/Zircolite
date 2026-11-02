@@ -525,6 +525,46 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
+    "description": "Detects a PHP or web-server worker spawning a shell, interpreter, downloader, or discovery utility with an execution-oriented command line. This is a high-confidence post-exploitation signal consistent with PHP2Shell but is not specific to one CVE; SOC L1 should verify the full parent chain, the originating web requests, the worker account, and any files or network connections created nearby.\nD\u00e9tecte un worker PHP ou un serveur web qui lance un shell, un interpr\u00e9teur, un outil de t\u00e9l\u00e9chargement ou un utilitaire de reconnaissance avec une ligne de commande orient\u00e9e ex\u00e9cution. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance, coh\u00e9rent avec PHP2Shell mais non sp\u00e9cifique \u00e0 un seul CVE ; le SOC L1 doit v\u00e9rifier la cha\u00eene compl\u00e8te des processus parents, les requ\u00eates web d\u2019origine, le compte du worker et les fichiers ou connexions r\u00e9seau cr\u00e9\u00e9s \u00e0 proximit\u00e9.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized troubleshooting performed by administrators under a PHP service account",
+      "A documented deployment or monitoring job that launches a child process from a PHP worker"
+    ],
+    "filename": "CVE-2026-109618_109619_PHP2Shell/rules/linux_php_worker_child_process_php2shell_strict.yml",
+    "id": "3d6f8b21-5a74-4c90-b1e3-7f2d9a6c5e48",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/php-fpm%' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi%' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8%' ESCAPE '\\' OR ParentImage LIKE '%/lsphp%' ESCAPE '\\' OR ParentImage LIKE '%/apache2%' ESCAPE '\\' OR ParentImage LIKE '%/httpd%' ESCAPE '\\' OR ParentImage LIKE '%/nginx%' ESCAPE '\\') AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\') AND ((CommandLine LIKE '% -c %' ESCAPE '\\' OR CommandLine LIKE '% -lc %' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%id%' ESCAPE '\\' OR CommandLine LIKE '%uname%' ESCAPE '\\' OR CommandLine LIKE '%curl http%' ESCAPE '\\' OR CommandLine LIKE '%wget http%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/shadow%' ESCAPE '\\' OR CommandLine LIKE '%php -r%' ESCAPE '\\' OR CommandLine LIKE '%sh</%' ESCAPE '\\' OR CommandLine LIKE '%bash</%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%/var/tmp/%' ESCAPE '\\') OR (Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\')) AND (NOT COALESCE((CommandLine LIKE '%/usr/local/bin/php-fpm-healthcheck%' ESCAPE '\\' OR CommandLine LIKE '%/opt/monitoring/php-healthcheck%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1505.003",
+      "cve.2026-109618",
+      "cve.2026-109619"
+    ],
+    "title": "PHP Worker Spawns Suspicious Child Process After PHP2Shell Exploitation - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
     "description": "Detects a suspicious non-sshd process listening on SSH test ports from user or temporary paths, consistent with renamed libssh2 CVE-2026-55200 PoC servers. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte un serveur SSH de test suspect en ecoute, typique du PoC C 0xBlackash une fois compile et renomme. Le PoC ecoute par defaut sur TCP/2222, accepte des clients libssh2 vulnerables et envoie un paquet SSH malforme avec packet_length 0xffffffff. Cette regle couvre l angle mort ou la creation de processus ne contient plus aucun mot-cle CVE apres renommage du binaire. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
     "eventid": [],
     "falsepositives": [
@@ -651,6 +691,45 @@
       "cve.2025-0366"
     ],
     "title": "Web Runtime Shell Execution Consistent With Jupiter X Core RCE - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a PHP or web-server worker creating a PHP-family executable file in a web root or temporary directory. This is a high-confidence post-exploitation signal consistent with a PHP webshell drop after PHP2Shell, but it does not identify the initial vulnerability; SOC L1 should verify deployment activity, file content and hash, owner, process lineage, and preceding web requests.\nD\u00e9tecte un worker PHP ou un serveur web qui cr\u00e9e un fichier ex\u00e9cutable de la famille PHP dans un web root ou un r\u00e9pertoire temporaire. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance coh\u00e9rent avec le d\u00e9p\u00f4t d\u2019un webshell PHP apr\u00e8s PHP2Shell, mais il n\u2019identifie pas la vuln\u00e9rabilit\u00e9 initiale ; le SOC L1 doit v\u00e9rifier les d\u00e9ploiements, le contenu et le hash du fichier, son propri\u00e9taire, la cha\u00eene de processus et les requ\u00eates web pr\u00e9c\u00e9dentes.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized deployments performed by a documented service account",
+      "Applications that legitimately generate PHP cache or template files in a controlled path"
+    ],
+    "filename": "CVE-2026-109618_109619_PHP2Shell/rules/linux_php_worker_webshell_creation_php2shell_strict.yml",
+    "id": "5f8c2a14-9e63-4b70-a1d5-7c3f6e8b2049",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "TargetFilename",
+      "User"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Image LIKE '%/php-fpm%' ESCAPE '\\' OR Image LIKE '%/php-cgi%' ESCAPE '\\' OR Image LIKE '%/apache2%' ESCAPE '\\' OR Image LIKE '%/httpd%' ESCAPE '\\' OR Image LIKE '%/nginx%' ESCAPE '\\' OR Image LIKE '%/lsphp%' ESCAPE '\\') AND (TargetFilename LIKE '%.php' ESCAPE '\\' OR TargetFilename LIKE '%.php3' ESCAPE '\\' OR TargetFilename LIKE '%.php4' ESCAPE '\\' OR TargetFilename LIKE '%.php5' ESCAPE '\\' OR TargetFilename LIKE '%.php7' ESCAPE '\\' OR TargetFilename LIKE '%.php8' ESCAPE '\\' OR TargetFilename LIKE '%.phtml' ESCAPE '\\' OR TargetFilename LIKE '%.phar' ESCAPE '\\') AND ((TargetFilename LIKE '%/var/www/%' ESCAPE '\\' OR TargetFilename LIKE '%/srv/www/%' ESCAPE '\\' OR TargetFilename LIKE '%/htdocs/%' ESCAPE '\\' OR TargetFilename LIKE '%/public\\_html/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/share/nginx/html/%' ESCAPE '\\') OR (TargetFilename LIKE '%/tmp/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/tmp/%' ESCAPE '\\' OR TargetFilename LIKE '%/dev/shm/%' ESCAPE '\\')) AND (NOT COALESCE((User LIKE '%deploy%' ESCAPE '\\' OR User LIKE '%www-deploy%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1505.003",
+      "attack.execution",
+      "cve.2026-109618",
+      "cve.2026-109619"
+    ],
+    "title": "PHP Worker Creates Web Executable File After PHP2Shell Activity - STRICT"
   },
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
