@@ -4,6 +4,7 @@ import dataclasses
 import gzip
 import hashlib
 import json
+import sys
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -146,6 +147,34 @@ class TestDuckdb:
 
         with pytest.raises(PackageError, match="no_such_extension"):
             check_duckdb()
+
+    def test_a_copy_installed_by_another_duckdb_client_is_accepted(self, monkeypatch, tmp_path):
+        # Every DuckDB client on a machine installs into ~/.duckdb/extensions, and
+        # duckdb_extensions() then reports that copy's install_mode for the built-in one.
+        connection = duckdb.connect()
+        version, = connection.execute("SELECT library_version FROM pragma_version()").fetchone()
+        platform, = connection.execute("PRAGMA platform").fetchone()
+        connection.close()
+        extensions = tmp_path / ".duckdb" / "extensions" / version / platform
+        extensions.mkdir(parents=True)
+        (extensions / "json.duckdb_extension").write_bytes(b"")
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+        connection = duckdb.connect(config={"autoload_known_extensions": False})
+        mode, = connection.execute(
+            "SELECT install_mode FROM duckdb_extensions() WHERE extension_name = 'json'").fetchone()
+        connection.close()
+        assert mode != "STATICALLY_LINKED", "duckdb did not read the extension directory set up here"
+
+        check_duckdb()
+
+    def test_a_frozen_build_is_not_told_to_reinstall_duckdb(self, monkeypatch):
+        monkeypatch.setattr(package, "REQUIRED_EXTENSIONS", ("no_such_extension",))
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+
+        with pytest.raises(PackageError) as refused:
+            check_duckdb()
+        assert "PyPI" not in str(refused.value)
 
     @pytest.mark.parametrize("text", ["plain", "it's", "back\\slash", 'dou"ble', "semi;colon -- x", "Ä ä 😀"])
     def test_literals_and_identifiers_round_trip(self, text):

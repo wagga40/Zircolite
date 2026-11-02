@@ -26,13 +26,15 @@ the keys are `output.package` and `output.package_dir`.
   the run. The time and file filters still apply: use them to make a smaller package.
 - **It is written even when no rule matched**, beside the usual detections output.
 - **Problems surface before the run.** The destination, the viewer files and duckdb's
-  built-in JSON and Parquet support are checked before any log is read. duckdb is never
-  allowed to download anything.
+  built-in JSON and Parquet support are checked before any log is read, and a failed check
+  stops the run there. duckdb is never allowed to download anything, and extensions other
+  DuckDB programs installed in `~/.duckdb/extensions` are neither needed nor used.
 - **A package is whole or absent.** It is assembled in a `tmp-zircolite-package-*`
   directory inside the destination and moved into place when complete. That directory needs
   space for the temporary event spool, Parquet and final zip. With sufficient free space,
   plain temporary chunks save compression time; when space is low, new chunks use gzip.
-  If the package fails, the run exits `1` after writing its detections.
+  If building the package fails after the run, Zircolite exits `1` once its detections
+  are written.
 - **The command line is not recorded**, so an archive password cannot leak into it. The
   package keeps the settings that shape what it shows: processing mode, time field, time
   bounds, `--limit`, number of rules.
