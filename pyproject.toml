@@ -15,9 +15,9 @@ dependencies = [
     "jinja2>=2.11.3",
     "evtx>=0.6.2",
     "lxml>=4.9",
-    "pysigma>=2.0.1,<3",
-    "pysigma-pipeline-sysmon>=2.0.0",
-    "pysigma-pipeline-windows>=2.0.0",
+    "pysigma>=2.0.2,<3",
+    "pysigma-pipeline-sysmon>=3.0.0",
+    "pysigma-pipeline-windows>=3.0.0",
     "pysigma-backend-sqlite>=2.1.1,<3",
     "pyyaml>=6.0",
     "psutil>=5.9.0",
@@ -71,8 +71,6 @@ exclude-newer = "3 days"
 # Released in step with Zircolite by the same maintainer: holding it back only
 # holds a release back from the backend it was built against.
 exclude-newer-package = { pysigma-backend-sqlite = false }
-# See [tool.pdm.resolution.overrides].
-override-dependencies = ["pysigma>=2.0.1,<3"]
 
 [tool.ruff]
 # Without an explicit config ruff lints against whatever its current default
@@ -141,14 +139,6 @@ check_untyped_defs = true
 [[tool.mypy.overrides]]
 module = "tests.*"
 ignore_errors = true
-
-# The Windows and Sysmon pipeline releases still declare pysigma<2 but work
-# unchanged on pySigma 2, which pysigma-backend-sqlite 2.1.1 requires. Remove once
-# these are released (Poetry has no override, so it cannot resolve until then):
-# https://github.com/SigmaHQ/pySigma-pipeline-windows/pull/15
-# https://github.com/SigmaHQ/pySigma-pipeline-sysmon/pull/15
-[tool.pdm.resolution.overrides]
-pysigma = ">=2.0.1,<3"
 
 [dependency-groups]
 dev = [
