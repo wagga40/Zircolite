@@ -11,6 +11,7 @@ import base64
 import hashlib
 import logging
 import os
+import sys
 import threading
 import zipfile
 from collections.abc import Callable, Iterator
@@ -113,19 +114,25 @@ def check_duckdb() -> None:
     Packages are built where logs are analysed, often without a network, and
     an extension downloaded on one machine but not another would make the
     same run succeed or fail by where it ran.
+
+    With autoloading off, a fresh connection has loaded only what is compiled
+    in. install_mode cannot tell: a copy any other DuckDB client installed in
+    ~/.duckdb/extensions is reported in place of the built-in one.
     """
     connection = duckdb.connect(":memory:", config={
         "autoinstall_known_extensions": False, "autoload_known_extensions": False})
     try:
-        modes = dict(connection.execute(
-            "SELECT extension_name, install_mode FROM duckdb_extensions()").fetchall())
+        loaded = {name for (name,) in connection.execute(
+            "SELECT extension_name FROM duckdb_extensions() WHERE loaded").fetchall()}
     finally:
         connection.close()
-    missing = [name for name in REQUIRED_EXTENSIONS if modes.get(name) != "STATICALLY_LINKED"]
+    missing = [name for name in REQUIRED_EXTENSIONS if name not in loaded]
     if missing:
+        remedy = ("this Zircolite build is incomplete, please report it" if getattr(sys, "frozen", False)
+                  else "reinstall duckdb from PyPI")
         raise PackageError(
             f"this duckdb build does not include {', '.join(missing)}; packages are built "
-            "offline and cannot download it (reinstall duckdb from PyPI)")
+            f"offline and cannot download it ({remedy})")
 
 
 @dataclass
