@@ -151,16 +151,23 @@ class TestDuckdb:
     def test_a_copy_installed_by_another_duckdb_client_is_accepted(self, monkeypatch, tmp_path):
         # Every DuckDB client on a machine installs into ~/.duckdb/extensions, and
         # duckdb_extensions() then reports that copy's install_mode for the built-in one.
+        # The directory is set through duckdb's own setting: on Windows, duckdb does
+        # not see USERPROFILE changed by the process it runs in.
         connection = duckdb.connect()
         version, = connection.execute("SELECT library_version FROM pragma_version()").fetchone()
         platform, = connection.execute("PRAGMA platform").fetchone()
         connection.close()
-        extensions = tmp_path / ".duckdb" / "extensions" / version / platform
+        extensions = tmp_path / version / platform
         extensions.mkdir(parents=True)
         (extensions / "json.duckdb_extension").write_bytes(b"")
-        monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.setenv("USERPROFILE", str(tmp_path))
-        connection = duckdb.connect(config={"autoload_known_extensions": False})
+        connect = duckdb.connect
+
+        def with_installed_copy(database=":memory:", read_only=False, config=None):
+            return connect(database, read_only=read_only,
+                           config={**(config or {}), "extension_directory": str(tmp_path)})
+
+        monkeypatch.setattr(package.duckdb, "connect", with_installed_copy)
+        connection = package.duckdb.connect(config={"autoload_known_extensions": False})
         mode, = connection.execute(
             "SELECT install_mode FROM duckdb_extensions() WHERE extension_name = 'json'").fetchone()
         connection.close()
