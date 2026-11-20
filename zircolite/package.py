@@ -48,6 +48,7 @@ DATA_TABLES = ("events", "rules", "hits", "alerts", "alert_events")
 REQUIRED_EXTENSIONS = ("json", "parquet")
 CGROUP_ROOT = Path("/sys/fs/cgroup")
 CGROUP_MEMBERSHIP = Path("/proc/self/cgroup")
+CGROUP_MOUNTINFO = Path("/proc/self/mountinfo")
 # Wide schemas need smaller row groups to bound per-thread writer buffers.
 ROW_GROUP_SIZE = 20_000
 DUCKDB_SETTINGS: dict[str, Any] = {
@@ -234,6 +235,27 @@ def _cgroup_headroom(directory: Path) -> int | None:
     return max(0, limit - working_set)
 
 
+def _mount_path(field: bytes) -> Path:
+    # mountinfo escapes these four characters. Decode the escaped backslash last.
+    for encoded, char in ((br"\040", b" "), (br"\011", b"\t"), (br"\012", b"\n"), (br"\134", b"\\")):
+        field = field.replace(encoded, char)
+    return Path(os.fsdecode(field))
+
+
+def _cgroup_mount_root() -> Path:
+    """The hierarchy path mounted at CGROUP_ROOT, which can be a delegated subtree."""
+    try:
+        lines = CGROUP_MOUNTINFO.read_bytes().splitlines()
+    except OSError:
+        return Path("/")
+    for line in lines:
+        before, separator, _ = line.partition(b" - cgroup2 ")
+        fields = before.split()
+        if separator and len(fields) >= 5 and _mount_path(fields[4]) == CGROUP_ROOT:
+            return _mount_path(fields[3])
+    return Path("/")
+
+
 def _cgroup_memory_available() -> int | None:
     """The tightest visible cgroup v2 limit on the standard Linux mount."""
     if sys.platform != "linux":
@@ -243,9 +265,15 @@ def _cgroup_memory_available() -> int | None:
     except OSError:
         return None
     member = next((Path(os.fsdecode(line[3:])) for line in membership if line.startswith(b"0::/")), None)
-    if member is None or ".." in member.parts:
+    if member is None:
         return None
-    group = CGROUP_ROOT.joinpath(*member.parts[1:])
+    # A private mount can expose its root limit while namespace-relative
+    # membership points above it. Never walk outside the visible hierarchy.
+    if ".." in member.parts:
+        return _cgroup_headroom(CGROUP_ROOT)
+    mount_root = _cgroup_mount_root()
+    relative = member.relative_to(mount_root) if member.is_relative_to(mount_root) else member.relative_to("/")
+    group = CGROUP_ROOT / relative
     headrooms = []
     # A child can be unlimited while its siblings consume an ancestor's quota.
     for directory in (group, *group.parents):
