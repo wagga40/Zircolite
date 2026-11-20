@@ -60,6 +60,24 @@ def test_benchmark_default_report_stays_outside_worktree(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == reports
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS process-tree sampler")
+def test_benchmark_counts_a_worker_and_its_child():
+    import psutil
+
+    benchmark = load_tool("throughput-benchmark")
+    script = ("import subprocess, sys\n"
+              "with subprocess.Popen([sys.executable, '-c', 'import sys; sys.stdin.read()'], "
+              "stdin=subprocess.PIPE) as child:\n"
+              " print(child.pid, flush=True); sys.stdin.read(); child.stdin.close()")
+    with subprocess.Popen([sys.executable, "-c", script], stdin=subprocess.PIPE, stdout=subprocess.PIPE) as worker:
+        try:
+            grandchild = int(worker.stdout.readline())
+            pids = {p.pid for p in benchmark.descendants(psutil.Process())}
+            assert {worker.pid, grandchild} <= pids
+        finally:
+            worker.stdin.close()
+
+
 def test_benchmark_export_matrix_and_warmup(tmp_path, monkeypatch):
     benchmark = load_tool("throughput-benchmark")
     report = tmp_path / "report.json"
@@ -79,6 +97,26 @@ def test_benchmark_export_matrix_and_warmup(tmp_path, monkeypatch):
         assert runs[0]["output_bytes"] > 0
         assert runs[0]["export_fingerprint"]
         assert runs[0]["performance"]["status"] == "complete"
+
+
+def test_benchmark_can_launch_old_checkout_with_its_own_venv(tmp_path, monkeypatch):
+    benchmark = load_tool("throughput-benchmark")
+    baseline_python = tmp_path / "baseline-python"
+    baseline_python.symlink_to(sys.executable)
+    commands = []
+
+    def measure(command, *args, **kwargs):
+        commands.append(command[:2])
+        return {"seconds": 1, "peak_rss_mib": 1, "matches": 0, "fingerprint": "empty",
+                "export_records": 0, "export_fingerprint": "empty"}
+
+    monkeypatch.setattr(benchmark, "measure", measure)
+    monkeypatch.setattr(sys, "argv", ["throughput-benchmark.py", "--event-count", "1", "--files", "1",
+        "--passes", "1", "--modes", "auto", "--variants", "baseline", "current",
+        "--baseline-root", str(WORKSPACE_ROOT), "--baseline-python", str(baseline_python),
+        "--report", str(tmp_path / "report.json")])
+    assert benchmark.main() == 0
+    assert [command[0] for command in commands] == [str(baseline_python), sys.executable]
 
 
 def test_benchmark_export_fingerprint_detects_changed_content(tmp_path):
@@ -132,6 +170,28 @@ def test_benchmark_navigator_fingerprint_ignores_technique_order(tmp_path):
     techniques[0]["score"] = 3
     output.write_text(json.dumps({"techniques": techniques}))
     assert benchmark.export_fingerprint("navigator", output) != original
+
+
+def test_package_benchmark_detects_reordered_explore_ordinals(tmp_path):
+    import duckdb
+
+    from tests.test_package_build import build, fake_viewer, part
+    from zircolite.package import Viewer, sql_string, write_package
+    from zircolite.package_spool import PackageSpool
+
+    benchmark = load_tool("throughput-benchmark")
+    spool = PackageSpool(directory=str(tmp_path), time_field="SystemTime", rule_keys={})
+    data = build(spool, [part(spool, 0, [{"Computer": "a"}, {"Computer": "b"}])])
+    viewer = Viewer(fake_viewer(tmp_path), "test", ("index.html",), ("engine.wasm.gz",))
+    signatures = []
+    with duckdb.connect() as connection:
+        for order in ("ASC", "DESC"):
+            target = tmp_path / f"{order}.parquet"
+            connection.execute(f"COPY (SELECT _zl_uid, _zl_time FROM read_parquet(?) ORDER BY _zl_uid {order}) "
+                               f"TO {sql_string(str(target))} (FORMAT parquet)", [str(data.tables["events"])])
+            data.tables["explore"] = target
+            signatures.append(benchmark.package_fingerprint(write_package(viewer, data, tmp_path, tmp_path)))
+    assert signatures[0] != signatures[1]
 
 
 def test_benchmark_csv_detection_identity_ignores_partition_counts(tmp_path):

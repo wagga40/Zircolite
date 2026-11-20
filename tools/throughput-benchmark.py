@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import base64
 import csv
+import ctypes
 import gzip
 import hashlib
 import importlib.metadata
@@ -26,6 +27,7 @@ import time
 import zipfile
 from contextlib import suppress
 from copy import deepcopy
+from functools import lru_cache
 from itertools import dropwhile
 from pathlib import Path
 
@@ -146,7 +148,7 @@ def source_fingerprint(root):
     return digest.hexdigest()
 
 
-def package_fingerprint(path):
+def package_fingerprint(path, *, verified_tables=None):
     """Compare decoded schemas, rows (including links), and stable metadata."""
     with (zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory() as directory,
           duckdb.connect(config={"threads": 1, "memory_limit": "2GB",
@@ -175,7 +177,15 @@ def package_fingerprint(path):
                 raise RuntimeError(f"Package payload checksum failure: {item['name']}")
             if item["kind"] not in ("data", "index"):
                 continue
-            cursor = connection.execute("SELECT * FROM read_parquet(?)", [str(decoded)])
+            # Identical bytes have identical decoded rows. Every pass still checks
+            # the ZIP, chunk identities, size and digest against the fresh manifest.
+            key = (item["name"], item["sha256"])
+            if verified_tables is not None and key in verified_tables:
+                tables[item["name"]] = verified_tables[key]
+                continue
+            reader = ("SELECT * FROM read_parquet(?, file_row_number=true)" if item["name"] == "explore.parquet"
+                      else "SELECT * FROM read_parquet(?)")
+            cursor = connection.execute(reader, [str(decoded)])
             schema = [(column[0], str(column[1])) for column in cursor.description]
             count, digest_sum = 0, 0
             while rows := cursor.fetchmany(512):
@@ -184,6 +194,8 @@ def package_fingerprint(path):
                     digest_sum = (digest_sum + int.from_bytes(digest, "big")) % (1 << 256)
                     count += 1
             tables[item["name"]] = {"schema": schema, "rows": count, "digest": f"{digest_sum:064x}"}
+            if verified_tables is not None:
+                verified_tables[key] = tables[item["name"]]
         manifest.pop("created", None)
         # Parquet encoding and chunk boundaries can change without changing data.
         manifest["files"] = [{"name": item["name"], "kind": item["kind"]}
@@ -226,7 +238,43 @@ def export_fingerprint(kind, path, *, detections_only=False):
     return count, f"{digest_sum:064x}"
 
 
-def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, env=None):
+@lru_cache(maxsize=1)
+def _mac_list_children():
+    function = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True).proc_listchildpids
+    function.argtypes = (ctypes.c_int, ctypes.c_void_p, ctypes.c_int)
+    function.restype = ctypes.c_int
+    return function
+
+
+def descendants(process):
+    """Enumerate the measured tree. macOS can list our children without listing every process on the machine."""
+    if sys.platform != "darwin":
+        yield from process.children(recursive=True)
+        return
+    list_children = _mac_list_children()
+    pending = [process.pid]
+    seen = {process.pid}
+    while pending:
+        pid = pending.pop()
+        capacity = 32
+        while True:
+            children = (ctypes.c_int * capacity)()
+            count = list_children(pid, children, ctypes.sizeof(children))
+            if count < 0:
+                error = ctypes.get_errno()
+                raise OSError(error, os.strerror(error))
+            if count < capacity:
+                break
+            capacity *= 2
+        for child in children[:count]:
+            if child not in seen:
+                seen.add(child)
+                with suppress(psutil.NoSuchProcess):
+                    yield psutil.Process(child)
+                    pending.append(child)
+
+
+def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, package_dir=None, env=None):
     """Run a command to completion, sampling the RSS of its whole process tree.
 
     Returns (exit code, wall seconds, peak RSS bytes, RSS scope, peak bytes
@@ -245,7 +293,7 @@ def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, env=None):
             try:
                 rss = process.memory_info().rss
                 try:
-                    for descendant in process.children(recursive=True):
+                    for descendant in descendants(process):
                         try:
                             rss += descendant.memory_info().rss
                         except psutil.NoSuchProcess:
@@ -259,10 +307,14 @@ def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, env=None):
                 pass
             if temp_dir is not None:
                 visible_bytes = 0
-                for path in temp_dir.rglob("*"):
-                    with suppress(OSError):
-                        if path.is_file():
-                            visible_bytes += path.stat().st_size
+                roots = [temp_dir]
+                if package_dir is not None:
+                    roots.extend(package_dir.glob("tmp-zircolite-package-*"))
+                for root in roots:
+                    for path in root.rglob("*"):
+                        with suppress(OSError):
+                            if path.is_file():
+                                visible_bytes += path.stat().st_size
                 disk_peak = max(disk_peak, visible_bytes)
             time.sleep(0.02)
         code = child.wait()
@@ -271,8 +323,9 @@ def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, env=None):
 
 
 def measure(command, output, log, *, temp_dir=None, performance_path=None,
-            export="json", artifact=None, env=None):
-    code, elapsed, peak, rss_scope, disk_peak = run_sampled(command, log, temp_dir=temp_dir, env=env)
+            export="json", artifact=None, env=None, verified_tables=None):
+    code, elapsed, peak, rss_scope, disk_peak = run_sampled(
+        command, log, temp_dir=temp_dir, package_dir=artifact if export == "package" else None, env=env)
     if code:
         raise RuntimeError(f"CLI exited {code}: {log.read_text(errors='replace')[-4000:]}")
     count, digest = export_fingerprint("csv" if export == "csv" else "json", output, detections_only=True)
@@ -281,8 +334,12 @@ def measure(command, output, log, *, temp_dir=None, performance_path=None,
         if len(packages) != 1:
             raise RuntimeError(f"Expected one package, found {len(packages)}")
         artifact = packages[0]
+        export_count, export_digest = package_fingerprint(artifact, verified_tables=verified_tables)
+    elif export == "json":
+        export_count, export_digest = count, digest
+    else:
+        export_count, export_digest = export_fingerprint(export, artifact or output)
     artifact = artifact or output
-    export_count, export_digest = export_fingerprint(export, artifact)
     # Quiet mode suppresses worker presentation, but failure summaries still
     # identify broken rules and incomplete ingestion.
     transcript = log.read_text(errors="replace")
@@ -317,6 +374,7 @@ def main():
     parser.add_argument("--modes", nargs="+", choices=("auto", "sequential", "thread", "process"), default=["sequential", "thread", "process"])
     parser.add_argument("--variants", nargs="+", choices=tuple(VARIANTS), default=["reference", "current"])
     parser.add_argument("--baseline-root", type=Path, help="Preserved checkout for the baseline variant")
+    parser.add_argument("--baseline-python", type=Path, help="Python executable with the baseline dependencies")
     parser.add_argument("--rule-count", type=int, default=1, help="Distinct generated literal queries; use 32+ to exercise automatic filtering")
     parser.add_argument("--sqlite-cache-mib", type=int, default=64, help="Cache budget for disk variant")
     parser.add_argument("--report", type=Path, help="JSON report (default: a new file in the system temporary directory)")
@@ -355,6 +413,7 @@ def main():
         results: dict[str, list] = {result_key(*combo): [] for combo in combinations}
         expected: dict[str, tuple[int, str]] = {}
         expected_exports: dict[tuple[str, str], tuple[int, str]] = {}
+        verified_tables: dict = {}
         # Interleave modes to reduce bias from run order and warmed filesystem caches.
         for repeat in range(-args.warmup, args.passes):
             offset = repeat % len(combinations)
@@ -365,7 +424,8 @@ def main():
                 output = destination / ("detections.csv" if export == "csv" else "detections.json")
                 log = temp / "console.txt"
                 cli_root = args.baseline_root.resolve() if variant == "baseline" else ROOT
-                prefix = [sys.executable, str(cli_root / "zircolite.py")]
+                python = str(args.baseline_python.absolute()) if variant == "baseline" and args.baseline_python else sys.executable
+                prefix = [python, str(cli_root / "zircolite.py")]
                 command = [*prefix, "-e", str(events),
                            "-r", str(rules), "-c", str(args.config.resolve()), "-o", str(output),
                            "--logfile", str(temp / "run.log"), "--quiet"]
@@ -403,6 +463,7 @@ def main():
                 command.extend(VARIANTS[variant])
                 working = temp / "working"
                 working.mkdir(exist_ok=True)
+                env.update(TMPDIR=str(working), TEMP=str(working), TMP=str(working))
                 command.extend(["--working-db-dir", str(working)])
                 if variant == "disk":
                     command.extend(["--sqlite-cache-mib", str(args.sqlite_cache_mib)])
@@ -413,7 +474,7 @@ def main():
                 if args.scenario == "transforms" and not args.events:
                     command.append("--all-transforms")
                 run = measure(command, output, log, temp_dir=working, performance_path=metrics_path,
-                              export=export, artifact=artifact, env=env)
+                              export=export, artifact=artifact, env=env, verified_tables=verified_tables)
                 if args.scenario in ("evtx-derived", "linux") and not args.events and not run["matches"]:
                     raise RuntimeError("Known-positive generated corpus produced no detections")
                 identity = run["matches"], run["fingerprint"]
@@ -438,11 +499,12 @@ def main():
                   "modes": args.modes, "exports": args.exports, "warmup": args.warmup, "cache": args.cache,
                   "source_sha256": source_fingerprint(ROOT),
                   "baseline_sha256": source_fingerprint(args.baseline_root) if args.baseline_root else None,
+                  "baseline_python": str(args.baseline_python.absolute()) if args.baseline_python else sys.executable,
                   "rule_count_requested": args.rule_count,
                   "config_sha256": hashlib.sha256(args.config.read_bytes()).hexdigest(),
                   "variants": args.variants, "sqlite_cache_mib": args.sqlite_cache_mib,
                   "ruleset_sha256": hashlib.sha256(rules.read_bytes()).hexdigest(),
-                  "temp_scope": "visible working database files only; excludes unlinked result spools and SQLite scratch files",
+                  "temp_scope": "visible working databases, temporary directory and package staging; excludes unlinked files",
                   "json_array_backend": getattr(jsonstream.ijson, "backend", "stdlib"),
                   "median_seconds": {mode: statistics.median(r["seconds"] for r in runs) for mode, runs in results.items()}}
         try:
@@ -450,7 +512,8 @@ def main():
         except importlib.metadata.PackageNotFoundError:
             report["ijson"] = None
         report["libraries"] = {}
-        for name in ("PyYAML", "pyahocorasick", "pyroaring", "evtx", "orjson"):
+        for name in ("PyYAML", "pyahocorasick", "pyroaring", "evtx", "orjson", "duckdb",
+                     "pysigma", "pysigma-backend-sqlite"):
             try:
                 report["libraries"][name] = importlib.metadata.version(name)
             except importlib.metadata.PackageNotFoundError:
