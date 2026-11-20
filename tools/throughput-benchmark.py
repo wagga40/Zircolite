@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import base64
 import csv
-import ctypes
 import gzip
 import hashlib
 import importlib.metadata
@@ -27,7 +26,6 @@ import time
 import zipfile
 from contextlib import suppress
 from copy import deepcopy
-from functools import lru_cache
 from itertools import dropwhile
 from pathlib import Path
 
@@ -38,6 +36,7 @@ import psutil
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from tools.process_tree import descendants  # noqa: E402
 from zircolite import jsonstream  # noqa: E402
 from zircolite.streaming import select_flatten_kernel  # noqa: E402
 
@@ -251,42 +250,6 @@ def export_fingerprint(kind, path, *, detections_only=False):
         digest_sum = (digest_sum + int.from_bytes(digest, "big")) % (1 << 256)
         count += 1
     return count, f"{digest_sum:064x}"
-
-
-@lru_cache(maxsize=1)
-def _mac_list_children():
-    function = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True).proc_listchildpids
-    function.argtypes = (ctypes.c_int, ctypes.c_void_p, ctypes.c_int)
-    function.restype = ctypes.c_int
-    return function
-
-
-def descendants(process):
-    """Enumerate the measured tree. macOS can list our children without listing every process on the machine."""
-    if sys.platform != "darwin":
-        yield from process.children(recursive=True)
-        return
-    list_children = _mac_list_children()
-    pending = [process.pid]
-    seen = {process.pid}
-    while pending:
-        pid = pending.pop()
-        capacity = 32
-        while True:
-            children = (ctypes.c_int * capacity)()
-            count = list_children(pid, children, ctypes.sizeof(children))
-            if count < 0:
-                error = ctypes.get_errno()
-                raise OSError(error, os.strerror(error))
-            if count < capacity:
-                break
-            capacity *= 2
-        for child in children[:count]:
-            if child not in seen:
-                seen.add(child)
-                with suppress(psutil.NoSuchProcess):
-                    yield psutil.Process(child)
-                    pending.append(child)
 
 
 def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, package_dir=None, env=None):
