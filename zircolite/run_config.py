@@ -130,6 +130,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("csv_delimiter", "output", "csv_delimiter", DEFAULT_CSV_DELIMITER),
     Setting("template_append", "output", "template_append", False, Merge.OR),
     Setting("package", "output", "package", False, Merge.OR),
+    Setting("package_explore_index", "output", "package_explore_index", False, Merge.OR),
     Setting("package_dir", "output", "package_dir", DEFAULT_PACKAGE_DIR),
     Setting("keepflat", "output", "keep_flat", False, Merge.OR),
     Setting("dbfile", "output", "db_file"),

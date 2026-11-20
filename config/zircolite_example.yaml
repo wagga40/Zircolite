@@ -127,6 +127,7 @@ output:
   # Create a package for the offline viewer (every event plus the detections)
   package: false
   package_dir: ""  # Where to write it; empty means the working directory
+  package_explore_index: false  # Build a package with a chronological Explore index
 
   # Every detection as one row, in time order: a .csv, .jsonl or .ndjson
   # file, or "-" for JSONL on stdout. Off when null.

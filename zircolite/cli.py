@@ -279,6 +279,8 @@ def parse_arguments() -> argparse.Namespace:
     templating_formats_args.add_argument("--navigator-output", help="Shortcut: generate ATT&CK Navigator layer JSON and write to navigator-<RAND>.json (or specify a custom filename)", type=str, metavar="OUTPUT_FILE", nargs='?', const="")
     templating_formats_args.add_argument("-G", "--package", help="Create a package for the Zircolite Viewer: every event of the run plus the detections, in one zip opened offline with a web browser", action='store_true')
     templating_formats_args.add_argument("--package-dir", help="Existing directory to write the package to (default: the working directory)", type=str, default=None)
+    templating_formats_args.add_argument("--package-explore-index", action="store_true",
+                                         help="Build a viewer package with a chronological index for Explore")
 
     return parser.parse_args()
 
@@ -765,7 +767,8 @@ def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
         from .analysis_cache import default_directory
 
         with Steps() as steps:
-            target = package.PackageBuilder(spool, logger=ctx.logger, cache_directory=default_directory()).build(
+            target = package.PackageBuilder(spool, logger=ctx.logger, cache_directory=default_directory(),
+                                            explore_index=getattr(args, "package_explore_index", False)).build(
                 viewer=package.find_viewer(), parts=ctx.package_parts, rulesets=ctx.rulesets, run=run,
                 failed_sources=failed, expected_events=ctx.total_events, destination=destination,
                 progress=steps)
@@ -1596,6 +1599,8 @@ def _main(memory_tracker, start_time) -> None:
     # Resolve CLI arguments against the YAML configuration file, if any. This
     # also applies the built-in defaults, so it must run even without -Y.
     args = resolve_run_config(args, logger)
+    if args.package_explore_index:
+        args.package = True
     resolve_archive_password(args, logger)
 
     # Apply --timesketch shortcut
@@ -2012,7 +2017,6 @@ def _main(memory_tracker, start_time) -> None:
         export_spool=export_spool,
     )
 
-    zircolite_core = None
     log_list: list[Path] | None = None
     all_results: list[Any] = []
     strict_error = None
@@ -2029,18 +2033,28 @@ def _main(memory_tracker, start_time) -> None:
             ctx, args, logger
         )
 
-        # Written after a first Ctrl+C too, from the rows found, like the detections output
-        if timeline_spool is not None:
-            with ctx.parent_metrics.stage("output"):
-                timeline_stats = _write_timeline(ctx, args)
+        try:
+            # Written after a first Ctrl+C too, from the rows found, like the detections output
+            if timeline_spool is not None:
+                with ctx.parent_metrics.stage("output"):
+                    timeline_stats = _write_timeline(ctx, args)
 
-        if not is_shutdown_requested():
-            # Print rule profiling report if requested
-            if getattr(args, 'profile_rules', False) and zircolite_core is not None:
+            if not is_shutdown_requested() and getattr(args, 'profile_rules', False) and zircolite_core is not None:
                 from zircolite.console import print_profiling_report
                 print_section("Rule Performance")
                 print_profiling_report(zircolite_core.get_profiling_report())
+        finally:
+            # Templates and the package read results and spools. Release the unified
+            # database before DuckDB sizes its buffers against the available memory.
+            if zircolite_core is not None:
+                with ctx.parent_metrics.stage("finalization"):
+                    try:
+                        zircolite_core.close()
+                    except Exception as e:
+                        logger.debug(f"Core close: {e}")
+                zircolite_core = None
 
+        if not is_shutdown_requested():
             # Handle templating and package generation
             with ctx.parent_metrics.stage("output"):
                 templating_ok = handle_templating(ctx, all_results, args)
@@ -2057,11 +2071,6 @@ def _main(memory_tracker, start_time) -> None:
         raise
     finally:
         finalization_start = time.perf_counter()
-        if zircolite_core is not None:
-            try:
-                zircolite_core.close()
-            except Exception as e:
-                logger.debug(f"Core close: {e}")
         if package_spool is not None:
             shutil.rmtree(package_spool.directory, ignore_errors=True)
         if timeline_spool is not None:
