@@ -11,6 +11,7 @@
     "shot": "node e2e/shot.mjs",
     "e2e": "node e2e/explore.mjs",
     "perf": "node e2e/perf.mjs",
+    "wasm-pivots": "node e2e/wasm-pivots.mjs",
     "views": "node e2e/views.mjs"
   },
   "dependencies": {

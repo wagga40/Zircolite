@@ -137,7 +137,7 @@ describe('the loading screen', () => {
 
   it('lists the steps in the order the page takes them', () => {
     expect(BOOT_STEPS).toEqual([
-      'Reading the package', 'Loading the data', 'Starting the query engine', 'Loading Parquet support', 'Opening the data',
+      'Reading the package', 'Loading the engine', 'Starting the query engine', 'Loading Parquet support', 'Opening the data',
       'Linking detections to their events', 'Checking the package',
     ]);
   });

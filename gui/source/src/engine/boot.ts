@@ -1,22 +1,40 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
 import { blobToDataUrl, type ChunkStore, gunzip } from './chunks';
 import type { BootStep } from '../ui/loading';
-import type { Manifest, PackageFile } from './manifest';
+import { hasExploreTable, type Manifest, type PackageFile } from './manifest';
 
 export interface Engine {
   db: duckdb.AsyncDuckDB;
   conn: duckdb.AsyncDuckDBConnection;
 }
 
-export const TABLES = ['events', 'rules', 'hits', 'alerts', 'alert_events'] as const;
+const TABLES = ['events', 'rules', 'hits', 'alerts', 'alert_events'] as const;
 
-function find(manifest: Manifest, name: string): PackageFile {
+function find(manifest: Pick<Manifest, 'files'>, name: string): PackageFile {
   const file = manifest.files.find((entry) => entry.name === name);
   if (file === undefined) throw new Error(`the package has no ${name}`);
   return file;
 }
 
-export async function bootEngine(manifest: Manifest, store: ChunkStore, step: (label: BootStep) => void): Promise<Engine> {
+export async function openTables(
+  manifest: Pick<Manifest, 'files'>,
+  read: (file: PackageFile) => Promise<Uint8Array>,
+  register: (name: string, bytes: Uint8Array) => Promise<void>,
+  query: (sql: string) => Promise<unknown>,
+): Promise<void> {
+  const tables = hasExploreTable(manifest) ? [...TABLES, 'explore'] : TABLES;
+  for (const table of tables) {
+    const file = find(manifest, `${table}.parquet`);
+    await register(file.name, await read(file));
+    if (table === 'explore') {
+      await query("CREATE VIEW explore AS SELECT *, file_row_number AS _zl_pos FROM read_parquet('explore.parquet', file_row_number=true)");
+    } else {
+      await query(`CREATE VIEW ${table} AS SELECT * FROM read_parquet('${file.name}')`);
+    }
+  }
+}
+
+export async function bootEngine(manifest: Manifest, store: ChunkStore, step: (label: BootStep) => void, loaded: (source: string) => void): Promise<Engine> {
   const wasm = await gunzip(store.take(find(manifest, 'duckdb-eh.wasm.gz')), 'application/wasm');
   // A worker started from a file:// page cannot fetch a blob: URL in Chromium
   // or WebKit, but it can read a data: URL.
@@ -58,10 +76,7 @@ export async function bootEngine(manifest: Manifest, store: ChunkStore, step: (l
   await conn.query('SET autoinstall_known_extensions = false');
   await conn.query('SET autoload_known_extensions = false');
   step('Opening the data');
-  for (const table of TABLES) {
-    const file = find(manifest, `${table}.parquet`);
-    await db.registerFileBuffer(file.name, new Uint8Array(await store.take(file).arrayBuffer()));
-    await conn.query(`CREATE VIEW ${table} AS SELECT * FROM read_parquet('${file.name}')`);
-  }
+  await openTables(manifest, (file) => store.readBytes(file, loaded),
+    (name, bytes) => db.registerFileBuffer(name, bytes), (sql) => conn.query(sql));
   return { db, conn };
 }

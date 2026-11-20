@@ -329,12 +329,6 @@ async def wait_ready(page) -> None:
         if time.monotonic() - started > 180:
             raise SystemExit('the viewer did not become ready')
         await asyncio.sleep(0.2)
-    # The full-text index loads in the background; wait for it so nothing changes mid-tour.
-    while time.monotonic() - started < 180:
-        status = await page.locator('#engine-check').get_attribute('data-text-index')
-        if status in ('ready', 'failed', 'none', 'absent', None):
-            break
-        await asyncio.sleep(0.2)
 
 
 # The storyboard. Each beat leaves the page where the next expects it.

@@ -53,6 +53,14 @@ try {
   const report = {};
   const started = performance.now();
   const base = pathToFileURL(path.resolve(directory, 'index.html')).href;
+  const manifest = readManifest();
+  const index = manifest.files.find((file) => file.kind === 'index' && file.name === 'text.parquet');
+  if (!index) throw new Error('the full-text performance scenarios need a package with an index');
+  const indexUrls = new Set(index.chunks.map((chunk) => new URL(chunk, base).href));
+  const requests = [];
+  page.on('request', (request) => {
+    if (indexUrls.has(request.url())) requests.push(request.url());
+  });
   await page.goto(`${base}#/explore`);
   await poll(page, async () => /ready|error/.test(await page.title()));
   report.ready_ms = Math.round(performance.now() - started);
@@ -60,7 +68,6 @@ try {
   await settled();
   report.first_results_ms = Math.round(performance.now() - started);
   report.events = Number(await out.getAttribute('data-count'));
-  const manifest = readManifest();
   const bytesOf = (name) => manifest.files.find((file) => file.name === name)?.bytes ?? null;
   report.events_parquet_bytes = bytesOf('events.parquet');
   report.text_parquet_bytes = bytesOf('text.parquet');
@@ -217,10 +224,21 @@ try {
   await nav('Explore');
   build = 0;
   await settled();
+  report.index_requests_before_bare_word = requests.length;
+  if (requests.length || await page.locator('#engine-check').getAttribute('data-text-index') !== 'available') {
+    throw new Error('a structured search or pivot loaded the full-text index');
+  }
+  await page.locator('#search-input').fill('whoami');
   const indexStarted = performance.now();
+  await page.locator('#search-input').press('Enter');
   await poll(page, async () => (await page.locator('#engine-check').getAttribute('data-text-index')) === 'ready');
   report.text_index_wait_ms = Math.round(performance.now() - indexStarted);
+  await settled();
+  report.first_bare_word_ms = Math.round(performance.now() - indexStarted);
   report.full_text_indexed_ms = await search('powershell');
+  if (requests.length !== indexUrls.size || new Set(requests).size !== indexUrls.size) {
+    throw new Error(`the first bare word made ${requests.length} requests for ${indexUrls.size} index chunks`);
+  }
   await page.locator('#search-input').fill('mimikatz');
   await page.locator('#search-input').press('Enter');
   await page.waitForTimeout(300);
@@ -312,6 +330,7 @@ try {
     return value !== null && value !== '';
   });
   report.overview_reload_bare_word_ms = Math.round(performance.now() - reopened);
+  if (await fresh.locator('#engine-check').getAttribute('data-text-index') !== 'ready') throw new Error('the linked word did not use the index');
   report.overview_reload_bare_word_events = Number(await fresh.locator('#overview-tiles').getAttribute('data-events'));
   console.log(JSON.stringify(report, null, 2));
 } finally {

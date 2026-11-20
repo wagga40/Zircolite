@@ -14,7 +14,7 @@ export class QueryState {
    * meanwhile would hold the engine for a minute per query on a large package. Only an index that
    * failed sends them back to the scan.
    */
-  onIndex = $derived.by(() => this.indexed && (textIndex.status === 'loading' || textIndex.status === 'ready'));
+  onIndex = $derived.by(() => this.indexed && textIndex.status !== 'absent' && textIndex.status !== 'failed');
 
   // A query from a bookmark has not been validated: an invalid one shows its
   // error in the search bar and matches nothing, never everything.

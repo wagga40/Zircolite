@@ -22,14 +22,15 @@
   import ColumnValues from './ColumnValues.svelte';
   import { applyFilter } from './header';
   import ResultHeader from './ResultHeader.svelte';
-  import { centerScroll, columnTracks, COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, positionSql, resolveSort, ROW, tableMinWidth, wheelDelta, wheelPosition, widthOf } from './table';
+  import { centerScroll, columnTracks, COUNT_SQL, ensureVisible, type ExploreCounts, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, positionSql, resolveSort, ROW, tableMinWidth, wheelDelta, wheelPosition, widthOf } from './table';
 
-  let { db, exportDb, schema, manifest, where, whereFor, columns, slow }: {
+  let { db, exportDb, schema, manifest, index, where, whereFor, columns, slow }: {
     db: Db;
     /** Outlives the view, so an export finishes and downloads after the person moves to another view; Stop still ends it. */
     exportDb: Db;
     schema: Schema;
     manifest: Manifest;
+    index?: ExploreCounts;
     where: string;
     /** The filters with another search in place of the committed one. */
     whereFor: (q: string) => string;
@@ -200,7 +201,7 @@
     void run.generation;
     // A new list is a new question; a stop belongs to the list it cancelled.
     run.stopped = false;
-    const sql = idsSql(where, view.desc, sortKey);
+    const sql = idsSql(where, view.desc, sortKey, index);
     const mine = ++build;
     busy = true;
     failure = null;

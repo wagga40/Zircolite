@@ -10,9 +10,8 @@
  * that commits and then fails to report back can therefore leave its uids in
  * the table twice when the scan resumes, and no answer changes.
  *
- * The index loads after the page is ready, and a bare word compiles onto it
- * meanwhile: a scan queued while it loads would hold the single connection for
- * a minute per query on a large package. A query that needs the index waits
+ * The first bare-word query starts loading the index. Scanning the events
+ * while it loads would hold the single connection for a minute per query on a large package. A query that needs the index waits
  * for the file, then opens the view itself, on the connection it already
  * holds; opened through the queue, the view would wait behind those queries.
  * A page of the index that cannot be read fails the index the same way, and
@@ -49,7 +48,7 @@ export interface Stop {
 /** The index file on its way to the engine. */
 export interface TextSource {
   /** Settles once the file is registered with the engine, or rejects with why it never will be. */
-  registered: Promise<void>;
+  load(): Promise<void>;
   /** The file was registered, but the engine cannot open it. */
   failed(error: unknown): void;
 }
@@ -278,7 +277,8 @@ export class TextMatches extends Matches {
   protected override async ready(stop: Stop): Promise<void> {
     const source = this.source;
     if (this.opened || source === null) return;
-    await stop.until(source.registered);
+    if (stop.cancelled()) throw stop.superseded();
+    await stop.until(source.load());
     // Given up while the file was on its way: the view can be opened by whoever asks next.
     if (stop.cancelled()) throw stop.superseded();
     try {

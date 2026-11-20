@@ -26,6 +26,16 @@ describe('ChunkStore', () => {
     expect(await store.take(file('a', 2, 6)).text()).toBe('abcdef');
   });
 
+  it('hands the engine contiguous bytes in sequence and releases the decoded chunks', () => {
+    for (const parts of [[], ['abc'], ['abc', 'd', 'ef']]) {
+      const store = new ChunkStore();
+      const f = file('a', parts.length, parts.join('').length);
+      for (let i = parts.length - 1; i >= 0; i--) store.add('a', i, btoa(parts[i]));
+      expect(new TextDecoder().decode(store.takeBytes(f))).toBe(parts.join(''));
+      if (parts.length) expect(() => store.takeBytes(f)).toThrow(/did not load/);
+    }
+  });
+
   it('reports a chunk that is not base64 as the cause', () => {
     const store = new ChunkStore();
     store.add('a', 0, '***not base64***');

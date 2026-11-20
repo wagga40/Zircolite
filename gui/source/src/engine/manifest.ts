@@ -56,3 +56,7 @@ export interface Manifest {
   warnings: string[];
   files: PackageFile[];
 }
+
+export function hasExploreTable(manifest: Pick<Manifest, 'files'>): boolean {
+  return manifest.files.some((file) => file.kind === 'data' && file.name === 'explore.parquet');
+}

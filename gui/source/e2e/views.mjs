@@ -577,8 +577,8 @@ async function scenario(page, open, steps, expectedText, expectedStarts) {
 
     await nav(page, 'Explore');
     await reopened(page, state);
-    await poll(page, async () => (await page.locator('#engine-check').getAttribute('data-text-index')) === 'ready', 'the full-text index', 240_000);
     const found = await search(page, state, WORD);
+    await poll(page, async () => (await page.locator('#engine-check').getAttribute('data-text-index')) === 'ready', 'the full-text index', 240_000);
     check(found.count === expectedText, `"${WORD}" finds ${found.count} events through the index; a scan finds ${expectedText}`);
     steps.push('full text through the index equals a scan');
   } else {

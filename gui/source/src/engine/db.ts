@@ -11,7 +11,7 @@ export interface Db {
   cancel(lane?: string): void;
   /** Make bytes readable to the engine under a file name, as the boot does for the tables. */
   register(name: string, bytes: Uint8Array): Promise<void>;
-  /** The full-text index is on its way: queries that read it wait for it, and the first opens its view. */
+  /** The first bare-word query loads the full-text index and opens its view. */
   useTextIndex(source: TextSource): void;
   /**
    * A Db whose lanes are all named `name:lane`, for one view or panel. The page has one connection,
