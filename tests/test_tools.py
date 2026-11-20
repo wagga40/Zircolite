@@ -100,23 +100,33 @@ def test_benchmark_export_matrix_and_warmup(tmp_path, monkeypatch):
 
 
 def test_benchmark_can_launch_old_checkout_with_its_own_venv(tmp_path, monkeypatch):
+    import venv
+
     benchmark = load_tool("throughput-benchmark")
-    baseline_python = tmp_path / "baseline-python"
-    baseline_python.symlink_to(sys.executable)
+    old_env = tmp_path / "old-env"
+    venv.EnvBuilder(with_pip=False).create(old_env)
+    baseline_python = (old_env / "Scripts/python.exe") if os.name == "nt" else (old_env / "bin/python")
+    baseline_root = tmp_path / "baseline"
+    baseline_root.mkdir()
+    (baseline_root / "zircolite.py").touch()
     commands = []
 
     def measure(command, *args, **kwargs):
-        commands.append(command[:2])
+        commands.append((command[0], kwargs["cwd"]))
         return {"seconds": 1, "peak_rss_mib": 1, "matches": 0, "fingerprint": "empty",
                 "export_records": 0, "export_fingerprint": "empty"}
 
     monkeypatch.setattr(benchmark, "measure", measure)
     monkeypatch.setattr(sys, "argv", ["throughput-benchmark.py", "--event-count", "1", "--files", "1",
         "--passes", "1", "--modes", "auto", "--variants", "baseline", "current",
-        "--baseline-root", str(WORKSPACE_ROOT), "--baseline-python", str(baseline_python),
+        "--baseline-root", str(baseline_root), "--baseline-python", str(baseline_python),
         "--report", str(tmp_path / "report.json")])
     assert benchmark.main() == 0
-    assert [command[0] for command in commands] == [str(baseline_python), sys.executable]
+    assert commands == [(str(baseline_python), baseline_root), (sys.executable, WORKSPACE_ROOT)]
+    runtimes = json.loads((tmp_path / "report.json").read_bytes())["runtimes"]
+    assert runtimes["baseline"]["libraries"]["duckdb"] is None
+    assert runtimes["current"]["libraries"]["duckdb"] == importlib.metadata.version("duckdb")
+    assert runtimes["current"]["sqlite"] == runtimes["baseline"]["sqlite"]
 
 
 def test_benchmark_export_fingerprint_detects_changed_content(tmp_path):

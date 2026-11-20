@@ -141,6 +141,21 @@ def fingerprint(path):
     return count, f"{digest_sum:064x}"
 
 
+def runtime_versions(python, cwd):
+    """Use the requested interpreter, even when an older checkout lacks a dependency."""
+    describe = """import importlib.metadata as metadata, json, sqlite3, sys
+libraries = {}
+for name in sys.argv[1:]:
+    try:
+        libraries[name] = metadata.version(name)
+    except metadata.PackageNotFoundError:
+        libraries[name] = None
+print(json.dumps({"python": sys.version, "sqlite": sqlite3.sqlite_version, "libraries": libraries}))
+"""
+    names = ("PyYAML", "pyahocorasick", "pyroaring", "evtx", "orjson", "duckdb", "pysigma", "pysigma-backend-sqlite")
+    return json.loads(subprocess.check_output([python, "-c", describe, *names], cwd=cwd))  # noqa: S603 -- measured interpreter
+
+
 def source_fingerprint(root):
     digest = hashlib.sha256()
     for path in sorted((root / "zircolite").glob("*.py")):
@@ -322,10 +337,10 @@ def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, package_dir=None, env=
     return code, elapsed, peak, "process-tree" if tree_access else "parent-only", disk_peak
 
 
-def measure(command, output, log, *, temp_dir=None, performance_path=None,
+def measure(command, output, log, *, cwd=ROOT, temp_dir=None, performance_path=None,
             export="json", artifact=None, env=None, verified_tables=None):
     code, elapsed, peak, rss_scope, disk_peak = run_sampled(
-        command, log, temp_dir=temp_dir, package_dir=artifact if export == "package" else None, env=env)
+        command, log, cwd=cwd, temp_dir=temp_dir, package_dir=artifact if export == "package" else None, env=env)
     if code:
         raise RuntimeError(f"CLI exited {code}: {log.read_text(errors='replace')[-4000:]}")
     count, digest = export_fingerprint("csv" if export == "csv" else "json", output, detections_only=True)
@@ -473,7 +488,7 @@ def main():
                     command.extend(["--executor", mode, "--parallel-workers", str(args.workers)])
                 if args.scenario == "transforms" and not args.events:
                     command.append("--all-transforms")
-                run = measure(command, output, log, temp_dir=working, performance_path=metrics_path,
+                run = measure(command, output, log, cwd=cli_root, temp_dir=working, performance_path=metrics_path,
                               export=export, artifact=artifact, env=env, verified_tables=verified_tables)
                 if args.scenario in ("evtx-derived", "linux") and not args.events and not run["matches"]:
                     raise RuntimeError("Known-positive generated corpus produced no detections")
@@ -511,13 +526,10 @@ def main():
             report["ijson"] = importlib.metadata.version("ijson")
         except importlib.metadata.PackageNotFoundError:
             report["ijson"] = None
-        report["libraries"] = {}
-        for name in ("PyYAML", "pyahocorasick", "pyroaring", "evtx", "orjson", "duckdb",
-                     "pysigma", "pysigma-backend-sqlite"):
-            try:
-                report["libraries"][name] = importlib.metadata.version(name)
-            except importlib.metadata.PackageNotFoundError:
-                report["libraries"][name] = None
+        report["runtimes"] = {"current": runtime_versions(sys.executable, ROOT)}
+        report["libraries"] = report["runtimes"]["current"]["libraries"]
+        if "baseline" in args.variants:
+            report["runtimes"]["baseline"] = runtime_versions(report["baseline_python"], args.baseline_root)
         report_path = args.report
         if report_path is None:
             with tempfile.NamedTemporaryFile(prefix="zircolite-benchmark-", suffix=".json", delete=False) as saved:
