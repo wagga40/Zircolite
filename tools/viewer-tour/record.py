@@ -331,6 +331,25 @@ async def wait_ready(page) -> None:
         await asyncio.sleep(0.2)
 
 
+async def warm_text_index(page) -> None:
+    """Loads the full-text index before the recording, so no search beat waits for it mid-tour.
+
+    The index loads on the first bare-word search, and stays loaded for the next ones.
+    """
+    await page.evaluate('location.hash = "#/explore?q=powershell"')
+    started = time.monotonic()
+    while True:
+        status = await page.locator('#engine-check').get_attribute('data-text-index')
+        if status in ('ready', 'failed', 'absent'):
+            break
+        if time.monotonic() - started > 180:
+            raise SystemExit('the full-text index did not load')
+        await asyncio.sleep(0.2)
+    print(f'full-text index: {status}')
+    await page.evaluate('location.hash = "#/overview"')
+    await page.wait_for_timeout(1000)
+
+
 # The storyboard. Each beat leaves the page where the next expects it.
 
 async def overview(t: Tour) -> None:
@@ -658,6 +677,7 @@ async def main() -> None:
         page = await context.new_page()
         await page.goto(url + '#/overview')
         await wait_ready(page)
+        await warm_text_index(page)
         tour = Tour(page, work, args.dry)
         await page.mouse.move(*REST)
         await asyncio.sleep(0.5)
