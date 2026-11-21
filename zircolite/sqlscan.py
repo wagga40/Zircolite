@@ -23,6 +23,7 @@ same questions of the same statements once per input file.
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any
 
 # Opening delimiter -> its closer. Only ``'`` introduces a string literal; the
 # rest quote identifiers, which is why they are told apart below.
@@ -719,6 +720,7 @@ def clear_scan_cache() -> None:
     """Drop every memoised scan and normalisation. For tests and long-lived library callers."""
     _SCANS.clear()
     _NORMALIZED.clear()
+    _CENSUS_BOUNDS.clear()
 
 
 def _constraints(queries: list[str], field: str) -> set | None:
@@ -751,6 +753,55 @@ def admitted_pairs(sql: str, pairs: Iterable[tuple]) -> list[tuple] | None:
     eventids = scan.eventids
     return [pair for pair in pairs
             if (channels is None or pair[0] in channels) and (eventids is None or pair[1] in eventids)]
+
+
+# Keyed by statement text like _SCANS. Per-file runs ask for every rule on
+# every file, so the folded form is kept rather than rebuilt each time.
+_CENSUS_BOUNDS: dict[str, tuple[frozenset | None, frozenset | None] | None] = {}
+
+
+def census_bounds(sql: str) -> tuple[frozenset | None, frozenset | None] | None:
+    """``sql``'s ``(channels, eventids)`` bounds, channels lower-cased, for ``CensusIndex``.
+
+    None when the statement must run whatever the census holds: it is not a
+    plain row-preserving SELECT, or neither field bounds it.
+    """
+    try:
+        return _CENSUS_BOUNDS[sql]
+    except KeyError:
+        pass
+    scan = scan_query(sql)
+    bounds = None
+    if scan.row_preserving and (scan.channels is not None or scan.eventids is not None):
+        bounds = (None if scan.channels is None else frozenset(channel.lower() for channel in scan.channels),
+                  scan.eventids)
+    _CENSUS_BOUNDS[sql] = bounds
+    return bounds
+
+
+class CensusIndex:
+    """``(channel, eventid)`` pairs arranged so bounds are checked with set operations.
+
+    ``admits(census_bounds(sql))`` is true exactly when ``admitted_pairs(sql, pairs)``
+    returns a non-empty list. Channels must already be lower-cased.
+    """
+
+    __slots__ = ("by_channel", "eventids")
+
+    def __init__(self, pairs: Iterable[tuple]) -> None:
+        self.by_channel: dict[Any, set] = {}
+        for channel, eventid in pairs:
+            self.by_channel.setdefault(channel, set()).add(eventid)
+        self.eventids: set = set().union(*self.by_channel.values())
+
+    def admits(self, bounds: tuple[frozenset | None, frozenset | None]) -> bool:
+        channels, eventids = bounds
+        if channels is None:
+            return eventids is not None and not eventids.isdisjoint(self.eventids)
+        present = channels & self.by_channel.keys()
+        if eventids is None:
+            return bool(present)
+        return any(not eventids.isdisjoint(self.by_channel[channel]) for channel in present)
 
 
 def eventid_constraints(queries: list[str]) -> set[int] | None:

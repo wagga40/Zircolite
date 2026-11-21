@@ -3096,6 +3096,44 @@ class TestBatchSizeReachesTheProcessor:
             core.close()
 
 
+class TestCensusIndex:
+    """``CensusIndex.admits`` must agree with ``admitted_pairs`` on every statement."""
+
+    def test_agrees_with_admitted_pairs_on_the_shipped_ruleset(self):
+        from zircolite.sqlscan import CensusIndex, admitted_pairs, census_bounds, scan_query
+
+        rules = json.loads((Path(__file__).parent.parent / "rules" / "rules_windows_merged.json").read_text())
+        statements = sorted({sql for rule in rules for sql in rule.get("rule") or () if isinstance(sql, str)})
+        bounded = [sql for sql in statements if census_bounds(sql) is not None]
+        assert len(bounded) > 1000
+        censuses = [
+            {("security", 4624): 3, ("security", 4688): 1},
+            {("microsoft-windows-sysmon/operational", 1): 5, ("microsoft-windows-sysmon/operational", 3): 2},
+            {(None, 4104): 1, ("windows powershell", 400): 2, ("system", 7045): 1},
+            {(None, None): 4},
+            {("security", None): 1, ("security", "abc"): 1, ("application", 1.5): 1},
+            {("microsoft-windows-powershell/operational", 4104): 1, (None, 1): 1, ("security", 4688): 1},
+        ]
+        for census in censuses:
+            index = CensusIndex(census)
+            for sql in statements:
+                bounds = census_bounds(sql)
+                expected = admitted_pairs(sql, census)
+                if bounds is None:
+                    assert expected is None or not scan_query(sql).row_preserving, sql
+                else:
+                    assert index.admits(bounds) is bool(expected), (sql, census)
+
+    def test_empty_bounds_admit_nothing(self):
+        from zircolite.sqlscan import CensusIndex
+
+        index = CensusIndex({("security", 4624): 1})
+        assert index.admits((frozenset(), None)) is False
+        assert index.admits((None, frozenset())) is False
+        assert index.admits((frozenset({"security"}), frozenset())) is False
+        assert index.admits((frozenset({"security"}), frozenset({4624}))) is True
+
+
 class TestRuleCensus:
     """Rules that cannot match the database's log sources are not executed.
 

@@ -74,7 +74,8 @@ from .shutdown import is_shutdown_requested
 from .spellings import FieldSpellings, drop_spellings
 from .sqlscan import (
     _ASCII_LOWER,
-    admitted_pairs,
+    CensusIndex,
+    census_bounds,
     census_collations_supported,
     normalize_rule_sql,
     rebalance_sql,
@@ -188,7 +189,7 @@ def _index_name_for(column: str) -> str:
     return "idx_" + column.replace(".", "_")
 
 
-def _rule_may_match(rule: dict[str, Any], census: dict[tuple, int]) -> bool:
+def _rule_may_match(rule: dict[str, Any], census: CensusIndex) -> bool:
     """False only when no statement of ``rule`` can match a pair in ``census``.
 
     The bounds are the ones EventFilter already trusts to drop events before
@@ -199,10 +200,10 @@ def _rule_may_match(rule: dict[str, Any], census: dict[tuple, int]) -> bool:
     if rule.get("correlation") or not isinstance(queries, list):
         return True
     for sql in queries:
-        if not isinstance(sql, str) or not scan_query(sql).row_preserving:
+        if not isinstance(sql, str):
             return True
-        admitted = admitted_pairs(sql, census)
-        if admitted is None or admitted:
+        bounds = census_bounds(sql)
+        if bounds is None or census.admits(bounds):
             return True
     return False
 
@@ -1611,7 +1612,11 @@ class ZircoliteCore:
         # A rule whose Channel/EventID bounds miss every pair in this database
         # cannot match, so it is neither prepared nor handed to the prefilter.
         census = self._log_source_census()
-        may_run = [census is None or _rule_may_match(rule, census) for rule in self.ruleset]
+        if census is None:
+            may_run = [True] * len(self.ruleset)
+        else:
+            census_index = CensusIndex(census)
+            may_run = [_rule_may_match(rule, census_index) for rule in self.ruleset]
         pruned = may_run.count(False)
         self.metrics.data["pruned_rules"] += pruned
         if pruned:
