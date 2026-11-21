@@ -45,6 +45,7 @@ from RestrictedPython.Guards import guarded_iter_unpack_sequence, safer_getattr
 
 from .config import ProcessingConfig
 from .console import literal
+from .evtx_slices import EvtxSlice, SliceReader
 from .formats import (
     DEFAULT_INPUT_FORMAT,
     NON_WINDOWS_INPUT_FLAGS,
@@ -1573,8 +1574,12 @@ class StreamingEventProcessor:
         return min(done, total), total
 
     def stream_evtx_events(self, evtx_file: str) -> Generator[dict, None, None]:
-        """Stream and flatten events from an EVTX file (supports .evtx inside .gz/.bz2/.zip/.7z)."""
+        """Stream and flatten events from an EVTX file (supports .evtx inside .gz/.bz2/.zip/.7z).
+
+        ``evtx_file`` may also be an ``EvtxSlice``, read through ``SliceReader``.
+        """
         tmp_path = None
+        slice_source = None
         try:
             filepath = Path(evtx_file)
             filename = filepath.name
@@ -1603,13 +1608,19 @@ class StreamingEventProcessor:
                                 os.unlink(tmp_path)
                         raise
 
-            parser = (PyEvtxParser(path_to_parse, number_of_threads=self.evtx_threads)
-                      if self.evtx_threads is not None else PyEvtxParser(path_to_parse))
+            if isinstance(evtx_file, EvtxSlice):
+                slice_source = SliceReader(evtx_file)
+            source: Any = slice_source if slice_source is not None else path_to_parse
+            parser = (PyEvtxParser(source, number_of_threads=self.evtx_threads)
+                      if self.evtx_threads is not None else PyEvtxParser(source))
             flatten = self._flatten_event  # Local reference for speed
             json_loads = json.loads
             should_process = self._should_process_event  # Local reference for speed
-            from .parallel import evtx_record_count
-            self._input_total = evtx_record_count(path_to_parse)
+            if isinstance(evtx_file, EvtxSlice):
+                self._input_total = evtx_file.records
+            else:
+                from .parallel import evtx_record_count
+                self._input_total = evtx_record_count(path_to_parse)
 
             for record in parser.records_json():
                 self._records_read += 1
@@ -1659,6 +1670,8 @@ class StreamingEventProcessor:
                 "recovered events before the error were kept (use [cyan]--strict[/] to abort on parse errors)[/]"
             )
         finally:
+            if slice_source is not None:
+                slice_source.close()
             if tmp_path and os.path.exists(tmp_path):
                 with contextlib.suppress(OSError):
                     os.unlink(tmp_path)
@@ -1965,7 +1978,7 @@ class StreamingEventProcessor:
     def process_file_streaming(
         self,
         db_connection,
-        log_file: str,
+        log_file: "str | EvtxSlice",
         input_type: str = "evtx",
         extractor: Optional["EvtxExtractor"] = None,
         json_array: bool = False,
@@ -2020,6 +2033,15 @@ class StreamingEventProcessor:
         event_count = 0
         cursor = db_connection.cursor()
         insert_batch = self._insert_batch
+
+        # A slice numbers its rows after the slices before it. The table hands
+        # out the ID after the largest one, so a placeholder row at the base
+        # starts them there; it goes once the slice is read.
+        placeholder = log_file.row_id_base if isinstance(log_file, EvtxSlice) and log_file.row_id_base else None
+        if placeholder is not None:
+            cursor.execute("INSERT INTO logs (row_id) VALUES (?)", (placeholder,))
+            if db_connection.in_transaction:
+                db_connection.commit()
 
         # Events already committed when a later batch fails. Reporting 0 for
         # the whole file would contradict the rows rules then match against.
@@ -2079,6 +2101,10 @@ class StreamingEventProcessor:
             )
             return inserted_count
         finally:
+            if placeholder is not None:
+                cursor.execute("DELETE FROM logs WHERE row_id = ?", (placeholder,))
+                if db_connection.in_transaction:
+                    db_connection.commit()
             cursor.close()
             self._input = None
             self._input_total = 0

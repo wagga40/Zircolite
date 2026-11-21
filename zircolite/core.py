@@ -56,6 +56,7 @@ from .correlations import (
     is_correlation_plan_rule,
     plan_problem,
 )
+from .evtx_slices import EvtxSlice
 from .formats import json_array_requested
 from .fulltext import (
     FIELD,
@@ -283,6 +284,8 @@ class ZircoliteCore:
         "progress",
         "remove_index",
         "rounded_integer_fields",
+        # Position in ``ruleset`` of the rule running, for result sinks
+        "rule_index",
         "rule_prefilter",
         "rules_in_error",
         "ruleset",
@@ -354,6 +357,7 @@ class ZircoliteCore:
             raise
         self.full_results: list = []
         self.ruleset: list = []
+        self.rule_index = -1
         self._has_correlation_plans = False
         # Per execute_ruleset call: correlation title -> diagnostic counts
         self._correlation_diagnostics: dict[str, dict[str, int]] = {}
@@ -1782,6 +1786,7 @@ class ZircoliteCore:
                     if may_run[i]:
                         if is_shutdown_requested():
                             break
+                        self.rule_index = i
                         rule_results = run_rule(rule)
 
                     try:
@@ -2159,7 +2164,7 @@ class ZircoliteCore:
 
                 event_count = processor.process_file_streaming(
                     self.db_connection,
-                    str(log_file),
+                    log_file if isinstance(log_file, EvtxSlice) else str(log_file),
                     input_type=input_type,
                     extractor=extractor,
                     json_array=json_array,

@@ -54,6 +54,7 @@ from .console import (
     sort_key_severity,
 )
 from .core import ZircoliteCore
+from .evtx_slices import EvtxSlice, plan_slices
 from .exports import ExportError, ExportPart, ExportPartRecord, ExportSpool
 from .extractor import EvtxExtractor
 from .formats import format_by_name
@@ -61,8 +62,9 @@ from .package_spool import PackageError, PackageSpool, PartRecord, PartWriter
 from .parallel import MemoryAwareParallelProcessor, ParallelConfig
 from .performance import FileMetrics
 from .progress import BoardSlot, Reporter, Steps, WorkerBoard
-from .results import RowSpool, result_summary, write_result_json
+from .results import RowSpool, merge_result_spools, result_summary, write_result_json
 from .shutdown import SharedFlag, is_shutdown_requested, set_worker_shutdown_event
+from .sqlscan import scan_query
 from .timeline import TimelineError, TimelinePart, TimelinePartRecord, TimelineSpool
 from .utils import (
     MemoryTracker,
@@ -1052,7 +1054,7 @@ def process_db_input(
 # ============================================================================
 
 def process_single_file_worker(
-    log_file: Path,
+    log_file: Path | EvtxSlice,
     ctx: ProcessingContext,
     input_type: str,
     extractor: EvtxExtractor | None,
@@ -1076,7 +1078,8 @@ def process_single_file_worker(
     ``progress_board``, the worker reports each step of the file in its slot:
     ``progress_slot`` for a process worker, its thread's number otherwise.
     """
-    file_name = Path(log_file).name
+    sliced = isinstance(log_file, EvtxSlice)
+    file_name = log_file.name if sliced else Path(log_file).name
     metrics = FileMetrics()
     metrics.data["sources"] = [str(log_file)]
     package_part: PartWriter | None = None
@@ -1171,11 +1174,17 @@ def process_single_file_worker(
         else:
             output = None
         first = True
+        # Per result of a slice: (rule position, summary, matches offset, length)
+        # in the spool, which is how the main process merges a file's slices.
+        result_index: list[tuple[int, dict[str, Any], int, int]] = []
 
         def receive(result):
             nonlocal first, csv_rows
-            file_results.append(result_summary(result))
+            summary = result_summary(result)
+            file_results.append(summary)
             if output is None:
+                if sliced:
+                    result_index.append((core.rule_index, summary, 0, 0))
                 return
             if csv_spooled:
                 metadata = _csv_metadata(result)
@@ -1186,7 +1195,10 @@ def process_single_file_worker(
             else:
                 if not first:
                     output.write(b",\n")
-                write_result_json(output.write, result)
+                start = output.tell()
+                head, body = write_result_json(output.write, result)
+                if sliced:
+                    result_index.append((core.rule_index, summary, start + head, body))
                 first = False
 
         timeline_spool = _timeline_spool_for(ctx)
@@ -1213,9 +1225,10 @@ def process_single_file_worker(
         if not spool_output:
             file_results = list(core.full_results)
         package_record, finish_error = _finish_package_part(package_part)
-        timeline_record, timeline_finish_error = _finish_timeline_part(timeline_part, [str(log_file)])
+        # The timeline counts duplicates per source file, so a slice reports its file.
+        timeline_record, timeline_finish_error = _finish_timeline_part(timeline_part, [os.fspath(log_file)])
         timeline_part = None
-        export_record, export_finish_error = _finish_export_part(export_part, [str(log_file)])
+        export_record, export_finish_error = _finish_export_part(export_part, [os.fspath(log_file)])
         export_part = None
         summary = {
             "name": file_name,
@@ -1240,6 +1253,9 @@ def process_single_file_worker(
             "export_part": export_record,
             "export_error": export_finish_error,
         }
+        if isinstance(log_file, EvtxSlice):
+            summary["slice"] = (log_file.path, log_file.index, log_file.count)
+            summary["result_index"] = result_index
         if degraded:
             metrics.data["status"] = "partial"
             summary["error"] = (
@@ -1458,6 +1474,57 @@ def _write_csv_results(
                 )
 
 
+def _slicing_allowed(ctx: ProcessingContext, input_type: str) -> bool:
+    """Whether big EVTX inputs may be split into slices (see ``evtx_slices``).
+
+    A slice is a working database of its own. Whatever is defined per database
+    (``--limit``, ``--dbfile``, a rule that aggregates rows or correlates
+    events), or lists rows in file order before the main process could merge
+    them (CSV, ``--keepflat``, retained matches), keeps each file whole.
+    """
+    if (input_type != "evtx" or ctx.csv_mode or ctx.retain_results
+            or ctx.limit != -1 or ctx.dbfile or ctx.keepflat):
+        return False
+    for rule in ctx.rulesets or ():
+        queries = rule.get("rule")
+        if rule.get("correlation") or rule.get("correlation_plan") or not isinstance(queries, list):
+            return False
+        if not all(isinstance(sql, str) and scan_query(sql).row_preserving for sql in queries):
+            return False
+    return True
+
+
+def _work_items(ctx: ProcessingContext, input_type: str, file_list: list[Path]) -> list[Any]:
+    """``file_list``, each EVTX file of at least two slices' worth replaced by its slices."""
+    if not _slicing_allowed(ctx, input_type):
+        return list(file_list)
+    items: list[Any] = []
+    for path in file_list:
+        items.extend(plan_slices(path) or [path])
+    return items
+
+
+def _merge_slices(group: list[dict | None], spool_dir: str | None) -> dict[str, Any]:
+    """One file's result from its slices' results, as if it had been one database."""
+    present = [item for item in group if isinstance(item, dict)]
+    path = present[0]["slice"][0]
+    destination = None
+    if spool_dir is not None and any(item.get("result_path") for item in present):
+        fd, destination = tempfile.mkstemp(dir=spool_dir, suffix=".json")
+        os.close(fd)
+    summaries = merge_result_spools(
+        [(item.get("result_path"), item.get("result_index") or ()) for item in present], destination)
+    return {
+        "name": Path(path).name,
+        "path": path,
+        "results": summaries,
+        "events": sum(item.get("events", 0) for item in present),
+        "filtered": sum(item.get("filtered", 0) for item in present),
+        "time_filtered": sum(item.get("time_filtered", 0) for item in present),
+        "result_path": destination,
+    }
+
+
 def process_parallel_streaming(
     ctx: ProcessingContext,
     file_list: list[Path],
@@ -1486,10 +1553,13 @@ def process_parallel_streaming(
     if len(file_list) < 2:
         return process_perfile_streaming(ctx, file_list, input_type, extractor, args)
 
+    # What the workers process: files, and slices of the biggest EVTX files.
+    work_list = _work_items(ctx, input_type, file_list)
+
     if ctx.package_spool is not None:
         # Set before the payload is captured below: process workers get a copy.
-        ctx.package_spool.part_of = {str(path): index for index, path in enumerate(file_list)}
-        if len(ctx.package_spool.part_of) != len(file_list):
+        ctx.package_spool.part_of = {str(item): index for index, item in enumerate(work_list)}
+        if len(ctx.package_spool.part_of) != len(work_list):
             quit_on_error("[red]    [-] Two inputs resolve to the same path; a package needs one part per file[/]",
                           ctx.logger)
 
@@ -1513,7 +1583,7 @@ def process_parallel_streaming(
     )
 
     # Give each file worker a share of the native parser CPU budget.
-    worker_count = processor.calculate_optimal_workers(file_list)
+    worker_count = processor.calculate_optimal_workers(work_list)
     if ctx.package_spool is not None:
         ctx.package_spool.concurrent_writers = worker_count
     ctx.evtx_threads = max(1, (os.cpu_count() or 1) // worker_count)
@@ -1534,7 +1604,8 @@ def process_parallel_streaming(
                     # The owning TemporaryDirectory retries cleanup on exit.
                     ctx.logger.debug(f"Could not remove completed worker spool: {exc}")
 
-    def _on_file_complete(file_data) -> None:
+    def _collect_database(file_data) -> None:
+        """What each working database contributes, a slice's included."""
         if not isinstance(file_data, dict):
             return
         if file_data.get("performance"):
@@ -1545,6 +1616,15 @@ def process_parallel_streaming(
         if process_mode:
             total_filtered_count[0] += file_data.get("filtered", 0)
             total_filtered_count[1] += file_data.get("time_filtered", 0)
+
+    def _on_file_complete(file_data) -> None:
+        _collect_database(file_data)
+        _collect_file(file_data)
+
+    def _collect_file(file_data) -> None:
+        """What a whole input file contributes; for a sliced file, its merged result."""
+        if not isinstance(file_data, dict):
+            return
         result_path = file_data.get("result_path")
         if result_path and ctx.retain_results:
             with open(result_path, "rb") as source:
@@ -1575,7 +1655,7 @@ def process_parallel_streaming(
     # falls back to _write_csv_results which collects all columns first.
     use_incremental = not ctx.csv_mode
     board = None
-    progress_files = {str(path): index for index, path in enumerate(file_list)}
+    progress_files = {str(item): index for index, item in enumerate(work_list)}
     if not is_quiet():
         # More slots than workers costs a few integers, and the pool may
         # start more workers than counted above once memory is measured again,
@@ -1626,17 +1706,44 @@ def process_parallel_streaming(
         with ctx.memory_tracker.sampling() if process_mode else nullcontext():
             if use_incremental:
                 with _IncrementalResultWriter(ctx) as writer:
+                    # Slices of a file wait here until the last one arrives.
+                    pending_slices: dict[str, list[dict | None]] = {}
 
-                    def _on_result(file_data) -> None:
+                    def _write_file(file_data) -> None:
                         try:
                             with ctx.parent_metrics.stage("output"):
-                                _on_file_complete(file_data)
+                                _collect_file(file_data)
                                 writer.write_file_results(file_data)
                         finally:
                             _discard_file_spools(file_data)
 
+                    def _write_merged(group: list[dict | None]) -> None:
+                        try:
+                            with ctx.parent_metrics.stage("output"):
+                                merged = _merge_slices(group, spool_dir if spool_results else None)
+                        finally:
+                            for item in group:
+                                _discard_file_spools(item)
+                        _write_file(merged)
+
+                    def _on_result(file_data) -> None:
+                        sliced = file_data.get("slice") if isinstance(file_data, dict) else None
+                        if sliced is None:
+                            with ctx.parent_metrics.stage("output"):
+                                _collect_database(file_data)
+                            _write_file(file_data)
+                            return
+                        path, index, count = sliced
+                        group = pending_slices.setdefault(path, [None] * count)
+                        group[index] = file_data
+                        with ctx.parent_metrics.stage("output"):
+                            _collect_database(file_data)
+                        if all(item is not None for item in group):
+                            del pending_slices[path]
+                            _write_merged(group)
+
                     results_list, stats = processor.process_files_parallel(
-                        file_list,
+                        work_list,
                         worker,
                         desc="Processing",
                         disable_progress=is_quiet(),
@@ -1644,6 +1751,10 @@ def process_parallel_streaming(
                         board=board,
                         **process_options,
                     )
+                    # A slice whose worker died never reports: its file still
+                    # gets what the other slices found.
+                    for path in list(pending_slices):
+                        _write_merged(pending_slices.pop(path))
             else:
                 def _on_csv_result(file_data):
                     try:
@@ -1653,7 +1764,7 @@ def process_parallel_streaming(
                         _discard_file_spools(file_data)
 
                 results_list, stats = processor.process_files_parallel(
-                    file_list,
+                    work_list,
                     worker,
                     desc="Processing",
                     disable_progress=is_quiet(),

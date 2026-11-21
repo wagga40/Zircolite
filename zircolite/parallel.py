@@ -39,6 +39,7 @@ from rich.progress import (
 
 from .console import console, literal
 from .detector import EVTX_MAGIC
+from .evtx_slices import CHUNK_MAGIC, CHUNK_SIZE, HEADER_SIZE, MAX_CHUNK_RECORDS
 from .progress import WorkerBoard, show_board, worker_progress
 from .shutdown import is_shutdown_requested
 from .utils import cgroup_memory, estimate_input_size, visible_memory
@@ -117,12 +118,10 @@ def all_plain_evtx(paths: Sequence[Path | str]) -> bool:
     return bool(paths) and all(is_plain_evtx(path) for path in paths)
 
 
-_EVTX_HEADER_SIZE = 4096
-_EVTX_CHUNK_SIZE = 65536
-_EVTX_CHUNK_MAGIC = b"ElfChnk\x00"
-# A record takes 24 bytes at the very least, so a chunk header claiming more
-# than this describes no records: unused chunks carry such numbers.
-_MAX_CHUNK_RECORDS = _EVTX_CHUNK_SIZE // 24
+_EVTX_HEADER_SIZE = HEADER_SIZE
+_EVTX_CHUNK_SIZE = CHUNK_SIZE
+_EVTX_CHUNK_MAGIC = CHUNK_MAGIC
+_MAX_CHUNK_RECORDS = MAX_CHUNK_RECORDS
 
 
 def evtx_record_count(path: Path | str, limit: int | None = None) -> int:
@@ -578,7 +577,8 @@ class MemoryAwareParallelProcessor:
         start_time = time.time()
         self.stats = ParallelStats()
         # The board names a file by its place in the list as given, before sorting.
-        shown = [_truncate_filename(Path(path).name) for path in file_list]
+        # A slice of a file (evtx_slices.EvtxSlice) names itself with its position.
+        shown = [_truncate_filename(getattr(path, "name", None) or Path(path).name) for path in file_list]
         names = [literal(name) for name in shown]
         position = {str(path): index for index, path in enumerate(file_list)}
         finished: set[int] = set()
@@ -689,7 +689,9 @@ class MemoryAwareParallelProcessor:
                         try:
                             event_count, result = future.result()
                             self.stats.total_events += event_count
-                            self.stats.processed_files += 1
+                            # A file split into slices counts once, by its last one.
+                            if getattr(file_path, "index", 0) == getattr(file_path, "count", 1) - 1:
+                                self.stats.processed_files += 1
                             if result is not None:
                                 results.append(result)
 

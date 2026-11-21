@@ -479,7 +479,11 @@ def estimate_input_size(path: Path | str) -> int:
 
     gzip's trailer is modulo 2**32 and bzip2 has no expanded-size header, so
     their estimates remain heuristic. Runtime memory throttling still applies.
+    A slice of an EVTX file (``evtx_slices.EvtxSlice``) counts its own chunks.
     """
+    sliced = getattr(path, "input_size", None)
+    if sliced is not None:
+        return sliced
     p = Path(path)
     try:
         size = os.path.getsize(path)

@@ -212,6 +212,44 @@ takes a lock every process shares. With ten workers those checks queued for most
 detection time; on 1,692 EVTX files, removing them took four workers from 68 to 44 s. Compressed sizes feed scheduling estimates
 only; runtime memory throttling still applies.
 
+### Slices of large EVTX files
+
+A parallel per-file run is only as fast as its biggest file, and holds that file's whole
+database in one worker. `evtx_slices.py` splits a plain EVTX file holding at least two
+slices' worth of records (131,072) into slices of about 65,536 records. Chunks are
+self-contained, so a slice is the file header, rewritten to count the slice's chunks,
+followed by those chunks, read in place through a file-like object. Slices follow the
+parser's order: it starts at the chunk holding the lowest record number and wraps around
+the end of the file, where a circular log keeps its oldest events. The size is a record
+count, never a worker count, because a column takes its type from the first value it
+receives and the cut must not depend on the machine.
+
+- **Row IDs** stay unique and increasing within a file, but are not consecutive. Each
+  slice starts after the record count of the slices before it, read from the chunk
+  headers, with room for a full chunk where a header cannot be trusted. Events the
+  [event filter](#event-filter-bounds) drops leave gaps.
+- **Detections** list each rule once per file, as an unsliced file would. Each worker
+  returns the position of every result in its spool. When a file's last slice is done,
+  the main process copies each rule's matches from every slice, in slice order, under one
+  entry whose count is their sum, without parsing a row.
+- **Per database, not per file:** `--performance-json` lists each slice as
+  `file [n/total]`, and `--package` stores each slice as a part. The timeline counts its
+  duplicates by file, so a slice reports the file it came from.
+- **Kept whole** where a database boundary would show or rows would have to be merged
+  in file order: rulesets with a rule that aggregates rows or correlates events, `--limit`,
+  `--dbfile`, `--keepflat`, CSV output, templates that need every match, unified and
+  sequential runs, and compressed EVTX.
+
+Measured on a 10-core M1 Max against the same code with slicing turned off:
+- T001 (eight EVTX files, 1.72 million events) went from 25.5 to 19.3 s, and its peak
+  memory from 9.1 to 6.2 GiB.
+- BHG (1,692 files, the largest holding 1.34 million events) went from 42.3 to 21.6 s,
+  and from 4.6 to 2.3 GiB.
+
+The detections were identical by rule, channel, computer and record ID. A corpus of medium files can use
+more workers once its large files are split, and therefore more memory: HANCITOR went from
+four workers to eight and from 1.1 to 1.7 GiB.
+
 **Working storage.** With `--working-db disk`, each core owns a temporary directory and an
 SQLite file, removed with its WAL sidecars on close. `--dbfile` exports through SQLite's
 backup API either way.
@@ -566,6 +604,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `timeline.py` | `--timeline`: rows rendered per working database, then sorted, deduplicated and written |
 | `formats.py` | Input format registry: flag, YAML value, extension, encoding, reader |
 | `extractor.py` | `EvtxExtractor`: log line or XML element → event dict |
+| `evtx_slices.py` | Slices of large EVTX files: the plan, the slice reader (see [Slices](#slices-of-large-evtx-files)) |
 | `config.py` | Dataclasses passed to the engine (`ProcessingConfig`, `ExtractorConfig`, …) |
 | `attack.py` | MITRE ATT&CK technique and tactic IDs from Sigma tags |
 | `shutdown.py` | SIGINT handling, so `Ctrl+C` finishes the current batch and writes results |
