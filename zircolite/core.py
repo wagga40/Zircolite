@@ -464,10 +464,12 @@ class ZircoliteCore:
             common_pragmas = [
                 ('temp_store', 'FILE' if self._disk_working else 'MEMORY'),
                 ('mmap_size', '0' if self._disk_working else '268435456'),
-                ('page_size', '65536'),
                 ('threads', str(sqlite_threads)),
             ]
 
+            # Switching a new file to WAL writes its first page, which fixes the
+            # page size, so the size goes first.
+            conn.execute('PRAGMA page_size = 65536;').close()
             if db == ':memory:':
                 # In-memory database settings
                 pragmas = [

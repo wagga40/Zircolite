@@ -155,6 +155,9 @@ def test_disk_storage_exports_rolls_back_and_cleans_up(tmp_path):
         assert conn.execute("PRAGMA mmap_size").fetchone()[0] == 0
         assert conn.execute("PRAGMA temp_store").fetchone()[0] == 1
         core.create_db('value TEXT COLLATE NOCASE')
+        # WAL fixes the page size of a new file, so it must be set before.
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+        assert conn.execute("PRAGMA page_size").fetchone()[0] == 65536
         assert core.insert_data_to_db({"value": "Alpha"})
         assert not core.insert_data_to_db([{"value": "first"}, {"value": object()}])
         assert core.execute_select_query("SELECT value FROM logs") == [{"value": "Alpha"}]
