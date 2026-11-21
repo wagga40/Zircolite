@@ -106,7 +106,7 @@ def transform(param):
             
             # Character swap
             if len(main_domain) == len(legit):
-                diffs = sum(1 for a, b in zip(main_domain, legit) if a != b)
+                diffs = sum(1 for i in range(len(legit)) if main_domain[i] != legit[i])
                 if diffs <= 2:
                     techniques.append('CHAR_SWAP')
             

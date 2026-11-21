@@ -10,7 +10,9 @@ dependencies = [
     "rich>=14.2.0",
     "rich-argparse>=1.7.2",
     "chardet>=5.0,<6",
-    "RestrictedPython>=7.4",
+    # One sandbox for every install: 9.0 dropped bytes, sorted, tuple and zip, so a
+    # transform that works under 8.x could fail under 9.0
+    "RestrictedPython>=9.0",
     "requests>=2.32.4",
     "jinja2>=2.11.3",
     "evtx>=0.6.2",

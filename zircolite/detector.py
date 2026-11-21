@@ -852,13 +852,12 @@ class LogTypeDetector:
             if syslog_match(stripped):
                 has_syslog_header = True
                 sysmon_matches += 1
-            elif "<Event>" in stripped and "<EventID>" in stripped:
-                if (
-                    "RuleName" in stripped
-                    or "ProcessGuid" in stripped
-                    or "UtcTime" in stripped
-                ):
-                    sysmon_matches += 1
+            elif "<Event>" in stripped and "<EventID>" in stripped and (
+                "RuleName" in stripped
+                or "ProcessGuid" in stripped
+                or "UtcTime" in stripped
+            ):
+                sysmon_matches += 1
 
         if sysmon_matches >= 2:
             return DetectionResult(

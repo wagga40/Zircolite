@@ -10,10 +10,10 @@ def transform(param):
         # Try to decode
         try:
             hex_bytes = re.findall(r'0x([0-9a-fA-F]{2})', match)
-            decoded = bytes.fromhex(''.join(hex_bytes)).decode('ascii', errors='ignore')
+            decoded = base64.b16decode(''.join(hex_bytes), casefold=True).decode('ascii', errors='ignore')
             if decoded.isprintable() and len(decoded) > 3:
                 hex_patterns.append('DECODED:' + decoded[:50])
-        except:
+        except ValueError:
             pass
     
     # Continuous hex string (e.g., 48656c6c6f)
@@ -22,10 +22,10 @@ def transform(param):
         if len(match) % 2 == 0:  # Valid hex string
             hex_patterns.append('CONT_HEX')
             try:
-                decoded = bytes.fromhex(match).decode('ascii', errors='ignore')
+                decoded = base64.b16decode(match, casefold=True).decode('ascii', errors='ignore')
                 if decoded.isprintable() and len(decoded) > 3:
                     hex_patterns.append('DECODED:' + decoded[:50])
-            except:
+            except ValueError:
                 pass
     
     return '|'.join(hex_patterns) if hex_patterns else ''
