@@ -371,11 +371,12 @@ class LiteralPlan:
     max_literal_bytes: int = 0
 
 
-def _parse_literal_plan(sql):
+def _parse_literal_plan(sql, tokenize=None):
     try:
         tokens, ends = [], []
         longest = 0
-        for kind, start, end in iter_tokens(sql):
+        read_tokens = tokenize or iter_tokens
+        for kind, start, end in read_tokens(sql):
             value = sql[start:end]
             if kind == "comment":
                 return None
@@ -441,7 +442,7 @@ _PLANS: dict[str, "LiteralPlan | None"] = {}
 _PENDING_PLANS: dict[str, bytes] = {}
 
 
-def _plan_for(sql):
+def _plan_for(sql, *, tokenize=None):
     try:
         return _PLANS[sql]
     except KeyError:
@@ -454,7 +455,7 @@ def _plan_for(sql):
         except (ValueError, TypeError, KeyError, IndexError):
             raw = None
     if raw is None:
-        plan = _parse_literal_plan(sql.strip())
+        plan = _parse_literal_plan(sql.strip(), tokenize)
     _PLANS[sql] = plan
     return plan
 

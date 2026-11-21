@@ -8,6 +8,8 @@ This module contains:
 - UnknownPipelineError: A requested pySigma pipeline is not installed
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import os
@@ -17,10 +19,9 @@ import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import orjson as json
-import requests  # type: ignore[import-untyped]
 import yaml
 
 # Rich progress for downloads and conversion
@@ -33,12 +34,6 @@ from rich.progress import (
     TimeRemainingColumn,
     TransferSpeedColumn,
 )
-from sigma.backends.sqlite import sqlite
-from sigma.collection import SigmaCollection
-from sigma.correlations import SigmaCorrelationRule, SigmaExtendedCorrelationCondition
-from sigma.exceptions import SigmaRuleLocation, SigmaRuleNotFoundError
-from sigma.plugins import InstalledSigmaPlugins
-from sigma.processing.resolver import ProcessingPipelineResolver
 
 from . import analysis_cache
 from .assets import bundled_dir
@@ -51,6 +46,10 @@ from .event_filter import EventFilter
 from .fulltext import FIELD as FULLTEXT_FIELD
 from .rule_selection import RuleSelection, select_rules
 from .utils import random_suffix, safe_load_all
+
+if TYPE_CHECKING:
+    from sigma.collection import SigmaCollection
+    from sigma.correlations import SigmaCorrelationRule
 
 # Version 2 adds required_fields, result_type and correlation plans; version 3
 # marks rules that need captured source-value text. Unversioned rules are v1.
@@ -67,6 +66,8 @@ def _is_sigma_document(doc: Any) -> bool:
 
 def _referenced_names(rule: SigmaCorrelationRule) -> list[str]:
     """The rule names or ids a correlation refers to, as written."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
     if rule.rules is not None:
         return [reference.reference for reference in rule.rules]
     if isinstance(rule.condition, SigmaExtendedCorrelationCondition):
@@ -168,6 +169,8 @@ class RulesUpdater:
         return Path('rules')
 
     def download(self) -> None:
+        import requests  # type: ignore[import-untyped]
+
         resp = requests.get(self.url, stream=True, timeout=30)
         resp.raise_for_status()
         total = int(resp.headers.get('content-length', 0))
@@ -383,6 +386,8 @@ class RulesUpdater:
 
     def run(self) -> bool:
         """Download, check and install; False when nothing could be installed."""
+        import requests  # type: ignore[import-untyped]
+
         try:
             self.download()
             self.unzip()
@@ -467,29 +472,22 @@ class RulesetHandler:
         self.pipelines = []
         self.event_filter: EventFilter | None = None  # Will be populated after loading
 
-        # Init pipelines. Validators are never run, and loading them imports
-        # pySigma's MITRE tag data, which unpickles a cache under ~/.cache/pysigma.
-        plugins = InstalledSigmaPlugins.autodiscover(include_validators=False)
-        pipeline_resolver = plugins.get_pipeline_resolver()
-        pipeline_list = list(pipeline_resolver.pipelines.keys())
+        if list_pipelines_only or cfg.pipeline:
+            from sigma.plugins import InstalledSigmaPlugins
 
-        if list_pipelines_only:
-            self.logger.info("[+] Installed pipelines : "
-                            + ", ".join(pipeline_list)
-                            + f"\n    {pipeline_install_hint()}"
-                            )
-        elif cfg.pipeline:
-            requested = [item for pipeline in cfg.pipeline for item in pipeline]
+            # Validators are unused and would load pySigma's pickle-backed cache.
+            plugins = InstalledSigmaPlugins.autodiscover(include_validators=False)
+            pipeline_list = list(plugins.get_pipeline_resolver().pipelines)
+            if list_pipelines_only:
+                self.logger.info("[+] Installed pipelines : " + ", ".join(pipeline_list)
+                                 + f"\n    {pipeline_install_hint()}")
+                self.rulesets = []
+                return
+            requested = [item for pipeline in cfg.pipeline or () for item in pipeline]
             unknown = [name for name in dict.fromkeys(requested) if name not in pipeline_list]
             if unknown:
                 raise UnknownPipelineError(unknown, pipeline_list)
             self.pipelines = [plugins.pipelines[name]() for name in requested]
-
-        # Parse & (if necessary) convert ruleset, final list is stored in self.rulesets
-        # (--pipeline-list only prints the installed pipelines: skip loading entirely)
-        if list_pipelines_only:
-            self.rulesets = []
-            return
 
         raw_rulesets = self.ruleset_parsing()
         # Flatten list of rulesets into a single list of rules
@@ -671,6 +669,9 @@ class RulesetHandler:
 
     def _sigma_backend(self, pipelines: list[Any]) -> Any:
         """The SQLite backend, with the pipelines applied in the order given."""
+        from sigma.backends.sqlite import sqlite
+        from sigma.processing.resolver import ProcessingPipelineResolver
+
         pipeline_resolver = ProcessingPipelineResolver()
         # Preserve user order: pySigma's resolve() sorts by (priority, path).
         # When priorities are equal it uses pipeline name, so e.g. "Add Channel..."
@@ -703,6 +704,10 @@ class RulesetHandler:
         a rule nobody loaded fails it -- every rule of every path with it. A
         correlation that depends on a dropped one is dropped in turn.
         """
+        from sigma.collection import SigmaCollection
+        from sigma.correlations import SigmaCorrelationRule
+        from sigma.exceptions import SigmaRuleNotFoundError
+
         rules: list[Any] = list(merged.rules)
         while True:
             # Filters were applied when the paths were merged; none are passed again.
@@ -739,6 +744,10 @@ class RulesetHandler:
         rules of every path. Each path still gets its own conversion summary
         and, with --save-ruleset, its own saved ruleset.
         """
+        from sigma.collection import SigmaCollection
+        from sigma.correlations import SigmaCorrelationRule
+        from sigma.exceptions import SigmaRuleLocation
+
         paths = [Path(p) for p in sigma_rules_list]
         documents: list[SigmaCollection] = []
         # Resolved file -> index of the path it was loaded from

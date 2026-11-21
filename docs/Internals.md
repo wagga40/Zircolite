@@ -108,19 +108,22 @@ flattener decides which value lands in the column.
 
 ## Rule execution
 
-**Ruleset input.** JSON rulesets are decoded once. Sigma YAML is parsed once with
+**Ruleset input.** JSON rulesets are decoded once. The loader imports pySigma for
+native conversion and explicit pipeline requests. Sigma YAML is parsed once with
 the safe C loader (or the Python safe loader when LibYAML is unavailable), then
 passed to `SigmaCollection.from_dicts`. All files still merge before filters and
 cross-file references are resolved; pipeline application order is unchanged.
 
-**Analysis cache.** Normalising, planning and scanning the statements of a 4,500-rule
-ruleset takes about two seconds, which every process worker would pay again. The
+**Analysis cache.** On a cold load, SQL normalisation, scanning and literal prefilter
+planning share token spans for each statement. The
 command line keeps the results in the user's cache directory (`~/Library/Caches/Zircolite`,
 `%LOCALAPPDATA%\Zircolite\Cache` or `$XDG_CACHE_HOME/zircolite`), one file per ruleset,
 keyed by the statements, the Python version and a hash of the analysing code (in a binary,
-the executable). The ruleset is loaded, and workers start, from that file in tens of
-milliseconds; a plan stays JSON until the filter first asks for it. The file is validated
-line by line, and anything it would not have written is recomputed rather than trusted.
+the executable). Workers and repeat runs read the matching file directly. When a
+selection changes, an index of statement hashes lets the loader reuse analysis from
+the eight most recent cache files. It analyses the missing statements and atomically
+saves the combined selection. A SHA-256 checksum covers its contents. Prefilter
+plans are decoded when needed.
 `ZIRCOLITE_CACHE_DIR` moves the directory and `ZIRCOLITE_NO_CACHE=1` turns it off; library
 callers never write one.
 

@@ -2958,9 +2958,10 @@ class TestTheRulesetIsLexedOnce:
         lexed = []
         original = sqlscan._typed_tokens
 
-        def counting(sql):
-            lexed.append(sql)
-            return original(sql)
+        def counting(sql, tokenize=None):
+            if tokenize is None:
+                lexed.append(sql)
+            return original(sql, tokenize)
 
         monkeypatch.setattr(sqlscan, "_typed_tokens", counting)
         return lexed
