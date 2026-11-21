@@ -79,7 +79,9 @@ arrive as numbers; use `str(param)` when you expect text.
 
 - **Allowed:** common built-ins (`len`, `int`, `str`, `enumerate`, `min`, `sum`, …), the
   modules `re`, `base64`, `chardet` and `math` (their public functions only), writes into a
-  `dict`, `list` or `set`, and augmented assignment (`+=`, …).
+  `dict`, `list` or `set`, and augmented assignment (`+=`, …). `bytes`, `sorted`, `tuple` and
+  `zip` are not built-ins here (RestrictedPython 9 removed them): decode hex with
+  `base64.b16decode(value, casefold=True)`.
 - **Blocked:** file and network access, system calls, other imports, and writes to object
   attributes.
 
