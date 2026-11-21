@@ -488,6 +488,70 @@ class TestFlattenHotPathOptimizations:
         conn.close()
 
 
+    def test_insert_batch_keeps_order_across_key_sets(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """Runs of same-keyed events are inserted in batch order, with their own columns.
+
+        Row IDs are positions in the input; the package spool and the spelling
+        tables rely on them. A key set seen again in another order must still
+        bind each value to its own column.
+        """
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        cur = conn.cursor()
+        batch = [
+            {"Alpha": "a1", "Beta": "b1"},
+            {"Alpha": "a2", "Beta": "b2"},
+            {"Solo": "s1"},
+            {"Beta": "b3", "Alpha": "a3"},
+            {"Alpha": "a4", "Beta": "b4", "Gamma": 4},
+            {"Solo": "s2"},
+            {"Alpha": None, "Beta": "b5"},
+        ]
+        processor._insert_batch(conn, cur, batch)
+        processor._insert_batch(conn, cur, [{"Beta": "b6", "Alpha": "a6"}, {"Gamma": 7}])
+        # Without flattening no field type is known, so every column is TEXT.
+        assert cur.execute('SELECT row_id, "Alpha", "Beta", "Gamma", "Solo" FROM logs ORDER BY row_id').fetchall() == [
+            (1, "a1", "b1", None, None),
+            (2, "a2", "b2", None, None),
+            (3, None, None, None, "s1"),
+            (4, "a3", "b3", None, None),
+            (5, "a4", "b4", "4", None),
+            (6, None, None, None, "s2"),
+            (7, None, "b5", None, None),
+            (8, "a6", "b6", None, None),
+            (9, None, None, "7", None),
+        ]
+        conn.close()
+
+    def test_insert_batch_merges_case_variants_across_events(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """A batch spelling one field two ways still binds both to the one column.
+
+        Without flattening no field type is known, so the columns are TEXT.
+        """
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        cur = conn.cursor()
+        processor._insert_batch(conn, cur, [{"EventID": 1, "Other": "x"}, {"eventid": 2}, {"EventID": 3}])
+        assert cur.execute('SELECT row_id, "EventID", "Other" FROM logs ORDER BY row_id').fetchall() == [
+            (1, "1", "x"), (2, "2", None), (3, "3", None),
+        ]
+        conn.close()
+
+
 class TestStreamingEventProcessorSchemaGeneration:
     """Tests for SQL schema generation."""
 

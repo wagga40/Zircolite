@@ -50,7 +50,10 @@ split parses. Split fields are written directly (aliases do not apply to them), 
 any field name, and merged only where the event has no field of that name in any case, so
 log content cannot overwrite a real field or `row_id`.
 
-**Typing.** Columns are added as fields appear, and events are inserted in batches of 250. A
+**Typing.** Columns are added as fields appear, and events are inserted in batches of 250,
+one statement per run of events sharing their fields, so a row binds only its own fields
+rather than every field of its batch. On wide Windows logs that halved the cost of the
+inserts. The table's `row_id` is a plain `INTEGER PRIMARY KEY`. A
 column takes its type from the first value it receives: `INTEGER`, `NUMERIC` for floats (so
 ranges compare numerically), or `TEXT`. Integers beyond SQLite's signed 64-bit range are
 stored as floats and may be rounded; the run warns once and names the fields.

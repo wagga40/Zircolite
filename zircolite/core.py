@@ -552,9 +552,9 @@ class ZircoliteCore:
                 raise ValueError(f"Schema uses reserved keyword-search name {FIELD}")
             cleaned_field_stmt = ', '.join(filter(None, (cleaned_field_stmt, '"_sigma_fulltext" TEXT')))
         if cleaned_field_stmt:
-            create_table_stmt = f"CREATE TABLE logs ( row_id INTEGER PRIMARY KEY AUTOINCREMENT, {cleaned_field_stmt} );"
+            create_table_stmt = f"CREATE TABLE logs ( row_id INTEGER PRIMARY KEY, {cleaned_field_stmt} );"
         else:
-            create_table_stmt = "CREATE TABLE logs ( row_id INTEGER PRIMARY KEY AUTOINCREMENT );"
+            create_table_stmt = "CREATE TABLE logs ( row_id INTEGER PRIMARY KEY );"
         self.logger.debug(f" CREATE : {create_table_stmt}")
         if not self.execute_query(create_table_stmt):
             raise RuntimeError("Unable to create database table")
