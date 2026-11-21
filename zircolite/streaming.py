@@ -744,11 +744,13 @@ class StreamingEventProcessor:
         "_last_insert_stmt",
         "_last_sorted_columns",
         "_last_stray",
+        # Field path trie of the flattening kernel: key -> [dotted path,
+        # resolved (raw_name, mapped_key) or _EXCLUDED_SENTINEL, nested node]
+        "_path_trie",
+        "_path_trie_entries",
         "_records_read",
         "_reserved_field_seen",
-        # Path resolution cache – maps (raw_field_name, last_part) to resolved
-        # (raw_name, mapped_key) or _EXCLUDED_SENTINEL; avoids repeated
-        # exclusion/mapping lookups per leaf
+        # Exclusion and mapping lookup for one field path
         "_resolve_path",
         # Leaf keys whose schema bookkeeping is already done (skip repeat work)
         "_seen_leaf_keys",
@@ -956,9 +958,8 @@ class StreamingEventProcessor:
         self._detected_time_field = None
         self._timefield_warned = False
 
-        from functools import lru_cache
-
-        @lru_cache(maxsize=10000)
+        # Called once per field path: the flattening kernel keeps the answers
+        # in its path trie.
         def _resolve_path(raw_field_name: str, last_part: str):
             for exclusion in self.field_exclusions:
                 if exclusion in raw_field_name:
@@ -969,6 +970,8 @@ class StreamingEventProcessor:
             return (raw_field_name, mapped_key)
 
         self._resolve_path = _resolve_path
+        self._path_trie: dict = {}
+        self._path_trie_entries = 0
 
     def _load_config(self, *, _raw_config: dict | None = None):
         """Load field mappings configuration (supports JSON and YAML formats).

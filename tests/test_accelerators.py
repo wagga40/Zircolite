@@ -291,6 +291,37 @@ def test_cython_ingestion_matches_python_with_transforms(tmp_path):
     assert results[0] == results[1]
 
 
+def test_path_trie_keeps_paths_apart_on_both_backends(monkeypatch):
+    """The kernel caches each field path in a trie; its answers must not depend on it.
+
+    A key can be a leaf in one event and a dict in the next, and a dotted key
+    spells the same path as a nested one while naming another field. Starting
+    the trie over at its cap must change nothing either.
+    """
+    native("zircolite._flatten_native")
+    import zircolite.flatten_kernel as kernel
+
+    events = [
+        {"a": {"b": 1, "c": {"d": "x"}}, "e": "top"},
+        {"a": 5, "e": "again"},
+        {"a.b": 2, "a": {"b": 3}},
+        {"a": {"b": {"c": 4}}},
+        {"Event": {"EventData": {"CommandLine": "cmd", "Image": "c:\\a.exe"}}},
+    ]
+    args = argparse.Namespace(all_transforms=False, transform_categories=None)
+
+    def flatten_all(backend):
+        processor = StreamingEventProcessor(CONFIG, args, ProcessingConfig(flatten_backend=backend))
+        return [processor._flatten_event(deepcopy(event), "f.json") for event in events * 3]
+
+    expected = flatten_all("python")
+    assert expected[0] == {"OriginalLogfile": "f.json", "e": "top", "b": 1, "d": "x"}
+    assert expected[2] == {"ab": 2, "OriginalLogfile": "f.json", "b": 3}
+    assert flatten_all("cython") == expected
+    monkeypatch.setattr(kernel, "_MAX_PATH_TRIE_ENTRIES", 2)
+    assert flatten_all("python") == expected
+
+
 class ReferenceAutomaton:
     """Independent primitives for testing candidate logic without native wheels."""
     def __init__(self):
