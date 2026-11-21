@@ -20,7 +20,7 @@ merged ruleset that carries several -- and per-file and parallel modes ask the
 same questions of the same statements once per input file.
 """
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -104,7 +104,11 @@ def _unquote(text: str) -> str:
     return inner if closer == "]" else inner.replace(closer * 2, closer)
 
 
-def iter_tokens(sql: str) -> Iterator[tuple[str, int, int]]:
+TokenSpan = tuple[str, int, int]
+Tokenizer = Callable[[str], Iterable[TokenSpan]]
+
+
+def iter_tokens(sql: str) -> Iterator[TokenSpan]:
     """Yield ``(kind, start, end)`` across ``sql``.
 
     ``kind`` is ``literal`` for ``'...'``, ``identifier`` for a quoted name,
@@ -291,7 +295,7 @@ def null_safe_negation(sql: str) -> str:
 _NORMALIZED: dict[str, str] = {}
 
 
-def normalize_rule_sql(sql: str) -> str:
+def normalize_rule_sql(sql: str, *, tokenize: Tokenizer | None = None) -> str:
     """The text a rule statement is run, planned and repaired as.
 
     Double-quoted names become backtick-quoted (see ``quote_sql_identifiers``)
@@ -300,7 +304,8 @@ def normalize_rule_sql(sql: str) -> str:
     cached = _NORMALIZED.get(sql)
     if cached is None:
         try:
-            tokens = _significant(sql, iter_tokens(sql))
+            read_tokens = tokenize or iter_tokens
+            tokens = _significant(sql, read_tokens(sql))
         except _Unsupported:
             cached = sql
         else:
@@ -309,7 +314,7 @@ def normalize_rule_sql(sql: str) -> str:
     return cached
 
 
-def _typed_tokens(sql: str) -> list[tuple[str, str]]:
+def _typed_tokens(sql: str, tokenize: Tokenizer | None = None) -> list[tuple[str, str]]:
     """``iter_tokens`` as ``(kind, text)``, ready for the readers below.
 
     Identifiers arrive unquoted, and whitespace and comments are dropped: both
@@ -317,7 +322,8 @@ def _typed_tokens(sql: str) -> list[tuple[str, str]]:
     look like a token.
     """
     out: list[tuple[str, str]] = []
-    for kind, start, end in iter_tokens(sql):
+    read_tokens = tokenize or iter_tokens
+    for kind, start, end in read_tokens(sql):
         if kind == "comment":
             continue
         text = sql[start:end]
@@ -614,14 +620,14 @@ _UNSCANNABLE = QueryScan(None, None, frozenset(), ())
 _SCANS: dict[str, QueryScan] = {}
 
 
-def scan_query(sql: str) -> QueryScan:
+def scan_query(sql: str, *, tokenize: Tokenizer | None = None) -> QueryScan:
     """Read ``sql`` once, answering every question this module supports."""
     cached = _SCANS.get(sql)
     if cached is not None:
         return cached
 
     try:
-        tokens = _typed_tokens(sql)
+        tokens = _typed_tokens(sql, tokenize)
     except _Unsupported:
         # Unscannable SQL cannot be repaired here, and will fail loudly when run.
         _SCANS[sql] = _UNSCANNABLE

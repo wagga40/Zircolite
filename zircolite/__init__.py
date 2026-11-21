@@ -30,8 +30,8 @@ re-exporting it would put it inside the package's own import graph, and mypy
 then resolves `from zircolite import console` to the submodule rather than to
 the Console object defined in it -- ten errors that describe nothing real.
 
-`rules` and `templates` load on first use: they bring in pySigma, requests and
-Jinja2, which a process worker unpickling its context never needs.
+`rules` and `templates` load on first use. Native Sigma conversion, ruleset
+downloads and template rendering bring in pySigma, requests and Jinja2 respectively.
 """
 
 import importlib

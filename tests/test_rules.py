@@ -28,6 +28,18 @@ from zircolite.sqlscan import column_refs, rebalance_sql
 WORKSPACE_ROOT = Path(__file__).parent.parent
 
 
+def test_compiled_ruleset_loads_without_sigma_or_http_client():
+    script = """
+import sys
+from zircolite.cli import RulesetConfig, RulesetHandler
+handler = RulesetHandler(RulesetConfig(ruleset=['tests/fixtures/sample_ruleset.json']))
+assert handler.rulesets
+assert 'sigma' not in sys.modules
+assert 'requests' not in sys.modules
+"""
+    subprocess.run([sys.executable, "-c", script], cwd=WORKSPACE_ROOT, check=True)
+
+
 @pytest.mark.parametrize("kind", ["json", "yaml-file", "yaml-directory"])
 def test_ruleset_input_is_read_once(tmp_path, monkeypatch, kind):
     """Validation and conversion must share the bytes/documents they read."""
@@ -941,7 +953,7 @@ level: medium
             return ProcessingPipeline(name="combined", priority=0, items=[])
 
         with patch(
-            "zircolite.rules.ProcessingPipelineResolver.resolve",
+            "sigma.processing.resolver.ProcessingPipelineResolver.resolve",
             capture_resolve,
         ):
             handler = RulesetHandler(
@@ -977,7 +989,7 @@ detection:
 level: medium
 """)
         with patch(
-            "zircolite.rules.ProcessingPipelineResolver.resolve",
+            "sigma.processing.resolver.ProcessingPipelineResolver.resolve",
             lambda self_resolver, pipeline_specs, target=None: __import__(
                 "sigma.processing.pipeline", fromlist=["ProcessingPipeline"]
             ).ProcessingPipeline(name="combined", priority=0, items=[]),
@@ -1010,7 +1022,7 @@ class TestRulesUpdater:
         mock_resp.headers.get.return_value = "100"
         mock_resp.iter_content.return_value = [b"x" * 50, b"y" * 50]
 
-        with patch("zircolite.rules.requests.get", return_value=mock_resp):
+        with patch("requests.get", return_value=mock_resp):
             updater = RulesUpdater(logger=test_logger)
             updater.tempFile = str(tmp_path / "tmp-rules-abc.zip")
             updater.tmpDir = str(tmp_path / "tmp-rules-dir")
@@ -1869,7 +1881,7 @@ class TestRulesetHandlerRobustness:
         mock_resp.headers.get.return_value = "100"
         mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("404")
 
-        with patch("zircolite.rules.requests.get", return_value=mock_resp):
+        with patch("requests.get", return_value=mock_resp):
             updater = RulesUpdater(logger=test_logger)
             updater.tempFile = str(tmp_path / "tmp-rules-abc.zip")
             updater.tmpDir = str(tmp_path / "tmp-rules-dir")

@@ -1,7 +1,7 @@
 """What Zircolite reads out of rule SQL, kept on disk between runs.
 
-Normalising, planning and scanning a 4,500-rule ruleset costs about two
-seconds, which every process worker would pay again. All three are pure
+Normalising, planning and scanning thousands of rules costs seconds,
+which every process worker would pay again. All three are pure
 functions of the statement text and of this package's own analysis code, so a
 run reloads them from the user's cache directory instead. The file is JSON and
 is validated field by field: a damaged or foreign file is ignored and the
@@ -17,7 +17,8 @@ import logging
 import os
 import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,7 @@ from . import prefilter, sqlscan
 from .prefilter import rule_queries
 from .sqlscan import QueryScan
 
-FORMAT = 4
+FORMAT = 5
 ENV_DIRECTORY = "ZIRCOLITE_ANALYSIS_CACHE"
 # Files kept per directory; each holds one ruleset combination.
 KEEP = 8
@@ -76,13 +77,20 @@ def _code_fingerprint() -> bytes:
     return digest.digest()
 
 
-def cache_key(queries: tuple[str, ...]) -> str:
+def _query_index(queries: tuple[str, ...]) -> dict[str, str]:
+    return {hashlib.sha256(query.encode("utf-8", "surrogatepass")).hexdigest(): query
+            for query in dict.fromkeys(queries)}
+
+
+def _selection_key(fingerprint: bytes, query_ids: Iterable[str]) -> str:
     digest = hashlib.sha256(f"zircolite-analysis-{FORMAT}".encode())
-    digest.update(_code_fingerprint())
-    for query in queries:
-        digest.update(query.encode("utf-8", "surrogatepass"))
-        digest.update(b"\0")
+    digest.update(fingerprint)
+    digest.update("".join(query_ids).encode("ascii"))
     return digest.hexdigest()
+
+
+def cache_key(queries: tuple[str, ...]) -> str:
+    return _selection_key(_code_fingerprint(), _query_index(queries))
 
 
 def warm(rules: list[dict[str, Any]] | None) -> bool:
@@ -96,40 +104,86 @@ def warm(rules: list[dict[str, Any]] | None) -> bool:
     queries = rule_queries(rules)
     if not queries:
         return False
-    path = Path(directory) / f"analysis-{cache_key(queries)[:40]}.json"
-    try:
-        loaded = _decode(path.read_bytes(), queries)
-    except FileNotFoundError:
-        loaded = None
-    except (OSError, ValueError, TypeError, KeyError, IndexError) as exc:
-        logger.debug(f"Rule analysis cache ignored ({path.name}): {exc}")
-        loaded = None
-    if loaded is not None:
-        normalized, plans, scans = loaded
-        sqlscan._NORMALIZED.update(normalized)
-        sqlscan._SCANS.update(scans)
-        for text, raw in plans.items():
-            if text in prefilter._PLANS:
-                continue
-            if raw == b"null":
-                prefilter._PLANS[text] = None
-            else:
-                prefilter._PENDING_PLANS[text] = raw
+    wanted = _query_index(queries)
+    fingerprint = _code_fingerprint()
+    path = Path(directory) / f"analysis-{_selection_key(fingerprint, wanted)[:40]}.json"
+    if _load(path, wanted, fingerprint, exact=True):
         return True
-    _analyse(queries)
-    _save(path, queries)
-    return False
+
+    missing = wanted.copy()
+    recovered: dict[str, tuple[bytes, bytes]] = {}
+    for other in _recent_files(path.parent)[:KEEP]:
+        if other == path:
+            continue
+        entries = _load(other, missing, fingerprint)
+        recovered.update(entries)
+        for query_id in entries:
+            del missing[query_id]
+        if not missing:
+            break
+    if missing:
+        _analyse(tuple(missing.values()))
+    _save(path, wanted, recovered)
+    return not missing
+
+
+def _load(
+    path: Path, wanted: dict[str, str], fingerprint: bytes, *, exact: bool = False,
+) -> dict[str, tuple[bytes, bytes]]:
+    """Read only a compatible selection. No in-memory state changes until its entries decode."""
+    try:
+        with path.open("rb") as handle:
+            header = orjson.loads(handle.readline())
+            if not isinstance(header, dict) or header.get("format") != FORMAT:
+                return {}
+            ids = header["queries"]
+            if exact:
+                if ids != list(wanted):
+                    raise ValueError("index does not match the ruleset")
+            else:
+                if not isinstance(ids, list) or not all(isinstance(i, str) and len(i) == 64 for i in ids):
+                    raise ValueError("bad query index")
+                if wanted.keys().isdisjoint(ids):
+                    return {}
+                # Check the analyzer version and the integrity of the positional index.
+                if path.name != f"analysis-{_selection_key(fingerprint, ids)[:40]}.json":
+                    return {}
+            payload = handle.read()
+        if hashlib.sha256(payload).hexdigest() != header.get("sha256"):
+            raise ValueError("damaged analysis payload")
+        lines = payload.split(b"\n")
+        del payload
+        if len(lines) != 2 * len(ids):
+            raise ValueError("entries do not match the index")
+        entries = {key: (lines[2 * i], lines[2 * i + 1]) for i, key in enumerate(ids) if key in wanted}
+        _restore(entries, wanted)
+        return entries
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError, TypeError, KeyError, IndexError, RecursionError) as exc:
+        logger.debug(f"Rule analysis cache ignored ({path.name}): {exc}")
+        return {}
 
 
 def _analyse(queries: tuple[str, ...]) -> None:
     """Everything a run asks of these statements, computed once, eagerly."""
-    for query in queries:
-        text = sqlscan.normalize_rule_sql(query)
-        sqlscan.scan_query(query)
-        sqlscan.scan_query(text)
-        plan = prefilter._plan_for(text)
+    @cache
+    def spans(sql: str) -> list[sqlscan.TokenSpan]:
+        try:
+            return list(sqlscan.iter_tokens(sql))
+        except sqlscan._Unsupported:
+            # No complete token stream: none of the readers can derive facts.
+            return []
+
+    for query in dict.fromkeys(queries):
+        text = sqlscan.normalize_rule_sql(query, tokenize=spans)
+        sqlscan.scan_query(query, tokenize=spans)
+        if text != query:
+            sqlscan.scan_query(text, tokenize=spans)
+        plan = prefilter._plan_for(text, tokenize=spans)
         if plan is not None and plan.sql != text:
-            sqlscan.scan_query(plan.sql)
+            sqlscan.scan_query(plan.sql, tokenize=spans)
+        spans.cache_clear()
 
 
 def _scan_entry(scan: QueryScan) -> list[Any]:
@@ -138,13 +192,17 @@ def _scan_entry(scan: QueryScan) -> list[Any]:
             sorted(scan.columns), list(scan.regex_patterns), scan.row_preserving]
 
 
-def _lines(queries: tuple[str, ...]) -> Iterator[bytes]:
+def _lines(index: dict[str, str], recovered: dict[str, tuple[bytes, bytes]]) -> Iterator[bytes]:
     """Two lines per statement, by position, so the file never repeats the SQL.
 
     The first holds what every run reads; the second, the plan, stays bytes
     until the filter asks for it.
     """
-    for query in queries:
+    for query_id, query in index.items():
+        if query_id in recovered:
+            # Copy the original pair so a reused prefilter plan can stay lazy.
+            yield from recovered[query_id]
+            continue
         text = sqlscan._NORMALIZED[query]
         plan = prefilter._PLANS[text]
         plan_scan = None if plan is None or plan.sql in (query, text) else _scan_entry(sqlscan._SCANS[plan.sql])
@@ -155,29 +213,35 @@ def _lines(queries: tuple[str, ...]) -> Iterator[bytes]:
         yield orjson.dumps(None if plan is None else prefilter.plan_to_json(plan, text))
 
 
-def _save(path: Path, queries: tuple[str, ...]) -> None:
+def _save(path: Path, index: dict[str, str], recovered: dict[str, tuple[bytes, bytes]]) -> None:
     try:
         # Line by line: decoding them one at a time never holds the whole
         # file as Python objects.
-        data = b"\n".join([orjson.dumps({"format": FORMAT, "count": len(queries)}), *_lines(queries)])
+        payload = b"\n".join(_lines(index, recovered))
+        header = orjson.dumps({"format": FORMAT, "queries": list(index),
+                               "sha256": hashlib.sha256(payload).hexdigest()})
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".analysis-", suffix=".tmp")
         try:
             with os.fdopen(fd, "wb") as handle:
-                handle.write(data)
+                handle.write(header + b"\n")
+                handle.write(payload)
             os.replace(temporary, path)
         except BaseException:
             Path(temporary).unlink(missing_ok=True)
             raise
-        _prune(path.parent)
+        for stale in _recent_files(path.parent)[KEEP:]:
+            stale.unlink(missing_ok=True)
     except (OSError, KeyError, TypeError, ValueError) as exc:
         logger.debug(f"Rule analysis cache not written: {exc}")
 
 
-def _prune(directory: Path) -> None:
-    files = sorted(directory.glob("analysis-*.json"), key=lambda entry: entry.stat().st_mtime, reverse=True)
-    for stale in files[KEEP:]:
-        stale.unlink(missing_ok=True)
+def _recent_files(directory: Path) -> list[Path]:
+    try:
+        return sorted(directory.glob("analysis-*.json"), key=lambda entry: entry.stat().st_mtime_ns, reverse=True)
+    except OSError:
+        # Another process may prune a file between the listing and stat.
+        return []
 
 
 def _strings(values: Any) -> frozenset[str]:
@@ -189,7 +253,7 @@ def _strings(values: Any) -> frozenset[str]:
 
 def _decode_scan(entry: Any) -> QueryScan:
     channels, eventids, columns, patterns, row_preserving = entry
-    if eventids is not None and not all(type(value) is int for value in eventids):
+    if eventids is not None and (not isinstance(eventids, list) or not all(type(value) is int for value in eventids)):
         raise ValueError("bad eventids")
     if not isinstance(patterns, list) or not all(isinstance(value, str) for value in patterns):
         raise ValueError("bad patterns")
@@ -200,29 +264,42 @@ def _decode_scan(entry: Any) -> QueryScan:
                      _strings(columns), tuple(patterns), row_preserving)
 
 
-def _decode(data: bytes, queries: tuple[str, ...]) -> tuple[
-        dict[str, str], dict[str, bytes], dict[str, QueryScan]]:
-    lines = data.split(b"\n")
-    header = orjson.loads(lines[0])
-    if not isinstance(header, dict) or header.get("format") != FORMAT:
-        raise ValueError("unknown format")
-    if header.get("count") != len(queries) or len(lines) != 2 * len(queries) + 1:
-        raise ValueError("entries do not match the ruleset")
+def _decode_metadata(meta: bytes) -> tuple[str | None, QueryScan, QueryScan, QueryScan | None]:
+    text, query_scan, text_scan, plan_scan = orjson.loads(meta)
+    if text is not None and not isinstance(text, str):
+        raise ValueError("bad normalized text")
+    if (text is None) != (text_scan is None):
+        raise ValueError("normalized SQL and scan must be stored together")
+    original = _decode_scan(query_scan)
+    return (text, original, original if text_scan is None else _decode_scan(text_scan),
+            None if plan_scan is None else _decode_scan(plan_scan))
+
+
+def _restore(entries: dict[str, tuple[bytes, bytes]], wanted: dict[str, str]) -> None:
     normalized: dict[str, str] = {}
     plans: dict[str, bytes] = {}
     scans: dict[str, QueryScan] = {}
-    for index, query in enumerate(queries):
-        text, query_scan, text_scan, plan_scan = orjson.loads(lines[2 * index + 1])
+    # Thousands of rules share exactly the same bounds and columns. Decode each
+    # distinct metadata line once per file; QueryScan is immutable.
+    decode = cache(_decode_metadata)
+    for query_id, (meta, raw) in entries.items():
+        query = wanted[query_id]
+        text, original, normalized_scan, plan_scan = decode(meta)
         if text is None:
             text = query
-        elif not isinstance(text, str):
-            raise ValueError("bad normalized text")
         normalized[query] = text
-        scans[query] = _decode_scan(query_scan)
-        scans[text] = scans[query] if text_scan is None else _decode_scan(text_scan)
-        raw = lines[2 * index + 2]
+        scans[query] = original
+        scans[text] = normalized_scan
         plans[text] = raw
         if plan_scan is not None:
             plan = prefilter.plan_from_json(orjson.loads(raw), text)
-            scans[plan.sql] = _decode_scan(plan_scan)
-    return normalized, plans, scans
+            scans[plan.sql] = plan_scan
+    sqlscan._NORMALIZED.update(normalized)
+    sqlscan._SCANS.update(scans)
+    for text, raw in plans.items():
+        if text in prefilter._PLANS:
+            continue
+        if raw == b"null":
+            prefilter._PLANS[text] = None
+        else:
+            prefilter._PENDING_PLANS[text] = raw
