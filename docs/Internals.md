@@ -202,8 +202,11 @@ at a time. The heuristics are in
 so thread workers queue behind each other: on 450 EVTX files of 16 MiB, twenty threads ran
 2.4 times slower than one file at a time, and ten processes 3.9 times faster. Hence
 `--executor auto` picks processes from 32 MiB of input. Processes return summaries and
-temporary output paths rather than pickling match lists, share a shutdown event, and split
-the EVTX parser threads across the CPU budget. Compressed sizes feed scheduling estimates
+temporary output paths rather than pickling match lists, and split the EVTX parser threads
+across the CPU budget. They read Ctrl+C from a byte of shared memory, not a
+`multiprocessing.Event`: the rule loop checks it before each rule it runs, and an `Event`
+takes a lock every process shares. With ten workers those checks queued for most of the
+detection time; on 1,692 EVTX files, removing them took four workers from 68 to 44 s. Compressed sizes feed scheduling estimates
 only; runtime memory throttling still applies.
 
 **Working storage.** With `--working-db disk`, each core owns a temporary directory and an

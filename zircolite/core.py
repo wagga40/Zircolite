@@ -1758,9 +1758,11 @@ class ZircoliteCore:
 
             with live_display as live:
                 for i, rule in enumerate(self.ruleset):
-                    if is_shutdown_requested():
-                        break
-                    rule_results = run_rule(rule) if may_run[i] else None
+                    rule_results = None
+                    if may_run[i]:
+                        if is_shutdown_requested():
+                            break
+                        rule_results = run_rule(rule)
 
                     try:
                         if progress_callback is not None:
