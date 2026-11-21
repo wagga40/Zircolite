@@ -209,7 +209,14 @@ temporary output paths rather than pickling match lists, and split the EVTX pars
 across the CPU budget. They read Ctrl+C from a byte of shared memory, not a
 `multiprocessing.Event`: the rule loop checks it before each rule it runs, and an `Event`
 takes a lock every process shares. With ten workers those checks queued for most of the
-detection time; on 1,692 EVTX files, removing them took four workers from 68 to 44 s. Compressed sizes feed scheduling estimates
+detection time; on 1,692 EVTX files, removing them took four workers from 68 to 44 s.
+
+Workers start from a pickle the parent writes once into the run's private spool
+directory: the ruleset, the run settings and the list of inputs. Spawn passes only that
+path and the shared memory (the stop flag and the progress board). Passed through spawn
+instead, each worker's copy went down its pipe while the parent waited for the child to
+import its main module, so eight workers started over 1.5 s, one after another. They now
+start within 10 ms of each other, which took four HANCITOR files from 5.4 to 4.8 s. Compressed sizes feed scheduling estimates
 only; runtime memory throttling still applies.
 
 ### Slices of large EVTX files

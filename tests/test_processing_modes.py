@@ -6,16 +6,22 @@ with real temp files and assert on outputs and context updates.
 """
 
 import json
+import pickle
 import sqlite3
 import time
 from argparse import Namespace
+from pathlib import Path
 
+import pytest
+
+from zircolite.parallel import MemoryAwareParallelProcessor
 from zircolite.processing import (
     ProcessingContext,
     process_db_input,
     process_parallel_streaming,
     process_unified_streaming,
 )
+from zircolite.shutdown import SharedFlag
 from zircolite.utils import MemoryTracker
 
 
@@ -183,6 +189,43 @@ class TestProcessUnifiedStreaming:
 
 class TestProcessParallelStreaming:
     """Functional tests for process_parallel_streaming."""
+
+    def test_process_workers_take_their_payload_from_a_file(
+        self, field_mappings_file, test_logger, default_args_config, sample_ruleset, tmp_path, monkeypatch,
+    ):
+        """Spawn passes only a path and shared memory; the ruleset travels in a file.
+
+        A ruleset in the initargs went down each worker's spawn pipe while the
+        parent waited for that worker to import, so workers started in turn.
+        """
+        files = []
+        for name in ("a", "b"):
+            path = tmp_path / f"{name}.json"
+            path.write_text('{"Event": {"System": {"EventID": 1}}}\n')
+            files.append(path)
+        ctx = _make_ctx(tmp_path, field_mappings_file, test_logger, sample_ruleset)
+        default_args_config.executor = "process"
+        default_args_config.parallel_workers = 2
+        seen = {}
+
+        class Stop(Exception):
+            pass
+
+        def capture(self, file_list, process_func, **options):
+            path, spool_dir, cancel_event, shared = options["initargs"]
+            seen.update(path=path, spool_dir=spool_dir, flag=cancel_event, shared=shared,
+                        payload=pickle.loads(Path(path).read_bytes()))  # noqa: S301 -- the file this run wrote
+            raise Stop
+
+        monkeypatch.setattr(MemoryAwareParallelProcessor, "process_files_parallel", capture)
+        with pytest.raises(Stop):
+            process_parallel_streaming(ctx, files, "json", None, default_args_config, recommended_workers=2)
+        payload, args, input_type, raw_config, _progress_files = seen["payload"]
+        assert Path(seen["path"]).parent == Path(seen["spool_dir"])
+        assert payload["rulesets"] == sample_ruleset
+        assert input_type == "json" and args is not None and raw_config is not None
+        assert isinstance(seen["flag"], SharedFlag)
+        assert not Path(seen["path"]).exists(), "the payload goes with the run's spool directory"
 
     def test_parallel_two_files_merges_results_and_sets_workers_used(
         self,

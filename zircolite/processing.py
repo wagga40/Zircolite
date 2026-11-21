@@ -25,6 +25,7 @@ import csv
 import logging
 import multiprocessing
 import os
+import pickle
 import shutil
 import signal
 import sqlite3
@@ -1295,10 +1296,36 @@ def process_single_file_worker(
 _PROCESS_STATE = None
 
 
-def _initialize_process_worker(payload, args, input_type, raw_config, spool_dir, cancel_event,
-                               progress=None):
+_WORKER_PAYLOAD = "worker-payload.pickle"
+
+
+def _write_worker_payload(spool_dir: str, payload: tuple) -> str:
+    """Pickle what every process worker starts from, once, into the run's spool directory.
+
+    Passed as initargs instead, each worker's copy (the ruleset, every input
+    path) goes down the spawn pipe while the parent waits for the child to
+    import its main module, so the workers started one after another, about a
+    fifth of a second apart. Read from a file, they start together.
+    """
+    path = os.path.join(spool_dir, _WORKER_PAYLOAD)
+    with open(path, "wb") as handle:
+        pickle.dump(payload, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    return path
+
+
+def _initialize_process_worker(payload_path, spool_dir, cancel_event, shared=None):
+    """Set up a process worker from the file ``_write_worker_payload`` wrote.
+
+    ``shared`` holds what only inheritance can pass: the progress board and
+    the counter that hands out its slots.
+    """
     global _PROCESS_STATE
     from multiprocessing.util import Finalize
+
+    # Written by this run's parent in its own temporary directory, which
+    # nothing else writes to: the same data spawn would otherwise pickle.
+    with open(payload_path, "rb") as handle:
+        payload, args, input_type, raw_config, progress_files = pickle.load(handle)  # noqa: S301
 
     from .console import set_quiet_mode
     set_quiet_mode(True)
@@ -1317,12 +1344,12 @@ def _initialize_process_worker(payload, args, input_type, raw_config, spool_dir,
         extractor=create_extractor(args, logger, input_type), raw_config=raw_config,
         spool_dir=spool_dir, thread_local=local, counter_lock=threading.Lock(),
         worker_counter=[0], total_filtered_count=[0, 0])
-    if progress is not None:
+    if shared is not None:
         # Every process numbers its own threads from 0, so the slot on the
         # board is claimed here, once per process.
-        board, files, claimed = progress
+        board, claimed = shared
         with claimed.get_lock():
-            state.update(progress_board=board, progress_files=files, progress_slot=claimed.value)
+            state.update(progress_board=board, progress_files=progress_files, progress_slot=claimed.value)
             claimed.value += 1
     _PROCESS_STATE = state
 
@@ -1697,9 +1724,11 @@ def process_parallel_streaming(
             payload = {f.name: getattr(ctx, f.name) for f in fields(ctx)
                        if f.init and f.name not in ("logger", "memory_tracker", "parent_metrics", "performance_files")}
             worker = _process_file_job
-            progress = (board, progress_files, spawn.Value("i", 0)) if board is not None else None
+            payload_path = _write_worker_payload(
+                spool_dir, (payload, args, input_type, raw_config, progress_files if board is not None else None))
+            shared = (board, spawn.Value("i", 0)) if board is not None else None
             process_options = dict(initializer=_initialize_process_worker,
-                initargs=(payload, args, input_type, raw_config, spool_dir, cancel_event, progress),
+                initargs=(payload_path, spool_dir, cancel_event, shared),
                 cancel_event=cancel_event)
 
         # Workers are separate processes, invisible to the phase-boundary samples.
