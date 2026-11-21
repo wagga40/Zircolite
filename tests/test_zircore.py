@@ -935,6 +935,30 @@ class TestZircoliteCoreRuleset:
         assert len(zircore.ruleset) == 3
         zircore.close()
 
+    def test_reloading_the_same_list_keeps_the_filtered_rules(self, field_mappings_file, sample_ruleset, test_logger):
+        """Workers load the ruleset before every file; an unchanged list is not filtered again."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        try:
+            zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
+            first = zircore.ruleset
+            zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
+            assert zircore.ruleset is first
+
+            zircore.load_ruleset_from_var(sample_ruleset, rule_filters=["PowerShell"])
+            assert len(zircore.ruleset) == 2
+
+            zircore.ruleset = []
+            zircore.load_ruleset_from_var(sample_ruleset, rule_filters=["PowerShell"])
+            assert len(zircore.ruleset) == 2
+
+            grown = [*sample_ruleset]
+            zircore.load_ruleset_from_var(grown, rule_filters=None)
+            grown.append({"title": "late", "rule": ["SELECT * FROM logs"]})
+            zircore.load_ruleset_from_var(grown, rule_filters=None)
+            assert [rule["title"] for rule in zircore.ruleset][-1] == "late"
+        finally:
+            zircore.close()
+
     def test_apply_ruleset_filters(self, field_mappings_file, sample_ruleset, test_logger):
         """Test filtering rules by title."""
         zircore = ZircoliteCore(

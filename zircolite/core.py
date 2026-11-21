@@ -251,6 +251,7 @@ class ZircoliteCore:
         "_fulltext_revision",
         "_fulltext_validated",
         "_has_correlation_plans",
+        "_loaded_ruleset",
         "_logs_columns_lower",
         "_prefilter",
         "_prepared",
@@ -314,6 +315,8 @@ class ZircoliteCore:
         self.logger = logger or logging.getLogger(__name__)
         self.metrics = FileMetrics()
         self._prepared = None
+        # (source list, its length, filters, filtered list) of the last load
+        self._loaded_ruleset: tuple | None = None
         self.db_connection = None
         self._working_directory = None
         self._prefilter: LiteralPrefilter | None = None
@@ -1401,9 +1404,19 @@ class ZircoliteCore:
     def load_ruleset_from_var(
         self, ruleset: list[dict[str, Any]], rule_filters: list[str] | None = None
     ) -> None:
-        """Load a ruleset from a variable."""
+        """Load a ruleset from a variable.
+
+        Workers load the same list before every file. Filtering it again gives
+        the same rules, so a repeat load of an unchanged list keeps them.
+        """
+        filters = None if rule_filters is None else tuple(rule_filters)
+        loaded = self._loaded_ruleset
+        if (loaded is not None and loaded[0] is ruleset and loaded[1] == len(ruleset)
+                and loaded[2] == filters and loaded[3] is self.ruleset):
+            return
         self.ruleset = ruleset
         self.apply_ruleset_filters(rule_filters)
+        self._loaded_ruleset = (ruleset, len(ruleset), filters, self.ruleset)
 
     def apply_ruleset_filters(
         self, rule_filters: list[str] | None = None
