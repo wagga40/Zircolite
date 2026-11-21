@@ -289,3 +289,78 @@ def source_values(event: Any) -> str:
         elif node is not None and isinstance(node, (int, float)):
             values.append(str(node))
     return "\n".join(values)
+
+
+def event_filter_values(event_dict: Any, channel_plan: dict, channel_hint: Any,
+                        eventid_plan: dict, eventid_hint: Any) -> tuple:
+    """Channel and EventID of a raw event for the event filter, failing open.
+
+    Returns ``(channel, channel_hint, eventid, eventid_hint)``: a non-empty
+    string or None, an int or None, and for each the path that produced it
+    (the hint passed in when none did). See ``_filter_value``.
+    """
+    if not isinstance(event_dict, dict):
+        # A JSON line can hold any value; it is not this filter's to drop
+        return None, channel_hint, None, eventid_hint
+    channel, channel_hint = _filter_value(event_dict, channel_plan, channel_hint, False)
+    eventid, eventid_hint = _filter_value(event_dict, eventid_plan, eventid_hint, True)
+    return channel, channel_hint, eventid, eventid_hint
+
+
+def _filter_value(event_dict: dict, field_plan: dict, hint: Any, eventid: bool) -> tuple:
+    """A value read from every configured path, failing open.
+
+    ``field_plan`` holds the configured paths grouped by top-level key. The
+    filter runs before flattening, so it cannot read the column the rules
+    query: when an event carries several of these paths, which one ends up in
+    that column is decided by the flattener's traversal order and the field
+    mappings, not by the configured order. So every path is read, and if two
+    present paths disagree, or one holds an unusable value, the result is
+    None and the filter keeps the event rather than discard it on a value no
+    rule would have seen. An empty value does not count as found, and a
+    previous winner (the hint) never changes the result on mixed-schema
+    inputs; it is only kept for callers.
+
+    XML-derived events carry values as {"#text": ...}. A channel must be a
+    non-empty string and an EventID must convert to an int, the types the
+    filter's set membership test needs.
+    """
+    found = None
+    winner = hint
+    # Most paths are absent at their top-level key: walk whichever is shorter,
+    # the event's top-level keys (one for EVTX) or the configured ones.
+    keys = event_dict if len(event_dict) < len(field_plan) else field_plan
+    for key in keys:
+        entries = field_plan.get(key)
+        if entries is None:
+            continue
+        node = event_dict.get(key)
+        if node is None:
+            continue
+        for rest, path in entries:
+            raw = node
+            for part in rest:
+                if not isinstance(raw, dict):
+                    raw = None
+                    break
+                raw = raw.get(part)
+                if raw is None:
+                    break
+            if raw is None or raw == "":
+                continue
+            if isinstance(raw, dict):
+                raw = raw.get("#text")
+            value: Any
+            if eventid:
+                try:
+                    value = int(raw) if raw is not None else None
+                except (ValueError, TypeError):
+                    value = None
+            else:
+                value = raw if isinstance(raw, str) and raw else None
+            if value is None or (found is not None and value != found):
+                return None, winner
+            if found is None:
+                found = value
+                winner = path
+    return found, winner

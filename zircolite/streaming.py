@@ -45,6 +45,7 @@ from RestrictedPython.Guards import guarded_iter_unpack_sequence, safer_getattr
 
 from .config import ProcessingConfig
 from .console import literal
+from .evtx_slices import EvtxSlice, SliceReader
 from .formats import (
     DEFAULT_INPUT_FORMAT,
     NON_WINDOWS_INPUT_FLAGS,
@@ -293,28 +294,6 @@ def _xml_document_stream(raw: Any) -> _XmlDocumentStream:
             split = bom + len(prolog[:offset].encode(codec, errors="replace"))
             return _XmlDocumentStream(raw, head, split, codec)
     return _XmlDocumentStream(raw, head, codec=codec)
-
-
-# The event filter hands both values to a set membership test, so they have to
-# come back hashable. XML-derived events carry them as {"#text": ...}, or as
-# {"#attributes": {...}} when the element had attributes and no text.
-def _channel_filter_value(value: Any) -> str | None:
-    """A Channel the event filter can use: a non-empty string, else None."""
-    if isinstance(value, dict):
-        value = value.get("#text")
-    if isinstance(value, str) and value:
-        return value
-    return None
-
-
-def _eventid_filter_value(value: Any) -> int | None:
-    """An EventID the event filter can use: an int, else None."""
-    if isinstance(value, dict):
-        value = value.get("#text")
-    try:
-        return int(value) if value is not None else None
-    except (ValueError, TypeError):
-        return None
 
 
 def _field_path_plan(field_paths: tuple) -> dict:
@@ -728,6 +707,8 @@ class StreamingEventProcessor:
         "_failed_splits",
         "_failed_transforms",
         "_filter_all_sources",
+        # Channel/EventID reader of the flattening kernel (event_filter_values)
+        "_filter_values",
         "_filtering_enabled",
         "_flatten_impl",
         "_had_parse_error",
@@ -849,6 +830,7 @@ class StreamingEventProcessor:
             self.flattening_info["reason"] = _load_native_kernel()[1]
         self._flatten_impl = kernel.flatten_event
         self._source_values = kernel.source_values
+        self._filter_values = kernel.event_filter_values
         self.archive_password = proc.archive_password
         self.strict_evtx = proc.strict_evtx
         self.evtx_threads = proc.evtx_threads
@@ -1213,103 +1195,20 @@ class StreamingEventProcessor:
                     transform["code"] = _NOOP_TRANSFORM_CODE
 
     def _extract_event_filter_fields(self, event_dict: dict) -> tuple:
+        """Channel and EventID of a raw event for early filtering, failing open.
+
+        Every configured path is read (dot notation for nested fields, a
+        ``#text`` value for XML-derived events). When the paths present in the
+        event disagree, the value is None and the filter keeps the event: see
+        ``flatten_kernel.event_filter_values``, which runs compiled.
+
+        Returns ``(channel, eventid)``: a non-empty str or None, an int or None.
         """
-        Extract Channel and EventID from raw event data for early filtering.
-
-        Every configured path is read. When the paths present in the event
-        disagree, the value is None and the filter keeps the event: see
-        ``_extract_field_value_hinted``.
-
-        The field paths support:
-        - Dot notation for nested fields (e.g., "Event.System.Channel")
-        - Direct field names (e.g., "Channel")
-        - Special handling for EventID which may be a dict with '#text'
-
-        Args:
-            event_dict: Raw event dictionary (not yet flattened)
-
-        Returns:
-            Tuple of (channel, eventid): channel is a non-empty str or None,
-            eventid is int or None
-        """
-        if not isinstance(event_dict, dict):
-            # A JSON line can hold any value; it is not this filter's to drop
-            return None, None
-        channel, self._channel_path_hint = self._extract_field_value_hinted(
+        channel, self._channel_path_hint, eventid, self._eventid_path_hint = self._filter_values(
             event_dict, self._channel_field_plan, self._channel_path_hint,
-            _channel_filter_value,
-        )
-        eventid, self._eventid_path_hint = self._extract_field_value_hinted(
-            event_dict, self._eventid_field_plan, self._eventid_path_hint,
-            _eventid_filter_value,
+            self._eventid_field_plan, self._eventid_path_hint,
         )
         return channel, eventid
-
-    def _extract_field_value_hinted(
-        self, event_dict: dict, field_plan: dict, hint: tuple | None,
-        normalize: Callable[[Any], Any],
-    ) -> tuple:
-        """
-        Extract a field value from every configured path, failing open.
-
-        ``field_plan`` holds the configured paths grouped by top-level key
-        (see ``_field_path_plan``); paths support dot notation for nested
-        access (e.g. "Event.System.Channel"). Each value found goes through
-        ``normalize``, which returns None for a value the filter cannot use.
-
-        The filter runs before flattening, so it cannot read the column the
-        rules query. When an event carries several of these paths, which one
-        ends up in that column is decided by the flattener's traversal order
-        and the field mappings, not by the configured order: a
-        top-level ``Channel`` next to ``winlog.channel`` yields the nested
-        value. So every path is read, and if two present paths disagree, or
-        one holds an unusable value, the result is None and the filter keeps
-        the event rather than discard it on a value no rule would have seen.
-
-        An empty value does not count as found: a present-but-blank field would
-        otherwise make the event look ambiguous when its real value sits in
-        another candidate path.
-
-        A previous winner is not evidence that other fields are absent from
-        this event. Keep the hint for callers, but never let it change the
-        result on mixed-schema inputs.
-
-        Returns:
-            Tuple of (value, winning_path). ``winning_path`` is a path that
-            produced the value (the new hint), or the unchanged hint when no
-            path matched.
-        """
-        found = None
-        winner = hint
-        # Every path is read on every event, and most are absent at their
-        # top-level key. Walk whichever is shorter: the event's top-level keys
-        # (one for EVTX) or the configured ones.
-        keys = event_dict if len(event_dict) < len(field_plan) else field_plan
-        for key in keys:
-            entries = field_plan.get(key)
-            if entries is None:
-                continue
-            node = event_dict.get(key)
-            if node is None:
-                continue
-            for rest, path in entries:
-                raw = node
-                for part in rest:
-                    if not isinstance(raw, dict):
-                        raw = None
-                        break
-                    raw = raw.get(part)
-                    if raw is None:
-                        break
-                if raw is None or raw == "":
-                    continue
-                value = normalize(raw)
-                if value is None or (found is not None and value != found):
-                    return None, winner
-                if found is None:
-                    found = value
-                    winner = path
-        return found, winner
 
     def _get_nested_value(self, obj: dict, parts: tuple) -> Any:
         """
@@ -1383,7 +1282,10 @@ class StreamingEventProcessor:
         if not self._filter_all_sources and self.chosen_input in _NON_WINDOWS_INPUTS:
             return True
 
-        channel, eventid = self._extract_event_filter_fields(event_dict)
+        channel, self._channel_path_hint, eventid, self._eventid_path_hint = self._filter_values(
+            event_dict, self._channel_field_plan, self._channel_path_hint,
+            self._eventid_field_plan, self._eventid_path_hint,
+        )
         should_process = self.event_filter.should_process_event(channel, eventid)
 
         if not should_process:
@@ -1573,8 +1475,12 @@ class StreamingEventProcessor:
         return min(done, total), total
 
     def stream_evtx_events(self, evtx_file: str) -> Generator[dict, None, None]:
-        """Stream and flatten events from an EVTX file (supports .evtx inside .gz/.bz2/.zip/.7z)."""
+        """Stream and flatten events from an EVTX file (supports .evtx inside .gz/.bz2/.zip/.7z).
+
+        ``evtx_file`` may also be an ``EvtxSlice``, read through ``SliceReader``.
+        """
         tmp_path = None
+        slice_source = None
         try:
             filepath = Path(evtx_file)
             filename = filepath.name
@@ -1603,16 +1509,29 @@ class StreamingEventProcessor:
                                 os.unlink(tmp_path)
                         raise
 
-            parser = (PyEvtxParser(path_to_parse, number_of_threads=self.evtx_threads)
-                      if self.evtx_threads is not None else PyEvtxParser(path_to_parse))
+            if isinstance(evtx_file, EvtxSlice):
+                slice_source = SliceReader(evtx_file)
+            source: Any = slice_source if slice_source is not None else path_to_parse
+            parser = (PyEvtxParser(source, number_of_threads=self.evtx_threads)
+                      if self.evtx_threads is not None else PyEvtxParser(source))
             flatten = self._flatten_event  # Local reference for speed
             json_loads = json.loads
             should_process = self._should_process_event  # Local reference for speed
-            from .parallel import evtx_record_count
-            self._input_total = evtx_record_count(path_to_parse)
+            # Row IDs past a slice's bound would repeat the next slice's.
+            bound = None
+            if isinstance(evtx_file, EvtxSlice):
+                self._input_total = bound = evtx_file.records
+            else:
+                from .parallel import evtx_record_count
+                self._input_total = evtx_record_count(path_to_parse)
 
             for record in parser.records_json():
                 self._records_read += 1
+                if bound is not None and self._records_read > bound:
+                    raise ValueError(
+                        f"the slice holds more than the {bound:,} records its chunk headers claim; "
+                        "the rest of it is not read"
+                    )
                 if record is None:
                     continue
                 try:
@@ -1659,6 +1578,8 @@ class StreamingEventProcessor:
                 "recovered events before the error were kept (use [cyan]--strict[/] to abort on parse errors)[/]"
             )
         finally:
+            if slice_source is not None:
+                slice_source.close()
             if tmp_path and os.path.exists(tmp_path):
                 with contextlib.suppress(OSError):
                     os.unlink(tmp_path)
@@ -1965,7 +1886,7 @@ class StreamingEventProcessor:
     def process_file_streaming(
         self,
         db_connection,
-        log_file: str,
+        log_file: "str | EvtxSlice",
         input_type: str = "evtx",
         extractor: Optional["EvtxExtractor"] = None,
         json_array: bool = False,
@@ -2020,6 +1941,15 @@ class StreamingEventProcessor:
         event_count = 0
         cursor = db_connection.cursor()
         insert_batch = self._insert_batch
+
+        # A slice numbers its rows after the slices before it. The table hands
+        # out the ID after the largest one, so a placeholder row at the base
+        # starts them there; it goes once the slice is read.
+        placeholder = log_file.row_id_base if isinstance(log_file, EvtxSlice) and log_file.row_id_base else None
+        if placeholder is not None:
+            cursor.execute("INSERT INTO logs (row_id) VALUES (?)", (placeholder,))
+            if db_connection.in_transaction:
+                db_connection.commit()
 
         # Events already committed when a later batch fails. Reporting 0 for
         # the whole file would contradict the rows rules then match against.
@@ -2079,6 +2009,10 @@ class StreamingEventProcessor:
             )
             return inserted_count
         finally:
+            if placeholder is not None:
+                cursor.execute("DELETE FROM logs WHERE row_id = ?", (placeholder,))
+                if db_connection.in_transaction:
+                    db_connection.commit()
             cursor.close()
             self._input = None
             self._input_total = 0

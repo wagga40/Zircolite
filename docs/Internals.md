@@ -105,9 +105,10 @@ channel switches the filter to two global axes, each filtering only when every r
 constrains it. A legacy correlation rule (backend 1) with no channel in its SQL turns the
 filter off for the run.
 
-The filter reads its values from the raw event, before flattening. When an event carries
-several of the configured fields with different values, it keeps the event, since the
-flattener decides which value lands in the column.
+The filter reads its values from the raw event, before flattening, through the compiled
+[kernel](#processing-modes) (about 0.8 µs an event, against 1.2 µs in Python). When an event
+carries several of the configured fields with different values, it keeps the event, since
+the flattener decides which value lands in the column.
 
 ## Rule execution
 
@@ -209,19 +210,73 @@ temporary output paths rather than pickling match lists, and split the EVTX pars
 across the CPU budget. They read Ctrl+C from a byte of shared memory, not a
 `multiprocessing.Event`: the rule loop checks it before each rule it runs, and an `Event`
 takes a lock every process shares. With ten workers those checks queued for most of the
-detection time; on 1,692 EVTX files, removing them took four workers from 68 to 44 s. Compressed sizes feed scheduling estimates
+detection time; on 1,692 EVTX files, removing them took four workers from 68 to 44 s.
+
+Workers start from a pickle the parent writes once into the run's private spool
+directory: the ruleset, the run settings and the list of inputs. Spawn passes only that
+path and the shared memory (the stop flag and the progress board). Passed through spawn
+instead, each worker's copy went down its pipe while the parent waited for the child to
+import its main module, so eight workers started over 1.5 s, one after another. They now
+start within 10 ms of each other, which took four HANCITOR files from 5.4 to 4.8 s. Compressed sizes feed scheduling estimates
 only; runtime memory throttling still applies.
+
+### Slices of large EVTX files
+
+A parallel per-file run is only as fast as its biggest file, and holds that file's whole
+database in one worker. `evtx_slices.py` splits a plain EVTX file holding at least two
+slices' worth of records (131,072) into slices of about 65,536 records. Chunks are
+self-contained, so a slice is the file header, rewritten to count the slice's chunks,
+followed by those chunks, read in place through a file-like object. Slices follow the
+parser's order: it starts at the chunk holding the lowest record number and wraps around
+the end of the file, where a circular log keeps its oldest events. The size is a record
+count, never a worker count, because a column takes its type from the first value it
+receives and the cut must not depend on the machine.
+
+- **Row IDs** stay unique and increasing within a file, but are not consecutive. Each
+  slice starts after the record count of the slices before it, read from the chunk
+  headers, with room for a full chunk where a header cannot be trusted. Events the
+  [event filter](#event-filter-bounds) drops leave gaps.
+- **Detections** list each rule once per file, as an unsliced file would. Each worker
+  returns the position of every result in its spool. When a file's last slice is done,
+  the main process copies each rule's matches from every slice, in slice order, under one
+  entry whose count is their sum, without parsing a row.
+- **Per database, not per file:** `--performance-json` lists each slice as
+  `file [n/total]`, and `--package` stores each slice as a part. The timeline counts its
+  duplicates by file, so a slice reports the file it came from.
+- **Kept whole** where a database boundary would show or rows would have to be merged
+  in file order: rulesets with a statement that is not a plain `SELECT * FROM logs WHERE`
+  (grouping, ordering, limiting, a subquery) or with correlations, `--limit`, `--dbfile`,
+  `--keepflat`, CSV output, templates that need every match, unified and sequential runs,
+  and compressed EVTX. So is a file with an empty or damaged slot before its last chunk:
+  the parser skips the first kind and stops at the second, and a plan copying either
+  could read other records than the whole file. A chunk cut short by the end of the file
+  is left out, as the parser leaves it out of the whole file. A slice yielding more
+  records than its chunk headers claim stops there and is reported as read in part,
+  instead of numbering rows the next slice numbers.
+
+Measured on a 10-core M1 Max against the same code with slicing turned off:
+- T001 (eight EVTX files, 1.72 million events) went from 25.5 to 19.3 s, and its peak
+  memory from 9.1 to 6.2 GiB.
+- BHG (1,692 files, the largest holding 1.34 million events) went from 42.3 to 21.6 s,
+  and from 4.6 to 2.3 GiB.
+
+The detections were identical by rule, channel, computer and record ID. A corpus of medium files can use
+more workers once its large files are split, and therefore more memory: HANCITOR went from
+four workers to eight and from 1.1 to 1.7 GiB.
 
 **Working storage.** With `--working-db disk`, each core owns a temporary directory and an
 SQLite file, removed with its WAL sidecars on close. `--dbfile` exports through SQLite's
 backup API either way.
 
-**Kernel.** Flattening uses the compiled kernel when it was built from the current
-`flatten_kernel.py`, and otherwise runs the same source as Python.
+**Kernel.** Flattening, and the event filter's reading of Channel and EventID, use the
+compiled kernel when it was built from the current `flatten_kernel.py`, and otherwise run the
+same source as Python.
 
 **Timers.** Nested stage timers pause their parent, so index and output time does not also
 count as ingestion or detection. Worker stage times are summed apart from wall time, and RSS
-is sampled in a background thread. Detection JSON/CSV writes, template rendering,
+is sampled in a background thread, ten times a second, over the whole process tree. Finding
+the tree walks every process on the system (about 9 ms on macOS), so the walk is repeated
+only when the pool's workers change, a known process is gone, or two seconds have passed. Detection JSON/CSV writes, template rendering,
 timeline final output and package generation belong to `output`; `finalization`
 covers cleanup. These boundaries differ from older reports, which included direct
 detection writes in `detection` and final exports in `finalization`.
@@ -566,6 +621,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `timeline.py` | `--timeline`: rows rendered per working database, then sorted, deduplicated and written |
 | `formats.py` | Input format registry: flag, YAML value, extension, encoding, reader |
 | `extractor.py` | `EvtxExtractor`: log line or XML element → event dict |
+| `evtx_slices.py` | Slices of large EVTX files: the plan, the slice reader (see [Slices](#slices-of-large-evtx-files)) |
 | `config.py` | Dataclasses passed to the engine (`ProcessingConfig`, `ExtractorConfig`, …) |
 | `attack.py` | MITRE ATT&CK technique and tactic IDs from Sigma tags |
 | `shutdown.py` | SIGINT handling, so `Ctrl+C` finishes the current batch and writes results |

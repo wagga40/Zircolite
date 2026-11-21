@@ -319,6 +319,11 @@ against 214 s unified.
 | 4 | The **largest** file's estimate over 60% of usable RAM | No |
 | 5 | Several files, enough memory | Yes |
 
+In a parallel run, an EVTX file holding 131,072 records or more is split into slices of
+about 65,536 records, each a working database of its own, so one big file no longer keeps a
+single worker busy after the others are done. The detections still list each rule once per
+file ([how slices work](Internals.md#slices-of-large-evtx-files)).
+
 **Overriding it:**
 
 ```shell
