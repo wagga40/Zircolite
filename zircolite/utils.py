@@ -805,6 +805,100 @@ class MemoryTracker:
 
 
 ################################################################
+# MEMORY VISIBLE TO THE RUN
+################################################################
+CGROUP_ROOT = Path("/sys/fs/cgroup")
+CGROUP_MEMBERSHIP = Path("/proc/self/cgroup")
+CGROUP_MOUNTINFO = Path("/proc/self/mountinfo")
+
+
+def _cgroup_counters(directory: Path) -> tuple[int, int] | None:
+    """One cgroup's memory limit and the headroom left under it."""
+    try:
+        limit = int((directory / "memory.max").read_bytes())
+        current = int((directory / "memory.current").read_bytes())
+    except (OSError, ValueError):  # includes an unlimited ("max") cgroup
+        return None
+    if limit < 0 or current < 0:
+        return None
+    try:
+        stats = dict(line.split(b" ", 1) for line in (directory / "memory.stat").read_bytes().splitlines())
+        reclaimable = int(stats.get(b"inactive_file", 0)) + int(stats.get(b"active_file", 0))
+    except (OSError, ValueError):
+        reclaimable = 0
+    # The kernel reclaims page cache from both file lists before it OOM-kills;
+    # a file read twice moves to the active one. Counters are sampled separately.
+    working_set = current - min(current, max(0, reclaimable))
+    return limit, max(0, limit - working_set)
+
+
+def _mount_path(field: bytes) -> Path:
+    # mountinfo escapes these four characters. Decode the escaped backslash last.
+    for encoded, char in ((br"\040", b" "), (br"\011", b"\t"), (br"\012", b"\n"), (br"\134", b"\\")):
+        field = field.replace(encoded, char)
+    return Path(os.fsdecode(field))
+
+
+def _cgroup_mount_root() -> Path:
+    """The hierarchy path mounted at CGROUP_ROOT, which can be a delegated subtree."""
+    try:
+        lines = CGROUP_MOUNTINFO.read_bytes().splitlines()
+    except OSError:
+        return Path("/")
+    for line in lines:
+        before, separator, _ = line.partition(b" - cgroup2 ")
+        fields = before.split()
+        if separator and len(fields) >= 5 and _mount_path(fields[4]) == CGROUP_ROOT:
+            return _mount_path(fields[3])
+    return Path("/")
+
+
+def cgroup_memory() -> tuple[int, int] | None:
+    """The tightest visible cgroup v2 limit on the standard Linux mount, and the headroom under it."""
+    if sys.platform != "linux":
+        return None
+    try:
+        membership = CGROUP_MEMBERSHIP.read_bytes().splitlines()
+    except OSError:
+        return None
+    member = next((Path(os.fsdecode(line[3:])) for line in membership if line.startswith(b"0::/")), None)
+    if member is None:
+        return None
+    # A private mount can expose its root limit while namespace-relative
+    # membership points above it. Never walk outside the visible hierarchy.
+    if ".." in member.parts:
+        return _cgroup_counters(CGROUP_ROOT)
+    mount_root = _cgroup_mount_root()
+    relative = member.relative_to(mount_root) if member.is_relative_to(mount_root) else member.relative_to("/")
+    group = CGROUP_ROOT / relative
+    found = []
+    # A child can be unlimited while its siblings consume an ancestor's quota.
+    for directory in (group, *group.parents):
+        counters = _cgroup_counters(directory)
+        if counters is not None:
+            found.append(counters)
+        if directory == CGROUP_ROOT:
+            break
+    if not found:
+        return None
+    return min(limit for limit, _ in found), min(headroom for _, headroom in found)
+
+
+def visible_memory() -> tuple[int, int]:
+    """Total and available bytes, bounded by the tightest cgroup limit.
+
+    psutil reports the host's memory, which inside a container can be many
+    times what the run may use before the kernel kills it.
+    """
+    host = psutil.virtual_memory()
+    total, available = host.total, host.available
+    cgroup = cgroup_memory()
+    if cgroup is not None:
+        total, available = min(total, cgroup[0]), min(available, cgroup[1])
+    return total, available
+
+
+################################################################
 # HEURISTICS FOR OPTIMAL PROCESSING MODE
 ################################################################
 def format_size(size: float) -> str:
@@ -851,8 +945,7 @@ def analyze_files_and_recommend_mode(
     - Estimated memory per file < available_ram / num_workers → parallel safe
     """
     try:
-        available_ram = psutil.virtual_memory().available
-        total_ram = psutil.virtual_memory().total
+        total_ram, available_ram = visible_memory()
         cpu_count = os.cpu_count() or 4
         has_psutil = True
     except Exception:

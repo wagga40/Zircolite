@@ -340,15 +340,20 @@ When at least two CPUs and 4 GiB are available, DuckDB uses up to four threads a
 buffer limit of half the available memory, rounded down to whole GB and capped at 32 GB.
 The fallback is one thread and a 2 GB limit.
 
-On Linux with cgroup v2 mounted at `/sys/fs/cgroup`, the writer reads its membership
-from `/proc/self/cgroup` and checks its group and each visible ancestor. For each valid
-`memory.max` and `memory.current`, it estimates available bytes by subtracting current
-usage from the limit and adding back reclaimable `inactive_file` bytes from `memory.stat`.
-The lowest estimate and the host's available RAM bound the writer budget. Groups with an
-unlimited or unreadable limit or usage contribute no estimate. A finite group with less
-than 4 GiB available gets one thread and half the available memory in MiB, with a 1 MiB
-floor. Other mounts and cgroup v1 use the host estimate. These limits apply to DuckDB's
-buffer manager. Process RSS also includes allocations outside that manager.
+On Linux with cgroup v2 mounted at `/sys/fs/cgroup`, `utils.cgroup_memory` reads the
+process's membership from `/proc/self/cgroup` and checks its group and each visible
+ancestor. For each valid `memory.max` and `memory.current`, it estimates available bytes
+by subtracting current usage from the limit and adding back the page cache in `memory.stat`
+(`inactive_file` and `active_file`: the kernel reclaims both before it OOM-kills, and a
+file read twice sits on the active list). The lowest estimate and the host's available RAM
+bound the writer budget. Groups with an unlimited or unreadable limit or usage contribute
+no estimate. A finite group with less than 4 GiB available gets one thread and half the
+available memory in MiB, never below 128 MiB, under which DuckDB cannot pin the buffers a
+Parquet `COPY` needs. Other mounts and cgroup v1 use the host estimate. These limits apply
+to DuckDB's buffer manager. Process RSS also includes allocations outside that manager.
+The same bound (`utils.visible_memory`) sizes the run before ingestion: auto mode, the
+executor choice, the worker count and the parallel throttle all read the container's
+memory, not the host's.
 
 Insertion order is preserved. When buffers spill to the package's temporary directory,
 spilling can dominate runtime. A 1.9 million event, 386-column run took 31 s at a 3 GB

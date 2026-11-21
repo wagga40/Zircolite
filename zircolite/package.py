@@ -41,14 +41,11 @@ from .package_spool import (
     rule_key,
 )
 from .progress import Reporter
-from .utils import random_suffix
+from .utils import cgroup_memory, random_suffix
 
 PACKAGE_FORMAT = 1
 DATA_TABLES = ("events", "rules", "hits", "alerts", "alert_events")
 REQUIRED_EXTENSIONS = ("json", "parquet")
-CGROUP_ROOT = Path("/sys/fs/cgroup")
-CGROUP_MEMBERSHIP = Path("/proc/self/cgroup")
-CGROUP_MOUNTINFO = Path("/proc/self/mountinfo")
 # Wide schemas need smaller row groups to bound per-thread writer buffers.
 ROW_GROUP_SIZE = 20_000
 DUCKDB_SETTINGS: dict[str, Any] = {
@@ -60,6 +57,8 @@ DUCKDB_SETTINGS: dict[str, Any] = {
 }
 # The viewer holds the events file in WebAssembly memory, which stops at 4 GB.
 EVENTS_PARQUET_LIMIT = 1 << 30
+# Below about 128 MiB DuckDB cannot pin the buffers a Parquet COPY needs.
+DUCKDB_MIN_MEMORY = 128 << 20
 # Per file, like the events: the viewer reads the index into WASM memory too.
 TEXT_PARQUET_LIMIT = 1 << 30
 EXPLORE_PARQUET_LIMIT = 1 << 30
@@ -216,75 +215,6 @@ def row_group_size(column_count: int) -> int:
     return max(2048, min(ROW_GROUP_SIZE, 1000 * (4_000_000 // (1000 * max(1, column_count)))))
 
 
-def _cgroup_headroom(directory: Path) -> int | None:
-    try:
-        limit = int((directory / "memory.max").read_bytes())
-        current = int((directory / "memory.current").read_bytes())
-    except (OSError, ValueError):  # includes an unlimited ("max") cgroup
-        return None
-    if limit < 0 or current < 0:
-        return None
-    try:
-        stats = (directory / "memory.stat").read_bytes().splitlines()
-        line = next((line for line in stats if line.startswith(b"inactive_file ")), b"")
-        inactive = int(line.partition(b" ")[2] or 0)
-    except (OSError, ValueError):
-        inactive = 0
-    # Inactive file cache can be reclaimed. Kernel counters are sampled separately.
-    working_set = current - min(current, max(0, inactive))
-    return max(0, limit - working_set)
-
-
-def _mount_path(field: bytes) -> Path:
-    # mountinfo escapes these four characters. Decode the escaped backslash last.
-    for encoded, char in ((br"\040", b" "), (br"\011", b"\t"), (br"\012", b"\n"), (br"\134", b"\\")):
-        field = field.replace(encoded, char)
-    return Path(os.fsdecode(field))
-
-
-def _cgroup_mount_root() -> Path:
-    """The hierarchy path mounted at CGROUP_ROOT, which can be a delegated subtree."""
-    try:
-        lines = CGROUP_MOUNTINFO.read_bytes().splitlines()
-    except OSError:
-        return Path("/")
-    for line in lines:
-        before, separator, _ = line.partition(b" - cgroup2 ")
-        fields = before.split()
-        if separator and len(fields) >= 5 and _mount_path(fields[4]) == CGROUP_ROOT:
-            return _mount_path(fields[3])
-    return Path("/")
-
-
-def _cgroup_memory_available() -> int | None:
-    """The tightest visible cgroup v2 limit on the standard Linux mount."""
-    if sys.platform != "linux":
-        return None
-    try:
-        membership = CGROUP_MEMBERSHIP.read_bytes().splitlines()
-    except OSError:
-        return None
-    member = next((Path(os.fsdecode(line[3:])) for line in membership if line.startswith(b"0::/")), None)
-    if member is None:
-        return None
-    # A private mount can expose its root limit while namespace-relative
-    # membership points above it. Never walk outside the visible hierarchy.
-    if ".." in member.parts:
-        return _cgroup_headroom(CGROUP_ROOT)
-    mount_root = _cgroup_mount_root()
-    relative = member.relative_to(mount_root) if member.is_relative_to(mount_root) else member.relative_to("/")
-    group = CGROUP_ROOT / relative
-    headrooms = []
-    # A child can be unlimited while its siblings consume an ancestor's quota.
-    for directory in (group, *group.parents):
-        headroom = _cgroup_headroom(directory)
-        if headroom is not None:
-            headrooms.append(headroom)
-        if directory == CGROUP_ROOT:
-            break
-    return min(headrooms, default=None)
-
-
 def _duckdb_settings() -> dict[str, Any]:
     """Threads and memory for stage two, sized by what is free once the workers are gone.
 
@@ -299,11 +229,11 @@ def _duckdb_settings() -> dict[str, Any]:
     except (OSError, psutil.Error):
         available = None
         cpus = 1
-    cgroup = _cgroup_memory_available()
+    cgroup = cgroup_memory()
     if cgroup is not None:
-        available = cgroup if available is None else min(cgroup, available)
+        available = cgroup[1] if available is None else min(cgroup[1], available)
         if available < (4 << 30):
-            settings["memory_limit"] = f"{max(1, (available // 2) >> 20)}MiB"
+            settings["memory_limit"] = f"{max(DUCKDB_MIN_MEMORY, available // 2) >> 20}MiB"
     if cpus >= 2 and available is not None and available >= (4 << 30):
         settings.update(threads=min(4, cpus), memory_limit=f"{min(32, (available // 2) >> 30)}GB")
     return settings

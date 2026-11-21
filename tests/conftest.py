@@ -647,6 +647,32 @@ def pytest_runtest_setup(item):
 
 
 @pytest.fixture(autouse=True)
+def no_host_cgroup(monkeypatch):
+    """Keep the machine's own cgroup limit out of every memory decision under test.
+
+    Inside a memory-limited CI container the real limit would bound the
+    mocked host memory, and the same test would pass on one runner only.
+    """
+    from zircolite import utils
+    monkeypatch.setattr(utils, "CGROUP_MEMBERSHIP", Path("/nonexistent/zircolite-tests/cgroup"))
+
+
+@pytest.fixture
+def cgroup_tree(tmp_path, monkeypatch):
+    """A cgroup v2 hierarchy under tmp_path that places this process at /parent/child."""
+    from zircolite import utils
+    root = tmp_path / "cgroup"
+    (root / "parent" / "child").mkdir(parents=True)
+    membership = tmp_path / "membership"
+    membership.write_text("0::/parent/child\n")
+    monkeypatch.setattr(utils.sys, "platform", "linux")
+    monkeypatch.setattr(utils, "CGROUP_ROOT", root)
+    monkeypatch.setattr(utils, "CGROUP_MEMBERSHIP", membership)
+    monkeypatch.setattr(utils, "CGROUP_MOUNTINFO", tmp_path / "mountinfo")
+    return root
+
+
+@pytest.fixture(autouse=True)
 def cleanup_test_artifacts():
     """
     Automatically clean up any artifacts created during tests.

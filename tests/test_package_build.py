@@ -130,7 +130,6 @@ def test_build_reads_mixed_spool_compression(spool, tmp_path):
                                                (1, 8 << 30, (1, "2GB")),
                                                (4, (4 << 30) - 1, (1, "2GB"))])
 def test_build_selects_bounded_resources(spool, monkeypatch, cpus, available, want):
-    monkeypatch.setattr(package, "_cgroup_memory_available", lambda: None)
     monkeypatch.setattr("os.cpu_count", lambda: cpus)
     monkeypatch.setattr("psutil.virtual_memory", lambda: SimpleNamespace(available=available))
     connect = duckdb.connect
@@ -147,18 +146,10 @@ def test_build_selects_bounded_resources(spool, monkeypatch, cpus, available, wa
 
 
 @pytest.fixture
-def cgroup(tmp_path, monkeypatch):
-    root = tmp_path / "cgroup"
-    root.mkdir()
-    membership = tmp_path / "membership"
-    membership.write_text("0::/parent/child\n")
-    (root / "parent" / "child").mkdir(parents=True)
-    monkeypatch.setattr(package.sys, "platform", "linux")
-    monkeypatch.setattr(package, "CGROUP_ROOT", root)
-    monkeypatch.setattr(package, "CGROUP_MEMBERSHIP", membership)
+def cgroup(cgroup_tree, monkeypatch):
     monkeypatch.setattr(package.os, "cpu_count", lambda: 4)
     monkeypatch.setattr(package.psutil, "virtual_memory", lambda: SimpleNamespace(available=40 << 30))
-    return root
+    return cgroup_tree
 
 
 def test_writer_uses_lowest_available_memory_among_host_and_cgroup_ancestors(cgroup, monkeypatch):
@@ -176,29 +167,20 @@ def test_writer_uses_lowest_available_memory_among_host_and_cgroup_ancestors(cgr
     assert package._duckdb_settings()["memory_limit"] == "4GB"
 
 
-def test_writer_checks_visible_root_for_namespace_relative_membership(cgroup):
-    package.CGROUP_MEMBERSHIP.write_text("0::/../other/scope\n")
-    (cgroup / "memory.max").write_text(str(8 << 30))
-    (cgroup / "memory.current").write_text(str(2 << 30))
-    assert package._cgroup_memory_available() == 6 << 30
-
-
-def test_writer_resolves_membership_against_a_subtree_mount(cgroup, tmp_path, monkeypatch):
-    mounts = tmp_path / "mountinfo"
-    mounts.write_text(f"30 1 0:60 /slice\\040a {cgroup} ro,x - cgroup2 cgroup rw\n")
-    monkeypatch.setattr(package, "CGROUP_MOUNTINFO", mounts)
-    package.CGROUP_MEMBERSHIP.write_text("0::/slice a/parent/child\n")
+def test_writer_counts_active_page_cache_as_reclaimable(cgroup):
+    # Files read twice sit on the active list, and the kernel still reclaims them.
     child = cgroup / "parent" / "child"
-    (child / "memory.max").write_text(str(6 << 30))
-    (child / "memory.current").write_text(str(2 << 30))
-    assert package._cgroup_memory_available() == 4 << 30
+    (child / "memory.max").write_text(str(3 << 30))
+    (child / "memory.current").write_text(str(3 << 30))
+    (child / "memory.stat").write_text(f"active_file {2 << 30}\ninactive_file 0\n")
+    assert package._duckdb_settings()["memory_limit"] == "1024MiB"
 
 
 @pytest.mark.parametrize("limit,current,stat,want", [
     (str(16 << 30), str(6 << 30), "inactive_file malformed", (4, "5GB")),
     (str(16 << 30), str(6 << 30), None, (4, "5GB")),
     (str(8 << 30), str(6 << 30), None, (1, "1024MiB")),
-    (str(8 << 30), str(9 << 30), None, (1, "1MiB")),
+    (str(8 << 30), str(9 << 30), None, (1, "128MiB")),
     (str(8 << 30), str(2 << 30), f"inactive_file {30 << 30}", (4, "4GB")),
     ("max", str(8 << 30), None, (4, "20GB")),
     ("malformed", str(8 << 30), None, (4, "20GB")),

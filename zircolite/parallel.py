@@ -41,7 +41,7 @@ from .console import console, literal
 from .detector import EVTX_MAGIC
 from .progress import WorkerBoard, show_board, worker_progress
 from .shutdown import is_shutdown_requested
-from .utils import estimate_input_size
+from .utils import cgroup_memory, estimate_input_size, visible_memory
 
 # How often the workers' board is read (matches Live refresh_per_second=10)
 _BOARD_POLL_SECONDS = 0.1
@@ -355,9 +355,9 @@ class MemoryAwareParallelProcessor:
     # ------------------------------------------------------------------
 
     def get_available_memory_mb(self) -> float:
-        """Get available system memory in MB."""
+        """Get available memory in MB, bounded by a cgroup limit."""
         try:
-            return psutil.virtual_memory().available / (1024 * 1024)
+            return visible_memory()[1] / (1024 * 1024)
         except Exception:
             return 4096
 
@@ -379,9 +379,12 @@ class MemoryAwareParallelProcessor:
             return 0
 
     def get_memory_percent(self) -> float:
-        """Get current memory usage as percentage of total."""
+        """Get current memory usage as percentage of total, or of a cgroup limit."""
         try:
-            return psutil.virtual_memory().percent
+            if cgroup_memory() is None:
+                return psutil.virtual_memory().percent
+            total, available = visible_memory()
+            return 100.0 * (total - available) / total if total > 0 else 100.0
         except Exception:
             return 50.0
 
@@ -402,13 +405,13 @@ class MemoryAwareParallelProcessor:
         if self._calibrated_memory_per_file_mb is None:
             return False
         try:
-            vm = psutil.virtual_memory()
+            total, available = visible_memory()
         except Exception:
             return False
-        total_mb = vm.total / (1024 * 1024)
+        total_mb = total / (1024 * 1024)
         if total_mb <= 0:
             return False
-        used_mb = (vm.total - vm.available) / (1024 * 1024)
+        used_mb = (total - available) / (1024 * 1024)
         projected_percent = (
             (used_mb + (pending + 1) * self._calibrated_memory_per_file_mb)
             / total_mb * 100.0

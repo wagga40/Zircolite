@@ -267,7 +267,8 @@ span files.
 ![Per-file: each file gets its own database, processed in parallel. Unified: every file goes into one database, where a correlation can link events from different files](pics/db-layouts.svg)
 
 Given several files, auto mode weighs them against free RAM and CPUs, then picks the layout
-and whether to run in parallel:
+and whether to run in parallel. In a container, free RAM is what its cgroup v2 limit leaves
+([how it is read](Internals.md#stage-2-parquet)):
 
 ```
 [+] Analyzing workload...

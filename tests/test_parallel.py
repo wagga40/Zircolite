@@ -1154,3 +1154,42 @@ class TestCalibrationDoesNotSerialiseTheRun:
 
         assert stats.processed_files == 6
         assert peak >= 2
+
+
+class TestParallelMemoryInsideACgroup:
+    """The worker pool and its throttle read the container limit, not the host's memory."""
+
+    @staticmethod
+    def _limit(cgroup_tree, limit, current):
+        child = cgroup_tree / "parent" / "child"
+        (child / "memory.max").write_text(str(limit))
+        (child / "memory.current").write_text(str(current))
+
+    def test_available_memory_is_bounded_by_the_cgroup(self, cgroup_tree, test_logger):
+        self._limit(cgroup_tree, 1 << 30, 256 << 20)
+        processor = MemoryAwareParallelProcessor(logger=test_logger)
+        with patch("psutil.virtual_memory") as mock_vm:
+            mock_vm.return_value.total = 32 << 30
+            mock_vm.return_value.available = 8 << 30
+            assert processor.get_available_memory_mb() == 768
+
+    def test_memory_percent_is_relative_to_the_cgroup_limit(self, cgroup_tree, test_logger):
+        self._limit(cgroup_tree, 1000 << 20, 900 << 20)
+        processor = MemoryAwareParallelProcessor(logger=test_logger)
+        with patch("psutil.virtual_memory") as mock_vm:
+            mock_vm.return_value.total = 32 << 30
+            mock_vm.return_value.available = 28 << 30
+            mock_vm.return_value.percent = 12.5
+            assert processor.get_memory_percent() == pytest.approx(90.0)
+            assert processor.should_throttle() is True
+
+    def test_memory_budget_projects_against_the_cgroup_limit(self, cgroup_tree, test_logger):
+        self._limit(cgroup_tree, 1000 << 20, 800 << 20)
+        processor = MemoryAwareParallelProcessor(
+            config=ParallelConfig(memory_limit_percent=85.0), logger=test_logger
+        )
+        processor._calibrated_memory_per_file_mb = 100.0
+        with patch("psutil.virtual_memory") as mock_vm:
+            mock_vm.return_value.total = 32 << 30
+            mock_vm.return_value.available = 28 << 30
+            assert processor._would_exceed_memory_budget() is True  # 900 of 1000 MiB
