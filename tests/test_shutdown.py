@@ -1,11 +1,13 @@
 """Tests for graceful shutdown coordination (Ctrl+C handling)."""
 
 import json
+import multiprocessing
 import os
 import signal
 import sys
 import time
 from argparse import Namespace
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -36,6 +38,25 @@ class TestShutdownEvent:
         assert shutdown.is_shutdown_requested() is True
         shutdown.reset_shutdown_state()
         assert shutdown.is_shutdown_requested() is False
+
+
+class TestSharedFlag:
+    def test_set_and_clear(self):
+        flag = shutdown.SharedFlag(multiprocessing.get_context("spawn"))
+        assert flag.is_set() is False
+        flag.set()
+        assert flag.is_set() is True
+        flag.clear()
+        assert flag.is_set() is False
+
+    def test_process_workers_see_the_parent_set_it(self):
+        context = multiprocessing.get_context("spawn")
+        flag = shutdown.SharedFlag(context)
+        with ProcessPoolExecutor(1, mp_context=context, initializer=shutdown.set_worker_shutdown_event,
+                                 initargs=(flag,)) as pool:
+            assert pool.submit(shutdown.is_shutdown_requested).result() is False
+            flag.set()
+            assert pool.submit(shutdown.is_shutdown_requested).result() is True
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only signal semantics")

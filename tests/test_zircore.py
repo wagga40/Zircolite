@@ -935,6 +935,30 @@ class TestZircoliteCoreRuleset:
         assert len(zircore.ruleset) == 3
         zircore.close()
 
+    def test_reloading_the_same_list_keeps_the_filtered_rules(self, field_mappings_file, sample_ruleset, test_logger):
+        """Workers load the ruleset before every file; an unchanged list is not filtered again."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        try:
+            zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
+            first = zircore.ruleset
+            zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
+            assert zircore.ruleset is first
+
+            zircore.load_ruleset_from_var(sample_ruleset, rule_filters=["PowerShell"])
+            assert len(zircore.ruleset) == 2
+
+            zircore.ruleset = []
+            zircore.load_ruleset_from_var(sample_ruleset, rule_filters=["PowerShell"])
+            assert len(zircore.ruleset) == 2
+
+            grown = [*sample_ruleset]
+            zircore.load_ruleset_from_var(grown, rule_filters=None)
+            grown.append({"title": "late", "rule": ["SELECT * FROM logs"]})
+            zircore.load_ruleset_from_var(grown, rule_filters=None)
+            assert [rule["title"] for rule in zircore.ruleset][-1] == "late"
+        finally:
+            zircore.close()
+
     def test_apply_ruleset_filters(self, field_mappings_file, sample_ruleset, test_logger):
         """Test filtering rules by title."""
         zircore = ZircoliteCore(
@@ -3094,6 +3118,44 @@ class TestBatchSizeReachesTheProcessor:
             assert core.batch_size == ProcessingConfig().batch_size
         finally:
             core.close()
+
+
+class TestCensusIndex:
+    """``CensusIndex.admits`` must agree with ``admitted_pairs`` on every statement."""
+
+    def test_agrees_with_admitted_pairs_on_the_shipped_ruleset(self):
+        from zircolite.sqlscan import CensusIndex, admitted_pairs, census_bounds, scan_query
+
+        rules = json.loads((Path(__file__).parent.parent / "rules" / "rules_windows_merged.json").read_text())
+        statements = sorted({sql for rule in rules for sql in rule.get("rule") or () if isinstance(sql, str)})
+        bounded = [sql for sql in statements if census_bounds(sql) is not None]
+        assert len(bounded) > 1000
+        censuses = [
+            {("security", 4624): 3, ("security", 4688): 1},
+            {("microsoft-windows-sysmon/operational", 1): 5, ("microsoft-windows-sysmon/operational", 3): 2},
+            {(None, 4104): 1, ("windows powershell", 400): 2, ("system", 7045): 1},
+            {(None, None): 4},
+            {("security", None): 1, ("security", "abc"): 1, ("application", 1.5): 1},
+            {("microsoft-windows-powershell/operational", 4104): 1, (None, 1): 1, ("security", 4688): 1},
+        ]
+        for census in censuses:
+            index = CensusIndex(census)
+            for sql in statements:
+                bounds = census_bounds(sql)
+                expected = admitted_pairs(sql, census)
+                if bounds is None:
+                    assert expected is None or not scan_query(sql).row_preserving, sql
+                else:
+                    assert index.admits(bounds) is bool(expected), (sql, census)
+
+    def test_empty_bounds_admit_nothing(self):
+        from zircolite.sqlscan import CensusIndex
+
+        index = CensusIndex({("security", 4624): 1})
+        assert index.admits((frozenset(), None)) is False
+        assert index.admits((None, frozenset())) is False
+        assert index.admits((frozenset({"security"}), frozenset())) is False
+        assert index.admits((frozenset({"security"}), frozenset({4624}))) is True
 
 
 class TestRuleCensus:

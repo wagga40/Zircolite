@@ -50,7 +50,10 @@ split parses. Split fields are written directly (aliases do not apply to them), 
 any field name, and merged only where the event has no field of that name in any case, so
 log content cannot overwrite a real field or `row_id`.
 
-**Typing.** Columns are added as fields appear, and events are inserted in batches of 250. A
+**Typing.** Columns are added as fields appear, and events are inserted in batches of 250,
+one statement per run of events sharing their fields, so a row binds only its own fields
+rather than every field of its batch. On wide Windows logs that halved the cost of the
+inserts. The table's `row_id` is a plain `INTEGER PRIMARY KEY`. A
 column takes its type from the first value it receives: `INTEGER`, `NUMERIC` for floats (so
 ranges compare numerically), or `TEXT`. Integers beyond SQLite's signed 64-bit range are
 stored as floats and may be rounded; the run warns once and names the fields.
@@ -202,8 +205,11 @@ at a time. The heuristics are in
 so thread workers queue behind each other: on 450 EVTX files of 16 MiB, twenty threads ran
 2.4 times slower than one file at a time, and ten processes 3.9 times faster. Hence
 `--executor auto` picks processes from 32 MiB of input. Processes return summaries and
-temporary output paths rather than pickling match lists, share a shutdown event, and split
-the EVTX parser threads across the CPU budget. Compressed sizes feed scheduling estimates
+temporary output paths rather than pickling match lists, and split the EVTX parser threads
+across the CPU budget. They read Ctrl+C from a byte of shared memory, not a
+`multiprocessing.Event`: the rule loop checks it before each rule it runs, and an `Event`
+takes a lock every process shares. With ten workers those checks queued for most of the
+detection time; on 1,692 EVTX files, removing them took four workers from 68 to 44 s. Compressed sizes feed scheduling estimates
 only; runtime memory throttling still applies.
 
 **Working storage.** With `--working-db disk`, each core owns a temporary directory and an

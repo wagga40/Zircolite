@@ -155,6 +155,9 @@ def test_disk_storage_exports_rolls_back_and_cleans_up(tmp_path):
         assert conn.execute("PRAGMA mmap_size").fetchone()[0] == 0
         assert conn.execute("PRAGMA temp_store").fetchone()[0] == 1
         core.create_db('value TEXT COLLATE NOCASE')
+        # WAL fixes the page size of a new file, so it must be set before.
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+        assert conn.execute("PRAGMA page_size").fetchone()[0] == 65536
         assert core.insert_data_to_db({"value": "Alpha"})
         assert not core.insert_data_to_db([{"value": "first"}, {"value": object()}])
         assert core.execute_select_query("SELECT value FROM logs") == [{"value": "Alpha"}]
@@ -286,6 +289,37 @@ def test_cython_ingestion_matches_python_with_transforms(tmp_path):
             schema = conn.execute("PRAGMA table_info(logs)").fetchall()
         results.append((rows, processor.field_types, schema, stored))
     assert results[0] == results[1]
+
+
+def test_path_trie_keeps_paths_apart_on_both_backends(monkeypatch):
+    """The kernel caches each field path in a trie; its answers must not depend on it.
+
+    A key can be a leaf in one event and a dict in the next, and a dotted key
+    spells the same path as a nested one while naming another field. Starting
+    the trie over at its cap must change nothing either.
+    """
+    native("zircolite._flatten_native")
+    import zircolite.flatten_kernel as kernel
+
+    events = [
+        {"a": {"b": 1, "c": {"d": "x"}}, "e": "top"},
+        {"a": 5, "e": "again"},
+        {"a.b": 2, "a": {"b": 3}},
+        {"a": {"b": {"c": 4}}},
+        {"Event": {"EventData": {"CommandLine": "cmd", "Image": "c:\\a.exe"}}},
+    ]
+    args = argparse.Namespace(all_transforms=False, transform_categories=None)
+
+    def flatten_all(backend):
+        processor = StreamingEventProcessor(CONFIG, args, ProcessingConfig(flatten_backend=backend))
+        return [processor._flatten_event(deepcopy(event), "f.json") for event in events * 3]
+
+    expected = flatten_all("python")
+    assert expected[0] == {"OriginalLogfile": "f.json", "e": "top", "b": 1, "d": "x"}
+    assert expected[2] == {"ab": 2, "OriginalLogfile": "f.json", "b": 3}
+    assert flatten_all("cython") == expected
+    monkeypatch.setattr(kernel, "_MAX_PATH_TRIE_ENTRIES", 2)
+    assert flatten_all("python") == expected
 
 
 class ReferenceAutomaton:

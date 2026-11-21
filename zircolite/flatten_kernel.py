@@ -14,6 +14,9 @@ from .utils import (
     parse_timestamp,
 )
 
+# Path trie entries kept before starting over, as the lru_cache it replaced did.
+_MAX_PATH_TRIE_ENTRIES = 10000
+
 
 def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
     """
@@ -37,6 +40,10 @@ def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
     field_types = self.field_types
     transform_value = self._transform_value
     resolve_path = self._resolve_path
+    if self._path_trie_entries > _MAX_PATH_TRIE_ENTRIES:
+        self._path_trie.clear()
+        self._path_trie_entries = 0
+    trie = self._path_trie
     special_fields = self._special_fields
     seen_leaf_keys = self._seen_leaf_keys
     _sentinel = _EXCLUDED_SENTINEL
@@ -46,11 +53,10 @@ def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
     # Pairs split out of a field value, merged once every real field is known
     split_fields: dict[str, str] = {}
 
-    def process_leaf(raw_field_name: str, last_part: str, obj: Any) -> None:
-        cached = resolve_path(raw_field_name, last_part)
+    def process_leaf(cached: Any, last_part: str, obj: Any) -> None:
         if cached is _sentinel:
             return
-        raw_field_name, mapped_key = cached  # type: ignore[misc]
+        raw_field_name, mapped_key = cached
         value: Any
         if isinstance(obj, list):
             value = str(obj)
@@ -69,7 +75,7 @@ def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
         # one-time column-type record, so they skip the lookups below.
         if key not in special_fields and raw_field_name not in special_fields:
             is_int = isinstance(value, int)
-            if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
+            if is_int and not -(1 << 63) <= value < (1 << 63):
                 # Past SQLite's INTEGER range; stored as REAL, like orjson reads it
                 self.rounded_integer_fields.add(key)
                 value = float(value)
@@ -178,26 +184,30 @@ def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
                     )
                 seen_leaf_keys.add(k)
 
-    # Descend through the event tree, carrying the dotted path as a string
-    # (cheaper than re-allocating a path tuple at every node). Leaves are
-    # processed without an extra stack push/pop.
+    # Descend through the event tree beside the path trie. A trie node maps
+    # each key to [dotted path, resolved leaf, nested node], filled the first
+    # time the key is met there, so a field seen before costs dict lookups
+    # rather than a new path string and a cache lookup keyed by it.
     # Only dicts are ever pushed, so every popped node is one.
-    stack: list[tuple[dict[str, Any], str]] = [(event_dict, "")]
+    stack: list[tuple[dict[str, Any], dict, str]] = [(event_dict, trie, "")]
     while stack:
-        obj, raw_path = stack.pop()
-        if raw_path:
-            for k, v in obj.items():
-                new_path = f"{raw_path}.{k}"
-                if isinstance(v, dict):
-                    stack.append((v, new_path))
-                else:
-                    process_leaf(new_path, k, v)
-        else:
-            for k, v in obj.items():
-                if isinstance(v, dict):
-                    stack.append((v, k))
-                else:
-                    process_leaf(k, k, v)
+        obj, node, raw_path = stack.pop()
+        for k, v in obj.items():
+            entry = node.get(k)
+            if entry is None:
+                entry = [f"{raw_path}.{k}" if raw_path else k, None, None]
+                node[k] = entry
+                self._path_trie_entries += 1
+            if isinstance(v, dict):
+                child = entry[2]
+                if child is None:
+                    child = entry[2] = {}
+                stack.append((v, child, entry[0]))
+            else:
+                cached = entry[1]
+                if cached is None:
+                    cached = entry[1] = resolve_path(entry[0], k)
+                process_leaf(cached, k, v)
 
     if split_fields:
         # A pair inside a field value must not stand in for a field the event

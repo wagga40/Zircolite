@@ -74,7 +74,8 @@ from .shutdown import is_shutdown_requested
 from .spellings import FieldSpellings, drop_spellings
 from .sqlscan import (
     _ASCII_LOWER,
-    admitted_pairs,
+    CensusIndex,
+    census_bounds,
     census_collations_supported,
     normalize_rule_sql,
     rebalance_sql,
@@ -188,7 +189,7 @@ def _index_name_for(column: str) -> str:
     return "idx_" + column.replace(".", "_")
 
 
-def _rule_may_match(rule: dict[str, Any], census: dict[tuple, int]) -> bool:
+def _rule_may_match(rule: dict[str, Any], census: CensusIndex) -> bool:
     """False only when no statement of ``rule`` can match a pair in ``census``.
 
     The bounds are the ones EventFilter already trusts to drop events before
@@ -199,10 +200,10 @@ def _rule_may_match(rule: dict[str, Any], census: dict[tuple, int]) -> bool:
     if rule.get("correlation") or not isinstance(queries, list):
         return True
     for sql in queries:
-        if not isinstance(sql, str) or not scan_query(sql).row_preserving:
+        if not isinstance(sql, str):
             return True
-        admitted = admitted_pairs(sql, census)
-        if admitted is None or admitted:
+        bounds = census_bounds(sql)
+        if bounds is None or census.admits(bounds):
             return True
     return False
 
@@ -250,6 +251,7 @@ class ZircoliteCore:
         "_fulltext_revision",
         "_fulltext_validated",
         "_has_correlation_plans",
+        "_loaded_ruleset",
         "_logs_columns_lower",
         "_prefilter",
         "_prepared",
@@ -313,6 +315,8 @@ class ZircoliteCore:
         self.logger = logger or logging.getLogger(__name__)
         self.metrics = FileMetrics()
         self._prepared = None
+        # (source list, its length, filters, filtered list) of the last load
+        self._loaded_ruleset: tuple | None = None
         self.db_connection = None
         self._working_directory = None
         self._prefilter: LiteralPrefilter | None = None
@@ -464,10 +468,12 @@ class ZircoliteCore:
             common_pragmas = [
                 ('temp_store', 'FILE' if self._disk_working else 'MEMORY'),
                 ('mmap_size', '0' if self._disk_working else '268435456'),
-                ('page_size', '65536'),
                 ('threads', str(sqlite_threads)),
             ]
 
+            # Switching a new file to WAL writes its first page, which fixes the
+            # page size, so the size goes first.
+            conn.execute('PRAGMA page_size = 65536;').close()
             if db == ':memory:':
                 # In-memory database settings
                 pragmas = [
@@ -546,9 +552,9 @@ class ZircoliteCore:
                 raise ValueError(f"Schema uses reserved keyword-search name {FIELD}")
             cleaned_field_stmt = ', '.join(filter(None, (cleaned_field_stmt, '"_sigma_fulltext" TEXT')))
         if cleaned_field_stmt:
-            create_table_stmt = f"CREATE TABLE logs ( row_id INTEGER PRIMARY KEY AUTOINCREMENT, {cleaned_field_stmt} );"
+            create_table_stmt = f"CREATE TABLE logs ( row_id INTEGER PRIMARY KEY, {cleaned_field_stmt} );"
         else:
-            create_table_stmt = "CREATE TABLE logs ( row_id INTEGER PRIMARY KEY AUTOINCREMENT );"
+            create_table_stmt = "CREATE TABLE logs ( row_id INTEGER PRIMARY KEY );"
         self.logger.debug(f" CREATE : {create_table_stmt}")
         if not self.execute_query(create_table_stmt):
             raise RuntimeError("Unable to create database table")
@@ -1398,9 +1404,19 @@ class ZircoliteCore:
     def load_ruleset_from_var(
         self, ruleset: list[dict[str, Any]], rule_filters: list[str] | None = None
     ) -> None:
-        """Load a ruleset from a variable."""
+        """Load a ruleset from a variable.
+
+        Workers load the same list before every file. Filtering it again gives
+        the same rules, so a repeat load of an unchanged list keeps them.
+        """
+        filters = None if rule_filters is None else tuple(rule_filters)
+        loaded = self._loaded_ruleset
+        if (loaded is not None and loaded[0] is ruleset and loaded[1] == len(ruleset)
+                and loaded[2] == filters and loaded[3] is self.ruleset):
+            return
         self.ruleset = ruleset
         self.apply_ruleset_filters(rule_filters)
+        self._loaded_ruleset = (ruleset, len(ruleset), filters, self.ruleset)
 
     def apply_ruleset_filters(
         self, rule_filters: list[str] | None = None
@@ -1609,7 +1625,11 @@ class ZircoliteCore:
         # A rule whose Channel/EventID bounds miss every pair in this database
         # cannot match, so it is neither prepared nor handed to the prefilter.
         census = self._log_source_census()
-        may_run = [census is None or _rule_may_match(rule, census) for rule in self.ruleset]
+        if census is None:
+            may_run = [True] * len(self.ruleset)
+        else:
+            census_index = CensusIndex(census)
+            may_run = [_rule_may_match(rule, census_index) for rule in self.ruleset]
         pruned = may_run.count(False)
         self.metrics.data["pruned_rules"] += pruned
         if pruned:
@@ -1758,9 +1778,11 @@ class ZircoliteCore:
 
             with live_display as live:
                 for i, rule in enumerate(self.ruleset):
-                    if is_shutdown_requested():
-                        break
-                    rule_results = run_rule(rule) if may_run[i] else None
+                    rule_results = None
+                    if may_run[i]:
+                        if is_shutdown_requested():
+                            break
+                        rule_results = run_rule(rule)
 
                     try:
                         if progress_callback is not None:

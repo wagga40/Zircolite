@@ -62,7 +62,7 @@ from .parallel import MemoryAwareParallelProcessor, ParallelConfig
 from .performance import FileMetrics
 from .progress import BoardSlot, Reporter, Steps, WorkerBoard
 from .results import RowSpool, result_summary, write_result_json
-from .shutdown import is_shutdown_requested, set_worker_shutdown_event
+from .shutdown import SharedFlag, is_shutdown_requested, set_worker_shutdown_event
 from .timeline import TimelineError, TimelinePart, TimelinePartRecord, TimelineSpool
 from .utils import (
     MemoryTracker,
@@ -1612,11 +1612,11 @@ def process_parallel_streaming(
         process_options: dict[str, Any] = {}
         worker = _process_file
         if process_mode:
-            cancel_event = multiprocessing.get_context("spawn").Event()
+            spawn = multiprocessing.get_context("spawn")
+            cancel_event = SharedFlag(spawn)
             payload = {f.name: getattr(ctx, f.name) for f in fields(ctx)
                        if f.init and f.name not in ("logger", "memory_tracker", "parent_metrics", "performance_files")}
             worker = _process_file_job
-            spawn = multiprocessing.get_context("spawn")
             progress = (board, progress_files, spawn.Value("i", 0)) if board is not None else None
             process_options = dict(initializer=_initialize_process_worker,
                 initargs=(payload, args, input_type, raw_config, spool_dir, cancel_event, progress),
