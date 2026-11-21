@@ -236,9 +236,15 @@ receives and the cut must not depend on the machine.
   `file [n/total]`, and `--package` stores each slice as a part. The timeline counts its
   duplicates by file, so a slice reports the file it came from.
 - **Kept whole** where a database boundary would show or rows would have to be merged
-  in file order: rulesets with a rule that aggregates rows or correlates events, `--limit`,
-  `--dbfile`, `--keepflat`, CSV output, templates that need every match, unified and
-  sequential runs, and compressed EVTX.
+  in file order: rulesets with a statement that is not a plain `SELECT * FROM logs WHERE`
+  (grouping, ordering, limiting, a subquery) or with correlations, `--limit`, `--dbfile`,
+  `--keepflat`, CSV output, templates that need every match, unified and sequential runs,
+  and compressed EVTX. So is a file with an empty or damaged slot before its last chunk:
+  the parser skips the first kind and stops at the second, and a plan copying either
+  could read other records than the whole file. A chunk cut short by the end of the file
+  is left out, as the parser leaves it out of the whole file. A slice yielding more
+  records than its chunk headers claim stops there and is reported as read in part,
+  instead of numbering rows the next slice numbers.
 
 Measured on a 10-core M1 Max against the same code with slicing turned off:
 - T001 (eight EVTX files, 1.72 million events) went from 25.5 to 19.3 s, and its peak

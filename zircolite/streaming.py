@@ -1616,14 +1616,21 @@ class StreamingEventProcessor:
             flatten = self._flatten_event  # Local reference for speed
             json_loads = json.loads
             should_process = self._should_process_event  # Local reference for speed
+            # Row IDs past a slice's bound would repeat the next slice's.
+            bound = None
             if isinstance(evtx_file, EvtxSlice):
-                self._input_total = evtx_file.records
+                self._input_total = bound = evtx_file.records
             else:
                 from .parallel import evtx_record_count
                 self._input_total = evtx_record_count(path_to_parse)
 
             for record in parser.records_json():
                 self._records_read += 1
+                if bound is not None and self._records_read > bound:
+                    raise ValueError(
+                        f"the slice holds more than the {bound:,} records its chunk headers claim; "
+                        "the rest of it is not read"
+                    )
                 if record is None:
                     continue
                 try:

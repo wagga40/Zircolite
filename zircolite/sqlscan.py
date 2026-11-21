@@ -721,6 +721,7 @@ def clear_scan_cache() -> None:
     _SCANS.clear()
     _NORMALIZED.clear()
     _CENSUS_BOUNDS.clear()
+    _PER_ROW.clear()
 
 
 def _constraints(queries: list[str], field: str) -> set | None:
@@ -777,6 +778,36 @@ def census_bounds(sql: str) -> tuple[frozenset | None, frozenset | None] | None:
                   scan.eventids)
     _CENSUS_BOUNDS[sql] = bounds
     return bounds
+
+
+# Words that make a statement's answer depend on rows other than the one tested.
+_CROSS_ROW_WORDS = frozenset({"GROUP", "HAVING", "LIMIT", "OFFSET", "DISTINCT", "OVER", "WINDOW",
+                              "ORDER", "WITH", "JOIN", "UNION", "INTERSECT", "EXCEPT"})
+_PER_ROW: dict[str, bool] = {}
+
+
+def is_per_row(sql: str) -> bool:
+    """Whether ``sql`` selects rows each on its own merits, whatever else the table holds.
+
+    A plain ``SELECT * FROM logs WHERE ...`` qualifies; anything grouping,
+    limiting, ordering or reading the table again does not, nor does SQL the
+    lexer cannot read. Split the table in two and a per-row statement returns
+    exactly the rows it returned on the whole, which ``row_preserving`` (a
+    statement's input being empty) does not promise.
+    """
+    try:
+        return _PER_ROW[sql]
+    except KeyError:
+        pass
+    answer = False
+    if scan_query(sql).row_preserving:
+        try:
+            words = [text.upper() for kind, text in _typed_tokens(sql) if kind == "word"]
+        except _Unsupported:
+            words = None
+        answer = words is not None and words.count("SELECT") == 1 and _CROSS_ROW_WORDS.isdisjoint(words)
+    _PER_ROW[sql] = answer
+    return answer
 
 
 class CensusIndex:

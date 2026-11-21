@@ -64,7 +64,7 @@ from .performance import FileMetrics
 from .progress import BoardSlot, Reporter, Steps, WorkerBoard
 from .results import RowSpool, merge_result_spools, result_summary, write_result_json
 from .shutdown import SharedFlag, is_shutdown_requested, set_worker_shutdown_event
-from .sqlscan import scan_query
+from .sqlscan import is_per_row
 from .timeline import TimelineError, TimelinePart, TimelinePartRecord, TimelineSpool
 from .utils import (
     MemoryTracker,
@@ -1489,7 +1489,7 @@ def _slicing_allowed(ctx: ProcessingContext, input_type: str) -> bool:
         queries = rule.get("rule")
         if rule.get("correlation") or rule.get("correlation_plan") or not isinstance(queries, list):
             return False
-        if not all(isinstance(sql, str) and scan_query(sql).row_preserving for sql in queries):
+        if not all(isinstance(sql, str) and is_per_row(sql) for sql in queries):
             return False
     return True
 

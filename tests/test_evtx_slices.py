@@ -77,6 +77,26 @@ class TestPlan:
         assert [s.chunks for s in slices] == [(0, 1), (2, 3, 4)]
         assert [(s.row_id_base, s.records) for s in slices] == [(0, 4), (4, MAX_CHUNK_RECORDS + 4)]
 
+    def test_a_gap_before_the_last_chunk_keeps_the_file_whole(self, tmp_path):
+        """The parser skips an empty slot and stops at a garbled one; a plan copies neither."""
+        path = _evtx(tmp_path / "gap.evtx", [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10)])
+        data = bytearray(path.read_bytes())
+        empty = bytes(data)
+        start = HEADER_SIZE + 3 * CHUNK_SIZE
+        path.write_bytes(empty[:start] + bytes(CHUNK_SIZE) + empty[start + CHUNK_SIZE:])
+        assert plan_slices(path, records=2) == []
+        data[start:start + 8] = b"garbage!"
+        path.write_bytes(bytes(data))
+        assert plan_slices(path, records=2) == []
+
+    def test_preallocated_space_and_a_cut_chunk_are_not_planned(self, tmp_path):
+        path = _evtx(tmp_path / "tail.evtx", [(1, 2), (3, 4), (5, 6)])
+        data = path.read_bytes()
+        path.write_bytes(data + bytes(2 * CHUNK_SIZE))
+        assert [s.chunks for s in plan_slices(path, records=2)] == [(0,), (1,), (2,)]
+        path.write_bytes(data + data[HEADER_SIZE:HEADER_SIZE + 4000])
+        assert [s.chunks for s in plan_slices(path, records=2)] == [(0,), (1,), (2,)]
+
     def test_a_slice_pickles_and_names_its_place(self, tmp_path):
         evtx_slice = EvtxSlice(str(tmp_path / "a.evtx"), 1, 3, (4, 5), 10, 20)
         # Process workers receive their work pickled; this round-trips our own object.
@@ -153,6 +173,19 @@ class TestMerge:
         assert merge_result_spools([(None, index), (None, index)], None) == [{"title": "t", "count": 4}]
 
 
+class TestShortFile:
+    def test_a_short_read_stops_where_the_file_ends(self, tmp_path):
+        """Bytes past a short read must never be filled from the next chunk."""
+        path = _evtx(tmp_path / "two.evtx", [(1, 1), (2, 2)])
+        data = path.read_bytes()
+        path.write_bytes(data[:HEADER_SIZE + CHUNK_SIZE + 4000])
+        with SliceReader(EvtxSlice(str(path), 0, 1, (1, 0), 2, 0)) as reader:
+            read = reader.read(HEADER_SIZE + 2 * CHUNK_SIZE)
+            assert len(read) == HEADER_SIZE + 4000
+            assert reader.tell() == HEADER_SIZE + 4000
+            assert read[HEADER_SIZE:] == data[HEADER_SIZE + CHUNK_SIZE:HEADER_SIZE + CHUNK_SIZE + 4000]
+
+
 class TestRowIds:
     def test_a_slice_numbers_its_rows_after_the_slices_before_it(self, field_mappings_file, test_logger,
                                                                    default_args_config, tmp_path):
@@ -166,6 +199,21 @@ class TestRowIds:
         assert processor.process_file_streaming(conn, slices[1], input_type="evtx") == 2
         assert [row[0] for row in conn.execute("SELECT row_id FROM logs ORDER BY row_id")] == [3, 4]
         assert {row[0] for row in conn.execute("SELECT OriginalLogfile FROM logs")} == {"four.evtx"}
+        conn.close()
+
+    def test_a_slice_holding_more_than_its_bound_is_flagged(self, field_mappings_file, test_logger,
+                                                             default_args_config, tmp_path):
+        """Reading on would number rows the next slice numbers too."""
+        path = _evtx(tmp_path / "two.evtx", [None, None])
+        processor = StreamingEventProcessor(config_file=field_mappings_file, args_config=default_args_config,
+                                            processing_config=ProcessingConfig(disable_progress=True),
+                                            logger=test_logger)
+        conn = sqlite3.connect(":memory:", isolation_level=None)
+        processor.create_initial_table(conn)
+        evtx_slice = EvtxSlice(str(path), 0, 2, (0, 1), 1, 0)
+        assert processor.process_file_streaming(conn, evtx_slice, input_type="evtx") == 1
+        assert processor.ingest_degraded
+        assert [row[0] for row in conn.execute("SELECT row_id FROM logs")] == [1]
         conn.close()
 
 
@@ -239,10 +287,13 @@ def test_slicing_stays_off_where_a_database_boundary_shows(field_mappings_file, 
                    {"retain_results": True}):
         assert not processing._slicing_allowed(replace(ctx, **change), "evtx"), change
     # A rule over several rows at once would see each slice apart.
-    plain = {"title": "plain", "rule": ["SELECT * FROM logs WHERE EventID=1"]}
+    plain = {"title": "plain", "rule": ["SELECT * FROM logs WHERE EventID=1 AND x LIKE '%group by%'"]}
     assert processing._slicing_allowed(replace(ctx, rulesets=[plain]), "evtx")
     for rule in (
         {"title": "aggregate", "rule": ["SELECT User, count(*) AS n FROM logs GROUP BY User HAVING n > 5"]},
+        {"title": "grouped rows", "rule": ["SELECT * FROM logs WHERE EventID=4625 GROUP BY User HAVING count(*) > 9"]},
+        {"title": "subquery", "rule": ["SELECT * FROM logs WHERE row_id = (SELECT min(row_id) FROM logs)"]},
+        {"title": "limit", "rule": ["SELECT * FROM logs WHERE EventID=1 LIMIT 5"]},
         {"title": "legacy", "correlation": {"type": "event_count"}, "rule": ["SELECT * FROM logs"]},
         {"title": "plan", "correlation_plan": {}, "rule": ["SELECT * FROM logs"]},
     ):

@@ -12,6 +12,7 @@ from the first value it receives, so the cut must not depend on the machine.
 """
 
 import io
+import os
 import struct
 import zlib
 from collections.abc import Iterator
@@ -65,21 +66,32 @@ class EvtxSlice:
 
 
 def _chunk_headers(path: str | PathLike[str]) -> tuple[bytes, list[tuple[int, int, int, bool]]] | None:
-    """The file header and ``(position, first, last, sane)`` per chunk, or None."""
+    """The file header and ``(position, first, last, sane)`` per chunk, or None.
+
+    None also means "read it whole": a slot without a chunk before the last
+    chunk of the file. The parser skips an empty slot and stops at a garbled
+    one, flagging the file; a plan would have to copy both behaviours exactly,
+    so it does not try. Empty slots after the last chunk are preallocated
+    space. A chunk cut short by the end of the file is never read, here or by
+    the parser on the whole file.
+    """
     chunks = []
     with open(path, "rb", buffering=0) as source:
         header = source.read(HEADER_SIZE)
         if len(header) < HEADER_SIZE or not header.startswith(EVTX_MAGIC):
             return None
-        position = 0
-        while True:
+        slots = (os.fstat(source.fileno()).st_size - HEADER_SIZE) // CHUNK_SIZE
+        gap = False
+        for position in range(slots):
             source.seek(HEADER_SIZE + position * CHUNK_SIZE)
             head = source.read(24)
             if len(head) < 24 or not head.startswith(CHUNK_MAGIC):
-                break
+                gap = True
+                continue
+            if gap:
+                return None
             first, last = struct.unpack_from("<QQ", head, 8)
             chunks.append((position, first, last, first <= last < first + MAX_CHUNK_RECORDS))
-            position += 1
     return header, chunks
 
 
@@ -188,10 +200,13 @@ class SliceReader(io.RawIOBase):
                 offset, length = piece
                 self._source.seek(offset)
                 got = self._source.readinto(view[done:done + length]) or 0
+                if got < length:
+                    # The next piece belongs after the bytes not read.
+                    done += got
+                    self._position += got
+                    break
             done += got
             self._position += got
-            if not got:
-                break
         return done
 
     def _pieces(self, wanted: int) -> Iterator[bytes | tuple[int, int]]:
