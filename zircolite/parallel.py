@@ -106,7 +106,7 @@ def _sigint_held_for_new_workers():
 def is_plain_evtx(path: Path | str) -> bool:
     """True for an uncompressed EVTX file, recognised by its signature rather than its name."""
     try:
-        with open(path, "rb") as source:
+        with open(path, "rb", buffering=0) as source:
             return source.read(len(EVTX_MAGIC)) == EVTX_MAGIC
     except OSError:
         return False
@@ -130,10 +130,12 @@ def evtx_record_count(path: Path | str, limit: int | None = None) -> int:
 
     File sizes say little here: Windows allocates logs ahead of their records.
     The scan reads 24 bytes per 64 KiB chunk and stops once ``limit`` is reached.
+    Unbuffered, because a buffered read after each seek fills a 128 KiB buffer,
+    which reads the whole file.
     """
     count = chunk = 0
     try:
-        with open(path, "rb") as source:
+        with open(path, "rb", buffering=0) as source:
             if source.read(len(EVTX_MAGIC)) != EVTX_MAGIC:
                 return 0
             while limit is None or count < limit:
