@@ -197,6 +197,39 @@ def test_memory_skips_the_process_table_without_worker_processes(monkeypatch):
     assert tracker.complete_scope
 
 
+def test_memory_walks_the_process_table_only_when_the_workers_may_have_changed(monkeypatch):
+    """Ten samples a second each walked every PID; the descendants found are reused."""
+    tracker = MemoryTracker()
+    tracker.process = Mock()
+    tracker.process.memory_info.return_value.rss = 10 * 1024**2
+    worker = Mock()
+    worker.memory_info.return_value.rss = 100 * 1024**2
+    tracker.process.children.return_value = [worker]
+    active = [SimpleNamespace(pid=1)]
+    monkeypatch.setattr("zircolite.utils.multiprocessing.active_children", lambda: active)
+    clock = [100.0]
+    monkeypatch.setattr("zircolite.utils.time.monotonic", lambda: clock[0])
+
+    assert tracker.get_memory_usage() == 110
+    assert tracker.get_memory_usage() == 110
+    assert tracker.process.children.call_count == 1
+
+    active = [SimpleNamespace(pid=1), SimpleNamespace(pid=2)]
+    assert tracker.get_memory_usage() == 110
+    assert tracker.process.children.call_count == 2
+
+    clock[0] += 2.5
+    assert tracker.get_memory_usage() == 110
+    assert tracker.process.children.call_count == 3
+
+    worker.memory_info.side_effect = psutil.NoSuchProcess(1)
+    assert tracker.get_memory_usage() == 10
+    worker.memory_info.side_effect = None
+    assert tracker.get_memory_usage() == 110
+    assert tracker.process.children.call_count == 4
+    assert tracker.complete_scope
+
+
 def test_nested_sampling_leaves_the_outer_sampler_running():
     tracker = MemoryTracker()
     tracker.start()

@@ -19,6 +19,7 @@ import re
 import string
 import sys
 import threading
+import time
 from collections import deque
 from collections.abc import Sequence
 from contextlib import contextmanager
@@ -698,6 +699,10 @@ def avoid_files(
     return cast(list[Path | str], filtered)
 
 
+# Seconds a walk of the process table stands for this process's descendants
+_DESCENDANTS_TTL = 2.0
+
+
 class MemoryTracker:
     """Track memory usage during execution."""
 
@@ -719,21 +724,25 @@ class MemoryTracker:
         self.complete_scope = True
         self.peak_memory: float = 0.0
         self.process = psutil.Process(os.getpid())
+        # (worker PIDs, when, descendants) of the last walk of the process table
+        self._descendants: tuple[frozenset[int], float, list] | None = None
 
     def get_memory_usage(self) -> float:
         """Get current memory usage in MB."""
         try:
             # Get RSS (Resident Set Size) in bytes, convert to MB
             rss = self.process.memory_info().rss
-            # Finding children walks every PID on the system (about 8 ms on
+            # Finding children walks every PID on the system (about 9 ms on
             # macOS); only worker processes can add to this process's memory.
-            if not multiprocessing.active_children():
+            active = multiprocessing.active_children()
+            if not active:
                 return rss / (1024 * 1024)
             try:
-                for child in self.process.children(recursive=True):
+                for child in self._known_descendants(active):
                     try:
                         rss += child.memory_info().rss
                     except psutil.NoSuchProcess:
+                        self._descendants = None
                         continue
                     except (psutil.Error, OSError):
                         self.complete_scope = False
@@ -751,6 +760,23 @@ class MemoryTracker:
         except Exception:
             self.complete_scope = False
             return 0
+
+    def _known_descendants(self, active: list) -> list:
+        """This process's descendants, walking the process table only when they may have changed.
+
+        Sampled ten times a second, the walk took a tenth of a core during
+        every process pool. It is repeated when the pool's workers change, a
+        known process is gone, or two seconds have passed, which is how soon
+        a process the pool does not know about is counted.
+        """
+        workers = frozenset(child.pid for child in active)
+        known = self._descendants
+        now = time.monotonic()
+        if known is not None and known[0] == workers and now - known[1] < _DESCENDANTS_TTL:
+            return known[2]
+        descendants = self.process.children(recursive=True)
+        self._descendants = (workers, now, descendants)
+        return descendants
 
     def sample(self):
         """Take a memory usage sample."""

@@ -272,7 +272,9 @@ backup API either way.
 
 **Timers.** Nested stage timers pause their parent, so index and output time does not also
 count as ingestion or detection. Worker stage times are summed apart from wall time, and RSS
-is sampled in a background thread. Detection JSON/CSV writes, template rendering,
+is sampled in a background thread, ten times a second, over the whole process tree. Finding
+the tree walks every process on the system (about 9 ms on macOS), so the walk is repeated
+only when the pool's workers change, a known process is gone, or two seconds have passed. Detection JSON/CSV writes, template rendering,
 timeline final output and package generation belong to `output`; `finalization`
 covers cleanup. These boundaries differ from older reports, which included direct
 detection writes in `detection` and final exports in `finalization`.
