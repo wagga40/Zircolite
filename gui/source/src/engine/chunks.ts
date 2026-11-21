@@ -34,8 +34,7 @@ export class ChunkStore {
     }
   }
 
-  /** The whole file, checked against the manifest; its chunks are released. */
-  take(file: PackageFile, type = 'application/octet-stream'): Blob {
+  private takeParts(file: PackageFile): Bytes[] {
     const list = this.parts.get(file.name) ?? [];
     const problem = this.broken.get(file.name);
     this.parts.delete(file.name);
@@ -45,9 +44,38 @@ export class ChunkStore {
       if (list[i] === undefined) throw new Error(`${file.name}: chunk ${i} of ${file.chunks.length} did not load`);
     }
     if (list.length !== file.chunks.length) throw new Error(`${file.name}: ${list.length} chunks loaded, ${file.chunks.length} listed`);
-    const blob = new Blob(list, { type });
-    if (blob.size !== file.bytes) throw new Error(`${file.name}: ${blob.size} bytes loaded, ${file.bytes} listed`);
-    return blob;
+    const size = list.reduce((sum, bytes) => sum + bytes.length, 0);
+    if (size !== file.bytes) throw new Error(`${file.name}: ${size} bytes loaded, ${file.bytes} listed`);
+    return list;
+  }
+
+  /** Engine assets need a Blob for decompression, data URLs or worker scripts. */
+  take(file: PackageFile, type = 'application/octet-stream'): Blob {
+    return new Blob(this.takeParts(file), { type });
+  }
+
+  /** DuckDB takes ownership of a contiguous buffer. Avoid a Blob copy and a subsequent arrayBuffer copy. */
+  takeBytes(file: PackageFile): Bytes {
+    const parts = this.takeParts(file);
+    if (parts.length === 1) return parts[0];
+    const bytes = new Uint8Array(file.bytes);
+    let offset = 0;
+    for (const part of parts) {
+      bytes.set(part, offset);
+      offset += part.length;
+    }
+    return bytes;
+  }
+
+  async readBytes(file: PackageFile, loaded: (source: string) => void): Promise<Bytes> {
+    try {
+      await loadScripts(file.chunks, loaded);
+      return this.takeBytes(file);
+    } catch (error) {
+      this.parts.delete(file.name);
+      this.broken.delete(file.name);
+      throw error;
+    }
   }
 }
 
@@ -59,7 +87,10 @@ export function loadScript(source: string): Promise<void> {
       script.remove();
       resolve();
     };
-    script.onerror = () => reject(new Error(`${source} could not be loaded; extract the whole archive before opening index.html`));
+    script.onerror = () => {
+      script.remove();
+      reject(new Error(`${source} could not be loaded; extract the whole archive before opening index.html`));
+    };
     document.head.appendChild(script);
   });
 }
@@ -69,11 +100,18 @@ export async function loadScripts(sources: string[], loaded: (source: string) =>
   const worker = async (): Promise<void> => {
     while (next < sources.length) {
       const source = sources[next++];
-      await loadScript(source);
-      loaded(source);
+      try {
+        await loadScript(source);
+        loaded(source);
+      } catch (error) {
+        next = sources.length;
+        throw error;
+      }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(concurrency, sources.length) }, worker));
+  // Let scripts already in flight finish before the caller releases this file's decoded chunks.
+  const results = await Promise.allSettled(Array.from({ length: Math.min(concurrency, sources.length) }, worker));
+  for (const result of results) if (result.status === 'rejected') throw result.reason;
 }
 
 export async function gunzip(blob: Blob, type: string): Promise<Blob> {

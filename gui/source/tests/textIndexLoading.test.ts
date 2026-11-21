@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from '../src/engine/db';
 import { type Activity, isSuperseded, QueryScheduler, type Sender } from '../src/engine/queries';
 import { ident } from '../src/engine/sql';
-import { loadTextIndex, textIndex } from '../src/engine/textIndex.svelte';
+import { configureTextIndex, textIndex } from '../src/engine/textIndex.svelte';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import { EMPTY } from '../src/state/hash';
@@ -21,7 +21,7 @@ let dir: string;
 let sent: string[] = [];
 
 const FILE = { name: 'text.parquet', kind: 'index' as const, bytes: 1, sha256: 'x', chunks: ['data/text.parquet.0000.js'] };
-const store = { take: () => new Blob([new Uint8Array([1])]) };
+const bytes = new Uint8Array([1]);
 const scanOf = (query: string) => fx.uids(compile(parse(query), schema));
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -41,7 +41,7 @@ function scheduler(onActivity?: (activity: Activity) => void): QueryScheduler {
   return new QueryScheduler(sender, { onActivity });
 }
 
-/** The Db loadTextIndex sees, over a scheduler; the file is registered when `arrive` is called. */
+/** The Db configureTextIndex sees, over a scheduler; the file is registered when `arrive` is called. */
 function pageDb(s: QueryScheduler) {
   let arrive: () => void = () => {};
   const arrived = new Promise<void>((resolve) => {
@@ -76,22 +76,66 @@ afterEach(() => {
 });
 
 describe('a bare word while the index loads', () => {
+  it('opens the page and serves field searches without reading index bytes', async () => {
+    const s = scheduler();
+    const page = pageDb(s);
+    let reads = 0;
+    configureTextIndex({ files: [FILE] }, page.db, async () => {
+      reads++;
+      return bytes;
+    });
+    const query = new QueryState(schema, 6, true);
+    for (const q of ['', 'EventID:4624', 'Computer:*02*']) {
+      view.q = q;
+      await s.rows(`SELECT count(*) FROM events WHERE ${query.where}`);
+    }
+    expect(reads).toBe(0);
+    expect(textIndex.status).toBe('available');
+    expect(textIndex.loaded).toBe(0);
+    view.q = 'powershell';
+    expect(query.where).toContain('fulltext');
+    expect(reads).toBe(0);
+    page.arrive();
+    const sql = `SELECT _zl_uid FROM events WHERE ${query.where} ORDER BY _zl_uid`;
+    const [first, second] = await Promise.all([s.rows(sql), s.rows(sql)]);
+    expect(first).toEqual(second);
+    expect(first).toHaveLength((await scanOf('powershell')).length);
+    expect(reads).toBe(1);
+    expect(textIndex.status).toBe('ready');
+  });
+
+  it('can supersede a bare word before it requests its first chunk', async () => {
+    const s = scheduler();
+    let reads = 0;
+    configureTextIndex({ files: [FILE] }, pageDb(s).db, async () => {
+      reads++;
+      return bytes;
+    });
+    const query = new QueryState(schema, 6, true);
+    view.q = 'whoami';
+    const first = s.rows(`SELECT count(*) FROM events WHERE ${query.where}`, { lane: 'table' });
+    const second = s.rows('SELECT 1 AS n', { lane: 'table' });
+    await expect(first).rejects.toSatisfy(isSuperseded);
+    expect(await second).toEqual([{ n: 1 }]);
+    expect(reads).toBe(0);
+  });
+
   it('compiles onto the index, waits for the file, and answers exactly as the scan would', async () => {
     sent = [];
     const s = scheduler();
     const page = pageDb(s);
-    const loading = loadTextIndex({ files: [FILE] }, store, page.db, async () => {});
+    configureTextIndex({ files: [FILE] }, page.db, async () => bytes);
     const query = new QueryState(schema, 6, true);
     view.q = 'powershell';
-    expect(textIndex.status).toBe('loading');
+    expect(textIndex.status).toBe('available');
     expect(query.where).toContain('fulltext');
     const answer = s.rows<{ _zl_uid: number }>(`SELECT _zl_uid FROM events WHERE ${query.where} ORDER BY _zl_uid`, { lane: 'table' });
     await tick();
     expect(sent).toEqual([]);
+    expect(textIndex.status).toBe('loading');
     page.arrive();
-    await loading;
-    expect(textIndex.status).toBe('ready');
     expect((await answer).map((row) => row._zl_uid)).toEqual(await scanOf('powershell'));
+    expect(textIndex.status).toBe('ready');
     expect(sent[0]).toMatch(/^CREATE OR REPLACE VIEW fulltext/);
   });
 
@@ -108,8 +152,9 @@ describe('a bare word while the index loads', () => {
         });
         loaded();
       }
+      return bytes;
     };
-    const loading = loadTextIndex({ files: [file] }, store, page.db, load);
+    configureTextIndex({ files: [file] }, page.db, (file, progress) => load(file.chunks, progress));
     const query = new QueryState(schema, 6, true);
     view.q = 'powershell';
     const answer = s.rows(`SELECT _zl_uid FROM events WHERE ${query.where}`, { lane: 'table' });
@@ -122,7 +167,6 @@ describe('a bare word while the index loads', () => {
     next();
     await tick();
     page.arrive();
-    await loading;
     await answer;
     expect(textIndex).toMatchObject({ status: 'ready', loaded: 2, total: 2 });
     expect(seen.some((activity) => activity.waiting)).toBe(true);
@@ -133,10 +177,10 @@ describe('a bare word while the index loads', () => {
     sent = [];
     const s = scheduler();
     let fail: (error: Error) => void = () => {};
-    const load = () => new Promise<void>((_, reject) => {
+    const load = () => new Promise<Uint8Array>((_, reject) => {
       fail = reject;
     });
-    const loading = loadTextIndex({ files: [FILE] }, store, pageDb(s).db, load);
+    configureTextIndex({ files: [FILE] }, pageDb(s).db, load);
     const query = new QueryState(schema, 6, true);
     view.q = 'powershell -error';
     const onIndex = query.where;
@@ -144,7 +188,6 @@ describe('a bare word while the index loads', () => {
     const watched = expect(waiting).rejects.toThrow('data/text.parquet.0000.js could not be loaded');
     await tick();
     fail(new Error('data/text.parquet.0000.js could not be loaded'));
-    await loading;
     await watched;
     expect(textIndex.status).toBe('failed');
     expect(query.where).not.toBe(onIndex);
@@ -158,7 +201,7 @@ describe('a bare word while the index loads', () => {
     sent = [];
     const s = scheduler();
     const page = pageDb(s);
-    const loading = loadTextIndex({ files: [FILE] }, store, page.db, async () => {});
+    configureTextIndex({ files: [FILE] }, page.db, async () => bytes);
     const query = new QueryState(schema, 6, true);
     view.q = 'whoami';
     const where = query.where;
@@ -169,7 +212,6 @@ describe('a bare word while the index loads', () => {
     await watched;
     expect(await s.rows('SELECT count(*)::INTEGER AS n FROM events', { lane: 'other' })).toEqual([{ n: 6 }]);
     page.arrive();
-    await loading;
     const again = await s.rows<{ _zl_uid: number }>(`SELECT _zl_uid FROM events WHERE ${where} ORDER BY _zl_uid`, { lane: 'table' });
     expect(again.map((row) => row._zl_uid)).toEqual(await scanOf('whoami'));
   });

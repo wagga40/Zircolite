@@ -127,7 +127,7 @@ export class QueryScheduler {
     this.drop((job) => job.lane !== null && job.lane.startsWith(prefix));
   }
 
-  /** The full-text index is on its way; queries that read it wait for it. */
+  /** The first bare-word query loads the full-text index. */
   useTextIndex(source: TextSource): void {
     this.matches.use(source);
   }

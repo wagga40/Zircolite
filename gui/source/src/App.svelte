@@ -3,9 +3,9 @@
   import { bootEngine } from './engine/boot';
   import { ChunkStore, loadScript, loadScripts } from './engine/chunks';
   import { type Db, openDb } from './engine/db';
-  import { type Manifest, PACKAGE_FORMAT } from './engine/manifest';
+  import { hasExploreTable, type Manifest, PACKAGE_FORMAT } from './engine/manifest';
   import { Schema } from './engine/schema';
-  import { loadTextIndex, textIndex } from './engine/textIndex.svelte';
+  import { configureTextIndex, textIndex } from './engine/textIndex.svelte';
   import { bindHash, view } from './state/view.svelte';
   import { activity } from './ui/busy.svelte';
   import Loading from './ui/Loading.svelte';
@@ -40,19 +40,21 @@
     manifest = m;
     const weights = chunkWeights(m.files);
     total = [...weights.values()].reduce((sum, bytes) => sum + bytes, 0);
-    phase = 'Loading the data';
-    await loadScripts([...weights.keys()], (source) => {
+    phase = 'Loading the engine';
+    const chunkLoaded = (source: string) => {
       loaded += weights.get(source) ?? 0;
-    });
+    };
+    await loadScripts(m.files.filter((file) => file.kind === 'engine').flatMap((file) => file.chunks), chunkLoaded);
     phase = 'Starting the query engine';
     const engine = await bootEngine(m, store, (label) => {
       phase = label;
-    });
+    }, chunkLoaded);
     phase = 'Linking detections to their events';
     const opened = await openDb(engine, { onActivity: (next) => Object.assign(activity, next) });
     phase = 'Checking the package';
-    const [counts] = await opened.rows<{ events: number; hits: number }>(
-      'SELECT (SELECT count(*) FROM events)::DOUBLE AS events, (SELECT count(*) FROM hits)::DOUBLE AS hits',
+    const exploreCount = hasExploreTable(m) ? ', (SELECT count(*) FROM explore)::DOUBLE AS explore' : '';
+    const [counts] = await opened.rows<{ events: number; hits: number; explore?: number }>(
+      `SELECT (SELECT count(*) FROM events)::DOUBLE AS events, (SELECT count(*) FROM hits)::DOUBLE AS hits${exploreCount}`,
       { cache: false },
     );
     engineEvents = counts.events;
@@ -61,12 +63,14 @@
         `The engine holds ${counts.events} events and ${counts.hits} hits; the package lists ${m.totals.events} and ${m.totals.hits}. The package is damaged or incomplete: extract the whole archive again, or re-create the package.`,
       );
     }
+    if (counts.explore !== undefined && counts.explore !== counts.events) {
+      throw new Error(`The Explore index holds ${counts.explore} rows for ${counts.events} events. Extract the whole archive again, or re-create the package.`);
+    }
     const [withHits] = await opened.rows<{ n: number }>('SELECT count(*)::DOUBLE AS n FROM event_levels', { cache: false });
     detected = withHits.n;
     schema = Schema.fromManifest(m);
     bindHash(view);
-    // Started before the views mount, so a bare word in the link reads the index from their first query.
-    void loadTextIndex(m, store, opened);
+    configureTextIndex(m, opened, (file, progress) => store.readBytes(file, progress));
     db = opened;
     document.title = 'Zircolite — ready';
   }

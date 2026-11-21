@@ -69,6 +69,40 @@ def table(data, name, tmp_path, sql="SELECT * FROM t"):
     return parquet_rows(data.tables[name].read_bytes(), tmp_path, sql)
 
 
+def test_optional_explore_index_keeps_chronology_and_pivot_fields(spool, tmp_path):
+    records = [part(spool, 0, [
+        {"SystemTime": "invalid", "ComputerName": "dc", "EventID": 5},
+        {"SystemTime": "2025-01-01T00:00:00Z", "ComputerName": "a", "EventID": 6},
+        {"SystemTime": "2025-01-01T00:00:00Z", "ComputerName": "b", "EventID": 7},
+        {"SystemTime": "2024-01-01T00:00:00Z", "Message": "detail"},
+    ])]
+    data = PackageBuilder(spool, explore_index=True).build_data(
+        parts=records, rulesets=RULES, run=RUN, failed_sources=[], expected_events=4)
+    with duckdb.connect() as db:
+        cursor = db.execute("SELECT * FROM read_parquet(?, file_row_number=true) ORDER BY file_row_number",
+                            [str(data.tables["explore"])])
+        columns = [col[0] for col in cursor.description]
+        rows = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+    assert set(columns) == {"_zl_uid", "_zl_time", "ComputerName", "EventID", "file_row_number"}
+    assert [(r["_zl_uid"], r["ComputerName"]) for r in rows] == [(4, None), (2, "a"), (3, "b"), (1, "dc")]
+    assert rows[-1]["_zl_time"] is None
+    archive = write_package(find_viewer(), data, tmp_path, Path(spool.directory))
+    with zipfile.ZipFile(archive) as zipped:
+        assert "data/explore.parquet.0000.js" in zipped.namelist()
+
+
+def test_oversized_optional_explore_index_falls_back_to_events(spool, monkeypatch):
+    from zircolite import package
+
+    monkeypatch.setattr(package, "EXPLORE_PARQUET_LIMIT", 1)
+    data = PackageBuilder(spool, explore_index=True).build_data(
+        parts=[part(spool, 0, [{"Computer": "host"}])], rulesets=RULES, run=RUN,
+        failed_sources=[], expected_events=1)
+    assert "explore" not in data.tables
+    assert "events" in data.tables
+    assert any("Explore index" in warning for warning in data.manifest["warnings"])
+
+
 def test_build_reads_mixed_spool_compression(spool, tmp_path):
     suffixes = ["", ".gz"] + ([".zst"] if package_spool._zstd is not None else [])
     records = [part(spool, index, [{"A": f"value {index}"}]) for index in range(len(suffixes))]
@@ -111,6 +145,56 @@ def test_build_selects_bounded_resources(spool, monkeypatch, cpus, available, wa
     assert (settings[0]["threads"], settings[0]["memory_limit"]) == want
 
 
+@pytest.fixture
+def cgroup(cgroup_tree, monkeypatch):
+    monkeypatch.setattr(package.os, "cpu_count", lambda: 4)
+    monkeypatch.setattr(package.psutil, "virtual_memory", lambda: SimpleNamespace(available=40 << 30))
+    return cgroup_tree
+
+
+def test_writer_uses_lowest_available_memory_among_host_and_cgroup_ancestors(cgroup, monkeypatch):
+    parent = cgroup / "parent"
+    child = parent / "child"
+    (cgroup / "memory.max").write_text("max\n")
+    (parent / "memory.max").write_text(str(16 << 30))
+    (parent / "memory.current").write_text(str(8 << 30))
+    (parent / "memory.stat").write_text(f"file {7 << 30}\ninactive_file {4 << 30}\n")
+    (child / "memory.max").write_text(str(24 << 30))
+    (child / "memory.current").write_text(str(2 << 30))
+
+    assert package._duckdb_settings()["memory_limit"] == "6GB"
+    monkeypatch.setattr(package.psutil, "virtual_memory", lambda: SimpleNamespace(available=8 << 30))
+    assert package._duckdb_settings()["memory_limit"] == "4GB"
+
+
+def test_writer_counts_active_page_cache_as_reclaimable(cgroup):
+    # Files read twice sit on the active list, and the kernel still reclaims them.
+    child = cgroup / "parent" / "child"
+    (child / "memory.max").write_text(str(3 << 30))
+    (child / "memory.current").write_text(str(3 << 30))
+    (child / "memory.stat").write_text(f"active_file {2 << 30}\ninactive_file 0\n")
+    assert package._duckdb_settings()["memory_limit"] == "1024MiB"
+
+
+@pytest.mark.parametrize("limit,current,stat,want", [
+    (str(16 << 30), str(6 << 30), "inactive_file malformed", (4, "5GB")),
+    (str(16 << 30), str(6 << 30), None, (4, "5GB")),
+    (str(8 << 30), str(6 << 30), None, (1, "1024MiB")),
+    (str(8 << 30), str(9 << 30), None, (1, "128MiB")),
+    (str(8 << 30), str(2 << 30), f"inactive_file {30 << 30}", (4, "4GB")),
+    ("max", str(8 << 30), None, (4, "20GB")),
+    ("malformed", str(8 << 30), None, (4, "20GB")),
+    (str(8 << 30), "malformed", None, (4, "20GB")),
+    (None, None, None, (4, "20GB")),
+])
+def test_writer_handles_partial_cgroup_counters(cgroup, limit, current, stat, want):
+    for name, value in (("memory.max", limit), ("memory.current", current), ("memory.stat", stat)):
+        if value is not None:
+            (cgroup / name).write_text(value)
+    settings = package._duckdb_settings()
+    assert (settings["threads"], settings["memory_limit"]) == want
+
+
 @pytest.mark.parametrize("columns,expected", [(4, 20000), (169, 20000), (390, 10000), (2004, 2048)])
 def test_row_groups_bound_wide_schema_buffers(columns, expected):
     assert package.row_group_size(columns) == expected
@@ -149,17 +233,17 @@ class TestDuckdb:
             check_duckdb()
 
     def test_a_copy_installed_by_another_duckdb_client_is_accepted(self, monkeypatch, tmp_path):
-        # Every DuckDB client on a machine installs into ~/.duckdb/extensions, and
-        # duckdb_extensions() then reports that copy's install_mode for the built-in one.
-        # The directory is set through duckdb's own setting: on Windows, duckdb does
-        # not see USERPROFILE changed by the process it runs in.
+        # A second extension in the same directory proves DuckDB can see the
+        # installed files even when it reports JSON's built-in copy first.
         connection = duckdb.connect()
         version, = connection.execute("SELECT library_version FROM pragma_version()").fetchone()
         platform, = connection.execute("PRAGMA platform").fetchone()
         connection.close()
         extensions = tmp_path / version / platform
         extensions.mkdir(parents=True)
-        (extensions / "json.duckdb_extension").write_bytes(b"")
+        (extensions / "json.duckdb_extension").touch()
+        marker = extensions / "local_marker.duckdb_extension"
+        marker.touch()
         connect = duckdb.connect
 
         def with_installed_copy(database=":memory:", read_only=False, config=None):
@@ -168,12 +252,15 @@ class TestDuckdb:
 
         monkeypatch.setattr(package.duckdb, "connect", with_installed_copy)
         connection = package.duckdb.connect(config={"autoload_known_extensions": False})
-        mode, = connection.execute(
-            "SELECT install_mode FROM duckdb_extensions() WHERE extension_name = 'json'").fetchone()
+        installed_path, loaded = connection.execute(
+            "SELECT install_path, loaded FROM duckdb_extensions() WHERE extension_name = 'local_marker'").fetchone()
         connection.close()
-        assert mode != "STATICALLY_LINKED", "duckdb did not read the extension directory set up here"
+        assert Path(installed_path) == marker and not loaded
 
         check_duckdb()
+        monkeypatch.setattr(package, "REQUIRED_EXTENSIONS", ("json", "local_marker"))
+        with pytest.raises(PackageError, match="local_marker"):
+            check_duckdb()
 
     def test_a_frozen_build_is_not_told_to_reinstall_duckdb(self, monkeypatch):
         monkeypatch.setattr(package, "REQUIRED_EXTENSIONS", ("no_such_extension",))

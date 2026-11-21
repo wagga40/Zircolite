@@ -956,6 +956,7 @@ settings for the runs that write one.
 | `--navigator-output` | ATT&CK Navigator layer → `navigator-<RAND>.json`, or a name you give |
 | `-G`, `--package` | Write a [Zircolite Viewer](Viewer.md) package |
 | `--package-dir` | Existing directory for the package (default: the working directory) |
+| `--package-explore-index` | Build a viewer package with an extra chronological index for Explore and host, channel or EventID filters |
 
 ### Processing
 

@@ -1,6 +1,8 @@
 import type { Field, Schema } from '../engine/schema';
 import { LEVEL_SORT } from '../state/hash';
 import { asciiLower, ident } from '../engine/sql';
+import type { Node } from '../search/parse';
+import { findShortcut } from '../search/shortcuts';
 
 export const ROW = 28;
 /** The sticky header, column names over the filter row, which sits inside the scroller above the rows. */
@@ -19,9 +21,38 @@ export const SORT_PREFIX = 128;
 /** The column a list is ordered by besides time: a field, or each event's highest detection level. */
 export type SortKey = Field | 'level';
 
+const pivotFields = new Set(['channel', 'eventid', ...(findShortcut('host')?.fields ?? []).map(asciiLower)]);
+
+/** Time and detection filters use _zl_time and _zl_uid, present in either table. */
+export function indexCovers(tree: Node | null): boolean {
+  if (tree === null) return true;
+  if (tree.kind === 'term') return tree.field !== null && pivotFields.has(asciiLower(tree.field));
+  if (tree.kind === 'not') return indexCovers(tree.item);
+  return tree.items.every(indexCovers);
+}
+
+export interface ExploreCounts {
+  events: number;
+  dated: number;
+}
+
 /** The ordered result list every page, count and export reads, rebuilt once per filter change. */
-export function idsSql(where: string, desc: boolean, sort: SortKey | null = null): string {
+export function idsSql(where: string, desc: boolean, sort: SortKey | null = null, index?: ExploreCounts): string {
   const order = desc ? 'DESC' : 'ASC';
+  if (sort === null && index) {
+    const mixedTimes = index.dated > 0 && index.dated < index.events;
+    let position = '_zl_pos';
+    if (where !== 'TRUE') {
+      const keys = desc && mixedTimes ? '(_zl_time IS NULL), _zl_pos DESC' : `_zl_pos ${order}`;
+      position = `row_number() OVER (ORDER BY ${keys}) - 1`;
+    } else if (desc) {
+      // Reverse the dated and timeless groups independently to keep NULLS LAST.
+      position = mixedTimes
+        ? `CASE WHEN _zl_time IS NULL THEN ${index.events + index.dated - 1} ELSE ${index.dated - 1} END - _zl_pos`
+        : `${index.events - 1} - _zl_pos`;
+    }
+    return `CREATE OR REPLACE TEMP TABLE view_ids AS SELECT (${position})::BIGINT AS _zl_pos, _zl_uid FROM explore WHERE ${where}`;
+  }
   // NULLS LAST in both directions keeps events without a time at the end, listed rather than lost.
   if (sort === null) {
     return (

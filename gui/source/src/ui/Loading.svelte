@@ -41,7 +41,7 @@
           <span class="mark" aria-hidden="true">{i < current ? '✓' : ''}</span>
           <span class="name">{step}</span>
           {#if i === current}
-            {#if step === 'Loading the data' && total > 0}
+            {#if (step === 'Loading the engine' || step === 'Opening the data') && total > 0}
               <span class="figure">{formatBytes(loaded)} of {formatBytes(total)}, {formatPercent(loaded / total)}</span>
             {:else if now - started >= 2000}
               <span class="figure">{formatElapsed(now - started)}</span>
@@ -50,7 +50,7 @@
         </li>
       {/each}
     </ol>
-    {#if phase === 'Loading the data' && total > 0}
+    {#if (phase === 'Loading the engine' || phase === 'Opening the data') && total > 0}
       <progress max={total} value={loaded} aria-label="Package data loaded"></progress>
     {:else}
       <div class="track" aria-hidden="true"><span class="sweep"></span></div>

@@ -334,15 +334,31 @@ its detections, then reports the error, writes no package and exits `1`.
 
 ### Stage 2: Parquet
 
-`PackageBuilder.build_data`, in the main process, first checks that the parts hold exactly
-the events ingested. It then runs an in-memory duckdb with up to four threads and a memory
-limit of half the available RAM (2 to 32 GB) when at least two CPUs and 4 GiB of available
-RAM are detected; otherwise it uses one thread and a 2 GB limit. Insertion order is kept,
-so what does not fit under the limit spills to the package's temporary directory, and a
-spill costs more than threads gain: 1.9 million events of 386 columns took 31 s under a
-3 GB limit, spilling 5.5 GiB, and 13 s under 12 GB. Extension autoloading is off. The
-memory setting limits DuckDB's buffer manager, not total process RSS. `check_duckdb`
-refused a duckdb without JSON and Parquet built in before ingestion.
+The CLI closes the working SQLite database after profiling and before package generation.
+`PackageBuilder.build_data` checks that the spooled parts hold every ingested event.
+When at least two CPUs and 4 GiB are available, DuckDB uses up to four threads and a
+buffer limit of half the available memory, rounded down to whole GB and capped at 32 GB.
+The fallback is one thread and a 2 GB limit.
+
+On Linux with cgroup v2 mounted at `/sys/fs/cgroup`, `utils.cgroup_memory` reads the
+process's membership from `/proc/self/cgroup` and checks its group and each visible
+ancestor. For each valid `memory.max` and `memory.current`, it estimates available bytes
+by subtracting current usage from the limit and adding back the page cache in `memory.stat`
+(`inactive_file` and `active_file`: the kernel reclaims both before it OOM-kills, and a
+file read twice sits on the active list). The lowest estimate and the host's available RAM
+bound the writer budget. Groups with an unlimited or unreadable limit or usage contribute
+no estimate. A finite group with less than 4 GiB available gets one thread and half the
+available memory in MiB, never below 128 MiB, under which DuckDB cannot pin the buffers a
+Parquet `COPY` needs. Other mounts and cgroup v1 use the host estimate. These limits apply
+to DuckDB's buffer manager. Process RSS also includes allocations outside that manager.
+The same bound (`utils.visible_memory`) sizes the run before ingestion: auto mode, the
+executor choice, the worker count and the parallel throttle all read the container's
+memory, not the host's.
+
+Insertion order is preserved. When buffers spill to the package's temporary directory,
+spilling can dominate runtime. A 1.9 million event, 386-column run took 31 s at a 3 GB
+limit with 5.5 GiB spilled, and 13 s at a 12 GB limit. Before ingestion `check_duckdb`
+requires built-in JSON and Parquet with extension autoloading disabled.
 
 - **Events.** `read_json` detects each spool file's compression and reads in part order,
   through `COPY … (FORMAT parquet, COMPRESSION zstd)`. The requested row-group size is
@@ -367,10 +383,34 @@ refused a duckdb without JSON and Parquet built in before ingestion.
 | `alerts.parquet` | One row per correlation alert |
 | `alert_events.parquet` | `(alert_idx, _zl_uid, ord)`: each alert's evidence, in order |
 | `text.parquet` | `(_zl_uid, _zl_text)`: each event's values, lowercased and joined by `chr(31)`, for full-text search |
+| `explore.parquet` | Optional chronological index of `_zl_uid`, `_zl_time`, and present host, channel and EventID fields. Timestamp ties use the unique row identifier `_zl_uid`. Missing timestamps sort last. |
 
 `data/manifest.js` carries the format and Zircolite versions, the creation time, the run
 settings (never the command line), the totals, every column with its type, the parts, the
 failed inputs, the warnings, and every file with its size, SHA-256 and chunks.
+
+#### Parquet writer measurements
+
+These runs timed `write_events` followed by `write_text` on the same retained zstd spools.
+The narrow input contained all eight `Windows PowerShell.evtx` files from the BHG_20200120
+hosts (12,261 events, 13 event fields). The wide input was `T001-04062021/ForwardedEvents.evtx`
+(142,737 events, 184 fields). Each input was spooled once with `--unified-db --no-parallel`
+and a rule matching zero rows.
+
+| Spool | Python DuckDB | 1 thread | 2 threads | 4 threads |
+|---|---|---:|---:|---:|
+| Narrow | 1.5.6 | 0.144 s / 302 MiB | 0.130 s / 344 MiB | 0.123 s / 383 MiB |
+| Narrow | 2.0.0 | 0.144 s / 320 MiB | 0.128 s / 347 MiB | 0.121 s / 393 MiB |
+| Wide | 1.5.6 | 2.050 s / 851 MiB | 1.221 s / 1,756 MiB | 1.023 s / 1,981 MiB |
+| Wide | 2.0.0 | 2.099 s / 872 MiB | 1.263 s / 1,609 MiB | 1.107 s / 1,458 MiB |
+
+Each cell gives median combined wall time and median process peak RSS for three fresh
+Python 3.14.10 processes on a 10-core Apple Silicon Mac with 64 GiB of RAM. Both versions
+used a 4 GB DuckDB memory limit, insertion order preservation and the production row-group
+size of 20,000 rows. Thread counts rotated between trials and the DuckDB versions alternated. Each trial
+verified the row counts in both output files. Four threads produced the shortest median
+wall time on both spools. On the wide spool at four threads, the 2.0.0 writer saved 523 MiB
+of peak RSS and took 84 ms longer.
 
 ### Wrapping for `file://`
 
@@ -411,7 +451,10 @@ build, and the only part of `gui/` that ships.
   is gunzipped and handed to DuckDB-WASM as a `data:` URL, because a worker started from
   `file://` cannot fetch a `blob:` URL in Chromium or WebKit. Parquet support loads from the
   package through a `data:` extension repository, then autoloading is switched off. The
-  engine's event and hit counts must equal the manifest's.
+  engine's event and hit counts must equal the manifest's. Boot registers each data
+  table before reading the next. The first bare-word query loads the full-text index.
+  When a package includes the Explore index, the viewer uses its physical row numbers
+  to locate chronological pages and checks its row count against the event total.
 - **Queries.** One connection; `QueryScheduler` runs one query at a time and can cancel it.
   Each request names a **lane**, and a newer request supersedes the older one in its lane;
   **Stop** cancels every lane. SQL is built only from checked identifiers and escaped

@@ -4,6 +4,8 @@ import logging
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import cli as zircolite_script
@@ -322,6 +324,23 @@ class TestExplicitDefaultsWin:
         assert args.outfile == "detected_events.json"
         assert args.logfile == "zircolite.log"
         assert args.timefield == "SystemTime"
+
+
+class TestPackageExploreIndexResolution:
+    """output.package_explore_index -> args: either side turns it on, neither turns it off."""
+
+    @pytest.mark.parametrize("cli, yaml_value, expected", [
+        (False, None, False),
+        (False, True, True),
+        (True, None, True),
+        (True, False, True),
+    ])
+    def test_cli_and_yaml_are_ored(self, cli, yaml_value, expected):
+        args = _args(package_explore_index=cli)
+
+        resolve(args, {} if yaml_value is None else {"output": {"package_explore_index": yaml_value}})
+
+        assert args.package_explore_index is expected
 
 
 class TestCsvOutputNaming:

@@ -96,6 +96,7 @@ class OutputConfig:
     timeline_config: str = DEFAULT_TIMELINE_CONFIG
     keep_duplicates: bool = False
     timezone: str = DEFAULT_TIMEZONE
+    package_explore_index: bool = False
 
 
 @dataclass
@@ -294,6 +295,7 @@ class ConfigLoader:
                 template_append=out.get('template_append', False),
                 package=out.get('package', False),
                 package_dir=out.get('package_dir', ''),
+                package_explore_index=out.get('package_explore_index', False),
                 keep_flat=out.get('keep_flat', False),
                 db_file=out.get('db_file'),
                 log_file=out.get('log_file', DEFAULT_LOG_FILE),
@@ -611,6 +613,7 @@ output:
   # Create a package for the offline viewer (every event plus the detections)
   package: false
   package_dir: ""  # Where to write it; empty means the working directory
+  package_explore_index: false  # Build a package with a chronological Explore index
 
   # Every detection as one row, in time order: a .csv, .jsonl or .ndjson
   # file, or "-" for JSONL on stdout. Off when null.

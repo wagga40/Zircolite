@@ -1,11 +1,13 @@
 <script lang="ts">
   import type { Db } from '../engine/db';
-  import type { Manifest } from '../engine/manifest';
+  import { hasExploreTable, type Manifest } from '../engine/manifest';
   import type { Schema } from '../engine/schema';
   import type { QueryState } from '../state/query.svelte';
   import { view } from '../state/view.svelte';
   import { ownScope } from '../ui/scope';
   import { shownColumns } from './columns';
+  import { timelessCount } from './histogram';
+  import { indexCovers } from './table';
   import FieldSidebar from './FieldSidebar.svelte';
   import ResultTable from './ResultTable.svelte';
   import Strip from './Strip.svelte';
@@ -16,6 +18,12 @@
   const db = ownScope(page, 'explore');
 
   const columns = $derived(shownColumns(view.cols, schema));
+  const index = $derived.by(() => {
+    if (!hasExploreTable(manifest)) return undefined;
+    const events = manifest.totals.events;
+    const dated = events - timelessCount(manifest);
+    return Number.isSafeInteger(dated) && dated >= 0 && dated <= events ? { events, dated } : undefined;
+  });
 </script>
 
 <main class="explore">
@@ -23,7 +31,8 @@
   <div class="body">
     <FieldSidebar {db} {schema} {manifest} where={query.where} {columns} />
     <section class="results" aria-label="Events">
-      <ResultTable {db} exportDb={page} {schema} {manifest} where={query.where} whereFor={(q) => query.whereFor(q)} {columns} slow={query.slow} />
+      <ResultTable {db} exportDb={page} {schema} {manifest} index={index && indexCovers(query.compiled.tree) ? index : undefined}
+        where={query.where} whereFor={(q) => query.whereFor(q)} {columns} slow={query.slow} />
     </section>
   </div>
 </main>

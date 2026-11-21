@@ -881,3 +881,84 @@ class TestCsvSanitisation:
         sanitize_row_for_csv(row)
 
         assert row == {"a": "one\ntwo"}
+
+
+class TestVisibleMemory:
+    """psutil reports the host. Inside a container the cgroup limit is what the run can use."""
+
+    def test_the_cgroup_limit_bounds_host_memory(self, cgroup_tree):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from zircolite.utils import visible_memory
+
+        child = cgroup_tree / "parent" / "child"
+        (child / "memory.max").write_text(str(512 << 20))
+        (child / "memory.current").write_text(str(32 << 20))
+        host = SimpleNamespace(total=32 << 30, available=29 << 30)
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=host):
+            assert visible_memory() == (512 << 20, 480 << 20)
+
+    def test_host_memory_bounds_a_looser_cgroup(self, cgroup_tree):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from zircolite.utils import visible_memory
+
+        child = cgroup_tree / "parent" / "child"
+        (child / "memory.max").write_text(str(64 << 30))
+        (child / "memory.current").write_text(str(1 << 30))
+        host = SimpleNamespace(total=16 << 30, available=6 << 30)
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=host):
+            assert visible_memory() == (16 << 30, 6 << 30)
+
+    def test_an_unlimited_cgroup_leaves_host_memory(self, cgroup_tree):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from zircolite.utils import cgroup_memory, visible_memory
+
+        (cgroup_tree / "parent" / "child" / "memory.max").write_text("max\n")
+        host = SimpleNamespace(total=16 << 30, available=6 << 30)
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=host):
+            assert cgroup_memory() is None
+            assert visible_memory() == (16 << 30, 6 << 30)
+
+    def test_namespace_relative_membership_reads_the_visible_root(self, cgroup_tree):
+        from zircolite import utils
+
+        utils.CGROUP_MEMBERSHIP.write_text("0::/../other/scope\n")
+        (cgroup_tree / "memory.max").write_text(str(8 << 30))
+        (cgroup_tree / "memory.current").write_text(str(2 << 30))
+        assert utils.cgroup_memory() == (8 << 30, 6 << 30)
+
+    def test_membership_resolves_against_a_subtree_mount(self, cgroup_tree, tmp_path):
+        from zircolite import utils
+
+        utils.CGROUP_MOUNTINFO.write_text(f"30 1 0:60 /slice\\040a {cgroup_tree} ro,x - cgroup2 cgroup rw\n")
+        utils.CGROUP_MEMBERSHIP.write_text("0::/slice a/parent/child\n")
+        child = cgroup_tree / "parent" / "child"
+        (child / "memory.max").write_text(str(6 << 30))
+        (child / "memory.current").write_text(str(2 << 30))
+        assert utils.cgroup_memory() == (6 << 30, 4 << 30)
+
+    def test_auto_mode_sizes_the_run_for_the_container(self, cgroup_tree, tmp_path):
+        """A 512 MiB container on a 32 GB host was given six process workers and OOM-killed."""
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from zircolite.utils import analyze_files_and_recommend_mode
+
+        child = cgroup_tree / "parent" / "child"
+        (child / "memory.max").write_text(str(512 << 20))
+        (child / "memory.current").write_text(str(32 << 20))
+        files = [str(tmp_path / f"part{i}.json") for i in range(6)]
+        host = SimpleNamespace(total=32 << 30, available=29 << 30)
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=host), \
+             patch("zircolite.utils.os.cpu_count", return_value=8), \
+             patch("zircolite.utils.estimate_input_size", return_value=18 << 20):
+            _, _, stats = analyze_files_and_recommend_mode(files)
+
+        assert stats["available_ram"] == 480 << 20
+        assert stats["total_ram"] == 512 << 20
+        assert stats["parallel_recommended"] is False

@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Field } from '../src/engine/schema';
+import { parse } from '../src/search/parse';
 import { SNAPSHOT_SQL } from '../src/explore/export';
-import { centerScroll, columnTracks, COUNT_SQL, dropGap, ensureVisible, positionSql, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, resolveSort, ROW, SORT_PREFIX, tableMinWidth, wheelDelta, wheelPosition, wheelScroll, widthOf } from '../src/explore/table';
+import { centerScroll, columnTracks, COUNT_SQL, dropGap, ensureVisible, positionSql, geometry, HEIGHT_CAP, idsSql, indexCovers, nextPage, PAGE, pageSql, resolveSort, ROW, SORT_PREFIX, tableMinWidth, wheelDelta, wheelPosition, wheelScroll, widthOf } from '../src/explore/table';
 import { type Fixture, openFixture, schema } from './fixture';
 
 let db: Fixture;
@@ -17,11 +18,53 @@ const A = 1, B = 2, CMD = 3, PS = 4294967297, OFF = 4294967298, PROC = 429496729
 const order = async () => (await db.rows('SELECT _zl_uid FROM view_ids ORDER BY _zl_pos')).map((r) => r._zl_uid);
 
 describe('result list', () => {
+  it('uses the chronological index only when all search terms are covered', () => {
+    for (const q of ['', 'host:DC01', 'EventID:4624 OR Channel:Security', '-Computer:DC02']) {
+      expect(indexCovers(parse(q))).toBe(true);
+    }
+    for (const q of ['powershell', 'host:WS01 AND Image:cmd', 'user:bob']) {
+      expect(indexCovers(parse(q))).toBe(false);
+    }
+  });
+
+  it('keeps dense positions for filters, tied timestamps and timeless rows in either direction', async () => {
+    await db.rows('CREATE OR REPLACE TEMP TABLE explore AS SELECT *, ' +
+      'row_number() OVER (ORDER BY _zl_time NULLS LAST, _zl_uid) - 1 AS _zl_pos FROM events');
+    for (const desc of [false, true]) {
+      for (const where of ['TRUE', '"Computer" = \'DC01\'', '"Computer" IS NULL OR "EventID" = 1', 'FALSE']) {
+        await db.rows(idsSql(where, desc));
+        const expected = await db.rows('SELECT * FROM view_ids ORDER BY _zl_pos');
+        const sql = idsSql(where, desc, null, { events: 6, dated: 5 });
+        expect(sql).toContain('FROM explore');
+        await db.rows(sql);
+        expect(await db.rows('SELECT * FROM view_ids ORDER BY _zl_pos')).toEqual(expected);
+      }
+    }
+  });
+
   it('timeless events sort last', async () => {
     await db.rows(idsSql('TRUE', false));
     expect(await order()).toEqual([1, 2, 3, 4294967297, 4294967299, 4294967298]);
     await db.rows(idsSql('TRUE', true));
     expect(await order()).toEqual([4294967299, 4294967297, 3, 2, 1, 4294967298]);
+  });
+
+  it.each([0, 2, 6])('preserves reverse order with %i dated rows and tied times', async (dated) => {
+    const orders = await openFixture([
+      'CREATE TEMP TABLE events AS SELECT _zl_uid, CASE WHEN row_number() OVER (ORDER BY _zl_uid) ' +
+        `<= ${dated} THEN TIMESTAMP '2026-01-01' END AS _zl_time FROM events`,
+      'CREATE TEMP TABLE explore AS SELECT *, row_number() OVER (ORDER BY _zl_time NULLS LAST, _zl_uid) - 1 AS _zl_pos FROM events',
+    ]);
+    try {
+      for (const where of ['TRUE', '_zl_uid > 1']) {
+        await orders.rows(idsSql(where, true));
+        const expected = await orders.rows('SELECT * FROM view_ids ORDER BY _zl_pos');
+        await orders.rows(idsSql(where, true, null, { events: 6, dated }));
+        expect(await orders.rows('SELECT * FROM view_ids ORDER BY _zl_pos')).toEqual(expected);
+      }
+    } finally {
+      orders.close();
+    }
   });
 
   it('keeps the time order\'s query text, so cached answers stay valid', () => {

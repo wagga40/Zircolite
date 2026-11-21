@@ -187,7 +187,7 @@ describe('TextMatches while the index loads', () => {
   it('waits for the file, then opens the view once, before its first slice', async () => {
     const { matches, sent } = matcher([1]);
     const file = deferred();
-    matches.use({ registered: file.promise, failed: () => {} });
+    matches.use({ load: () => file.promise, failed: () => {} });
     const first = matches.prepare(`SELECT 1 WHERE ${predicate}`, never);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(sent).toEqual([]);
@@ -200,7 +200,7 @@ describe('TextMatches while the index loads', () => {
 
   it('rejects with the reason the file never came', async () => {
     const { matches, sent } = matcher([1]);
-    matches.use({ registered: Promise.reject(new Error('data/text.parquet.0000.js could not be loaded')), failed: () => {} });
+    matches.use({ load: () => Promise.reject(new Error('data/text.parquet.0000.js could not be loaded')), failed: () => {} });
     await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, never)).rejects.toThrow('could not be loaded');
     expect(sent).toEqual([]);
   });
@@ -211,7 +211,7 @@ describe('TextMatches while the index loads', () => {
       if (sql === TEXT_VIEW_SQL) throw new Error('Invalid Input Error: No magic bytes found at end of file');
       return [];
     });
-    matches.use({ registered: Promise.resolve(), failed: (error) => reported.push(error) });
+    matches.use({ load: () => Promise.resolve(), failed: (error) => reported.push(error) });
     await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, never)).rejects.toThrow('No magic bytes');
     expect(reported).toHaveLength(1);
   });
@@ -227,7 +227,7 @@ describe('TextMatches while the index loads', () => {
       }
       return sql.includes('parquet_metadata') ? [{ first: 1 }] : [];
     });
-    matches.use({ registered: Promise.resolve(), failed: (error) => reported.push(error) });
+    matches.use({ load: () => Promise.resolve(), failed: (error) => reported.push(error) });
     await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, stopWhen(() => cancelled))).rejects.toThrow('superseded');
     cancelled = false;
     expect(await matches.prepare(`SELECT 1 WHERE ${predicate}`, never)).toContain('_zl_tm_1');
@@ -250,7 +250,7 @@ describe('QueryScheduler with the index', () => {
       },
     };
     const scheduler = new QueryScheduler(sender);
-    scheduler.useTextIndex({ registered: new Promise(() => {}), failed: () => {} });
+    scheduler.useTextIndex({ load: () => new Promise(() => {}), failed: () => {} });
     const waiting = scheduler.rows(`SELECT count(*) FROM events WHERE ${predicate}`, { lane: 'table' });
     const watched = expect(waiting).rejects.toSatisfy(isSuperseded);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -301,7 +301,7 @@ describe('after a cancel', () => {
     });
     let release = () => {};
     const registered = new Promise<void>((resolve) => (release = resolve));
-    matches.use({ registered, failed() {} });
+    matches.use({ load: () => registered, failed() {} });
     const prepared = matches.prepare(textPredicate("lower('%a%')"), fakeStop(() => cancelled));
     cancelled = true;
     release();
@@ -318,7 +318,7 @@ describe('an index that cannot be read', () => {
       if (sql.includes('_zl_uid >= ')) throw new Error('IO Error: corrupt page');
       return [];
     });
-    matches.use({ registered: Promise.resolve(), failed: (error) => failures.push(error) });
+    matches.use({ load: () => Promise.resolve(), failed: (error) => failures.push(error) });
     await expect(matches.prepare(textPredicate("lower('%a%')"), fakeStop(() => false))).rejects.toThrow('corrupt page');
     expect(failures).toHaveLength(1);
   });
@@ -333,7 +333,7 @@ describe('an index that cannot be read', () => {
       }
       return sql.startsWith('SELECT min(') ? [{ first: 0 }, { first: 100 }, { first: 200 }] : [];
     });
-    matches.use({ registered: Promise.resolve(), failed: (error) => failures.push(error) });
+    matches.use({ load: () => Promise.resolve(), failed: (error) => failures.push(error) });
     await expect(matches.prepare(textPredicate("lower('%a%')"), fakeStop(() => cancelled))).rejects.toSatisfy(isSuperseded);
     expect(failures).toEqual([]);
   });

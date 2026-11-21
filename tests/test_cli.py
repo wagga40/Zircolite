@@ -1687,7 +1687,8 @@ class TestCLIPackage:
         "thread": ["--executor", "thread", "--parallel-workers", "2"],
     }
 
-    def run(self, tmp_path, *extra, events=None, rules=None, expect_exit=None, inputs=None, input_format="-j"):
+    def run(self, tmp_path, *extra, events=None, rules=None, expect_exit=None, inputs=None, input_format="-j",
+            package_args=("--package",)):
         if inputs is None:
             inputs = tmp_path / "events.json"
             inputs.write_text("\n".join(json.dumps(e) for e in (events or self.EVENTS)), encoding="utf-8")
@@ -1701,7 +1702,7 @@ class TestCLIPackage:
         package_dir = tmp_path / "pkg"
         package_dir.mkdir(exist_ok=True)
         argv = ['zircolite.py', '-e', str(inputs), '-r', str(ruleset_file), '-c', str(config_file), input_format,
-                '-o', str(tmp_path / "out.json"), '--package', '--package-dir', str(package_dir),
+                '-o', str(tmp_path / "out.json"), *package_args, '--package-dir', str(package_dir),
                 *get_log_arg(tmp_path), *extra]
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
@@ -1723,10 +1724,40 @@ class TestCLIPackage:
         (target,) = package_dir.glob("zircolite-package-*.zip")
         manifest, files = read_package(target)
         assert manifest["totals"]["events"] == 2
+        assert "explore.parquet" not in files
         assert manifest["totals"]["hits"] == 1 and manifest["totals"]["rules_matched"] == 1
         _, rows = parquet_rows(files["events.parquet"], tmp_path, "SELECT CommandLine FROM t ORDER BY _zl_uid")
         assert rows == [("powershell.exe",), ("cmd.exe",)]
         assert not list(package_dir.glob("tmp-zircolite-package-*"))
+
+    @pytest.mark.parametrize("use_yaml", [False, True])
+    def test_explore_index_alone_builds_a_package(self, tmp_path, read_package, use_yaml):
+        config = tmp_path / "run.yaml"
+        config.write_text("output:\n  package_explore_index: true\n")
+        package_args = ("-Y", str(config)) if use_yaml else ("--package-explore-index",)
+        package_dir = self.run(tmp_path, package_args=package_args)
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        _, files = read_package(target)
+        _, rows = parquet_rows(files["explore.parquet"], tmp_path, "SELECT EventID, Channel FROM t ORDER BY _zl_uid")
+        assert rows == [(1, "Security"), (2, "Other")]
+
+    def test_unified_working_database_is_released_before_package_build(self, tmp_path, monkeypatch, read_package):
+        from zircolite.package import PackageBuilder
+
+        working = tmp_path / "working"
+        working.mkdir()
+        build = PackageBuilder.build
+
+        def build_after_close(builder, **kwargs):
+            assert list(working.iterdir()) == []
+            return build(builder, **kwargs)
+
+        monkeypatch.setattr(PackageBuilder, "build", build_after_close)
+        package_dir = self.run(tmp_path, "--unified-db", "--working-db", "disk", "--working-db-dir", str(working),
+                               "--profile-rules")
+
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        assert read_package(target)[0]["totals"]["hits"] == 1
 
     def test_package_written_without_detections(self, tmp_path, read_package):
         package_dir = self.run(tmp_path, rules=[{**self.RULE, "rule": ["SELECT * FROM logs WHERE 0"]}])

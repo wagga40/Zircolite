@@ -22,6 +22,13 @@ python3 zircolite.py --events logs/ --package --package-dir /cases/host1
 `--package-dir`, which must exist. In a [run configuration](Usage.md#yaml-configuration)
 the keys are `output.package` and `output.package_dir`.
 
+Use `--package-explore-index` to make a package for repeated timeline, host,
+channel or EventID investigations. It also enables `--package`. In YAML, set
+`output.package_explore_index: true`. The extra Parquet file holds event IDs, times
+and the available pivot fields in chronological order. Explore uses it to find
+rows and reads the original event for the selected columns, details and exports.
+Building and loading the index adds work and increases the ZIP size.
+
 - **Every event is kept.** The [event filter](Advanced.md#early-event-filtering) is off for
   the run. The time and file filters still apply: use them to make a smaller package.
 - **It is written even when no rule matched**, beside the usual detections output.
@@ -362,9 +369,9 @@ A console for one query at a time over the package's tables; see
 - Inside quotes, `\"` is a quote and `\\` a backslash; other backslashes stay as typed, so
   Windows paths work. `*` is a wildcard only outside quotes, so `Field:*"x"*` contains `x`;
   to find quote marks, escape them inside the quotes: `Field:*"\"x\""*`.
-- Bare words read the full-text index once it has loaded in the background. Without it they
-  scan every column, which is slow on large packages; a field search such as
-  `CommandLine:*mimikatz*` is faster.
+- The first bare-word search loads the packaged full-text index and shows its progress.
+  Later searches reuse it. When the package omits the index, bare words scan every
+  column. A field search such as `CommandLine:*mimikatz*` reads just that field.
 - A search that does not parse is not applied, and the bar says where it fails. One that
   arrives through a link and does not parse matches nothing, never everything.
 
@@ -418,6 +425,12 @@ ORDER BY e._zl_time
   `npm run smoke -- <dir>` (opens it in Chromium, Firefox and WebKit), `npm run e2e -- <dir>`
   and `npm run views -- <dir>` (cross-check Explore and every view), `npm run perf -- <dir>`
   and `npm run shot -- <dir> <out.png>`. They need `npx playwright install chromium firefox webkit`.
+- From `gui/source/`, run `npm run wasm-pivots -- <extracted-package-dir>` on a package
+  created with `--package-explore-index`. This browser-free smoke check compares both time
+  directions on the local Node DuckDB-WASM runtime. Add `--full` for five measured runs
+  per direction and applicable host, channel, event ID and time pivots. The report gives
+  median milliseconds to build the result list, count it and read its first 200 rows.
+  It also checks the ordered position and UID of every event and the first page's values.
 - The ATT&CK catalogue is MITRE ATT&CK Enterprise 19.2; MITRE's notice travels in every
   package as `THIRD_PARTY_NOTICES.txt`. To update it, run
   `node scripts/attack-catalog.mjs enterprise-attack-X.Y.json` in `gui/source/`, refresh

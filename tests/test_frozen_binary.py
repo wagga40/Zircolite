@@ -103,13 +103,15 @@ class Run:
 def _watch_children(pid: int, seen: set[tuple[int, float]], done: threading.Event) -> None:
     import psutil
 
+    from tools.process_tree import descendants
+
     try:
         parent = psutil.Process(pid)
     except psutil.NoSuchProcess:
         return
     while not done.is_set():
         try:
-            for child in parent.children(recursive=True):
+            for child in descendants(parent):
                 with contextlib.suppress(psutil.NoSuchProcess):
                     seen.add((child.pid, child.create_time()))
         except psutil.NoSuchProcess:

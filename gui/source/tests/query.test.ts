@@ -55,7 +55,7 @@ describe('QueryState', () => {
   it('puts bare words on the index while it loads and once it is ready, and back on the scan when it fails', () => {
     const query = new QueryState(schema, 6, true);
     view.q = 'powershell';
-    for (const [status, indexed] of [['loading', true], ['ready', true], ['failed', false], ['absent', false]] as const) {
+    for (const [status, indexed] of [['available', true], ['loading', true], ['ready', true], ['failed', false], ['absent', false]] as const) {
       textIndex.status = status;
       expect(query.where.includes('fulltext'), status).toBe(indexed);
     }

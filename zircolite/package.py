@@ -41,7 +41,7 @@ from .package_spool import (
     rule_key,
 )
 from .progress import Reporter
-from .utils import random_suffix
+from .utils import cgroup_memory, random_suffix
 
 PACKAGE_FORMAT = 1
 DATA_TABLES = ("events", "rules", "hits", "alerts", "alert_events")
@@ -57,8 +57,11 @@ DUCKDB_SETTINGS: dict[str, Any] = {
 }
 # The viewer holds the events file in WebAssembly memory, which stops at 4 GB.
 EVENTS_PARQUET_LIMIT = 1 << 30
+# Below about 128 MiB DuckDB cannot pin the buffers a Parquet COPY needs.
+DUCKDB_MIN_MEMORY = 128 << 20
 # Per file, like the events: the viewer reads the index into WASM memory too.
 TEXT_PARQUET_LIMIT = 1 << 30
+EXPLORE_PARQUET_LIMIT = 1 << 30
 UID_FACTOR = 1 << UID_PART_SHIFT
 CHUNK_BYTES = 3 * 1024 * 1024  # a multiple of 3: base64 pads only the last chunk
 # Parquet is compressed already, so deflate only wins back base64's overhead;
@@ -116,8 +119,7 @@ def check_duckdb() -> None:
     same run succeed or fail by where it ran.
 
     With autoloading off, a fresh connection has loaded only what is compiled
-    in. install_mode cannot tell: a copy any other DuckDB client installed in
-    ~/.duckdb/extensions is reported in place of the built-in one.
+    in, even if another client installed a copy of an extension on disk.
     """
     connection = duckdb.connect(":memory:", config={
         "autoinstall_known_extensions": False, "autoload_known_extensions": False})
@@ -221,12 +223,18 @@ def _duckdb_settings() -> dict[str, Any]:
     of 386 columns took 31 s under 3 GB, spilling 5.5 GiB, and 13 s under 12 GB.
     """
     settings = dict(DUCKDB_SETTINGS)
-    try:
-        available = psutil.virtual_memory().available
-    except (OSError, psutil.Error):
-        return settings
     cpus = os.cpu_count() or 1
-    if cpus >= 2 and available >= (4 << 30):
+    try:
+        available: int | None = psutil.virtual_memory().available
+    except (OSError, psutil.Error):
+        available = None
+        cpus = 1
+    cgroup = cgroup_memory()
+    if cgroup is not None:
+        available = cgroup[1] if available is None else min(cgroup[1], available)
+        if available < (4 << 30):
+            settings["memory_limit"] = f"{max(DUCKDB_MIN_MEMORY, available // 2) >> 20}MiB"
+    if cpus >= 2 and available is not None and available >= (4 << 30):
         settings.update(threads=min(4, cpus), memory_limit=f"{min(32, (available // 2) >> 30)}GB")
     return settings
 
@@ -297,6 +305,16 @@ def write_events(connection: duckdb.DuckDBPyConnection, work: Path,
     source = (f"read_json({_paths(files)}, format = 'newline_delimited', compression = 'auto_detect', "
               f"columns = {_struct(spec)}, maximum_object_size = {max(16 << 20, longest + 1)})")
     return _copy(connection, f"SELECT {projection} FROM {source}", target, group_size)  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
+
+
+def write_explore(connection: duckdb.DuckDBPyConnection, work: Path, events: Path, columns: list[Column], *,
+                  group_size: int) -> Path:
+    """The physical Parquet row number is the event's position in ascending time order."""
+    pivots = {"channel", "eventid", "computer", "computername", "hostname", "host"}
+    fields = ["_zl_uid", "_zl_time", *(sql_identifier(c.name) for c in columns if c.key in pivots)]
+    query = (f"SELECT {', '.join(fields)} FROM read_parquet({sql_string(str(events))}) "  # noqa: S608 -- quoted names and path
+             "ORDER BY _zl_time ASC NULLS LAST, _zl_uid ASC")
+    return _copy(connection, query, work / "explore.parquet", group_size)
 
 
 def write_text(connection: duckdb.DuckDBPyConnection, work: Path, events: Path, columns: list[Column], *,
@@ -569,7 +587,11 @@ def write_package(viewer: Viewer, data: PackageData, destination: Path, work: Pa
         context += descriptor.read_bytes()
     prepare_archive(temporary, entries, context=context, cache_directory=cache_directory)
     del entries
-    wrapped = [(table, "data") for table in DATA_TABLES] + ([("text", "index")] if "text" in data.tables else [])
+    wrapped = [(table, "data") for table in DATA_TABLES]
+    if "explore" in data.tables:
+        wrapped.append(("explore", "data"))
+    if "text" in data.tables:
+        wrapped.append(("text", "index"))
     total = sum(data.tables[table].stat().st_size for table, _ in wrapped)
     done = 0
 
@@ -593,8 +615,9 @@ class PackageBuilder:
     """Turns the spooled parts of a run into Parquet tables and a manifest."""
 
     def __init__(self, spool: PackageSpool, *, logger: logging.Logger | None = None,
-                 cache_directory: Path | None = None) -> None:
+                 cache_directory: Path | None = None, explore_index: bool = False) -> None:
         self.spool = spool
+        self.explore_index = explore_index
         self.cache_directory = cache_directory
         self.logger = logger or logging.getLogger(__name__)
         self.work = Path(spool.directory) / "build"
@@ -612,6 +635,7 @@ class PackageBuilder:
         self.work.mkdir(parents=True, exist_ok=True)
         columns = merge_columns(parts, self.spool.time_field)
         group_size = row_group_size(len(columns) + len(EVENT_COLUMNS))
+        notes: list[str] = []
         connection = duckdb.connect(":memory:", config={**_duckdb_settings(), "temp_directory": str(self.work / "duckdb")})
         try:
             if progress is not None:
@@ -633,6 +657,14 @@ class PackageBuilder:
                     "a browser can hold; narrow the run with --after/--before or -s")
             with _watched(connection, progress, "Writing the full-text index"):
                 text = write_text(connection, self.work, tables["events"], columns, group_size=group_size)
+            if self.explore_index:
+                with _watched(connection, progress, "Writing the Explore index"):
+                    explore = write_explore(connection, self.work, events, columns, group_size=group_size)
+                if explore.stat().st_size > EXPLORE_PARQUET_LIMIT:
+                    explore.unlink()
+                    notes.append("The Explore index exceeds the browser size limit. Explore reads the events table.")
+                else:
+                    tables["explore"] = explore
             totals = {name: _count(connection, "SELECT count(*) FROM read_parquet(?)", tables[name])
                       for name in ("events", "hits", "alerts")}
             # Counted like the run summary, which collapses a rule's variants into one.
@@ -644,7 +676,6 @@ class PackageBuilder:
         expected = sum(record.events for record in parts)
         if totals["events"] != expected:
             raise PackageError(f"the events table holds {totals['events']:,} events where the spool held {expected:,}")
-        notes: list[str] = []
         text_size = text.stat().st_size
         if text_size > TEXT_PARQUET_LIMIT:
             text.unlink()
