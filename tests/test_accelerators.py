@@ -322,6 +322,39 @@ def test_path_trie_keeps_paths_apart_on_both_backends(monkeypatch):
     assert flatten_all("python") == expected
 
 
+def test_event_filter_values_agree_on_both_backends():
+    """The event filter reads Channel and EventID through the kernel; both builds must agree."""
+    native_kernel = native("zircolite._flatten_native")
+    import zircolite.flatten_kernel as python_kernel
+
+    args = argparse.Namespace(all_transforms=False, transform_categories=None)
+    processor = StreamingEventProcessor(CONFIG, args, ProcessingConfig(flatten_backend="python"))
+    plans = (processor._channel_field_plan, processor._eventid_field_plan)
+    events = [
+        {"Event": {"System": {"Channel": "Security", "EventID": "4624"}}},
+        {"Event": {"System": {"Channel": "Security", "EventID": {"#text": "4688", "#attributes": {"q": 1}}}}},
+        {"Event": {"System": {"Channel": {"#text": "Application"}, "EventID": 1000}}},
+        {"Event": {"System": {"Channel": "", "EventID": "abc"}}},
+        {"Event": {"System": {"Channel": 7, "EventID": True}}},
+        {"Event": {"System": {"Channel": "System", "EventID": 7.9}}},
+        {"Event": {"System": "not a dict"}},
+        {"Channel": "Security", "EventID": 4624, "winlog": {"channel": "Security", "event_id": 4624}},
+        {"Channel": "Security", "winlog": {"channel": "System"}, "EventID": 1, "event": {"code": 2}},
+        {"channel": "Security", "eventid": "4624", "EventCode": "4624"},
+        {"Event": {"System": {"Channel": "Security"}}, "Channel": "Security", "EventID": None},
+        {},
+        ["not", "an", "event"],
+        "text",
+    ]
+    for hints in ((None, None), (("Channel",), ("Event", "System", "EventID"))):
+        for event in events:
+            expected = python_kernel.event_filter_values(event, plans[0], hints[0], plans[1], hints[1])
+            assert native_kernel.event_filter_values(event, plans[0], hints[0], plans[1], hints[1]) == expected, event
+    assert python_kernel.event_filter_values(events[0], plans[0], None, plans[1], None) == (
+        "Security", ("Event", "System", "Channel"), 4624, ("Event", "System", "EventID"))
+    assert python_kernel.event_filter_values(events[8], plans[0], None, plans[1], None)[::2] == (None, None)
+
+
 class ReferenceAutomaton:
     """Independent primitives for testing candidate logic without native wheels."""
     def __init__(self):
