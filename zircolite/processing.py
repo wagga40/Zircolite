@@ -1611,6 +1611,13 @@ def process_parallel_streaming(
 
     # Give each file worker a share of the native parser CPU budget.
     worker_count = processor.calculate_optimal_workers(work_list)
+    # The mode banner counted whole files before the ruleset allowed slices,
+    # and process workers re-measure free memory, so say what actually runs.
+    slices = [item for item in work_list if isinstance(item, EvtxSlice)]
+    if slices or worker_count != recommended_workers:
+        sliced = (f" ({len({item.path for item in slices})} EVTX file(s) cut into {len(slices)} slices)"
+                  if slices else "")
+        ctx.logger.info(f"[+] [cyan]Workers:[/] [yellow]{worker_count}[/]{sliced}")
     if ctx.package_spool is not None:
         ctx.package_spool.concurrent_writers = worker_count
     ctx.evtx_threads = max(1, (os.cpu_count() or 1) // worker_count)
@@ -1716,7 +1723,8 @@ def process_parallel_streaming(
                 progress_files=progress_files,
             )
 
-        process_options: dict[str, Any] = {}
+        # The pool runs the count the threads and spool writers were sized for.
+        process_options: dict[str, Any] = {"workers": worker_count}
         worker = _process_file
         if process_mode:
             spawn = multiprocessing.get_context("spawn")
@@ -1727,7 +1735,7 @@ def process_parallel_streaming(
             payload_path = _write_worker_payload(
                 spool_dir, (payload, args, input_type, raw_config, progress_files if board is not None else None))
             shared = (board, spawn.Value("i", 0)) if board is not None else None
-            process_options = dict(initializer=_initialize_process_worker,
+            process_options.update(initializer=_initialize_process_worker,
                 initargs=(payload_path, spool_dir, cancel_event, shared),
                 cancel_event=cancel_event)
 

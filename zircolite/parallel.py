@@ -552,6 +552,7 @@ class MemoryAwareParallelProcessor:
         initializer=None,
         initargs: tuple = (),
         cancel_event=None,
+        workers: int | None = None,
     ) -> tuple[list[Any], ParallelStats]:
         """
         Process files in parallel with memory awareness.
@@ -567,6 +568,7 @@ class MemoryAwareParallelProcessor:
                    worker, naming files by their position in ``file_list``.
                    Each busy worker gets a row under the main bar, and the
                    events they have read count in it before their files finish.
+            workers: Pool size the caller already chose; computed here when unset.
 
         Returns:
             ``(results_list, stats)``
@@ -591,7 +593,7 @@ class MemoryAwareParallelProcessor:
         if self.config.sort_by_size:
             file_list = self.sort_files_by_size(file_list)
 
-        num_workers = self.calculate_optimal_workers(file_list)
+        num_workers = workers or self.calculate_optimal_workers(file_list)
         self.stats.workers_used = num_workers
 
         # Snapshot memory before first file for adaptive calibration
