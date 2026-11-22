@@ -715,6 +715,28 @@ level: high
             "the second condition was dropped, so those events are never detected"
         )
 
+    def test_metadata_covers_every_branch(self, tmp_path, test_logger):
+        """--save-ruleset wrote only the first branch's eventid list."""
+        rule_file = tmp_path / "multi.yml"
+        rule_file.write_text(self.RULE)
+
+        handler = RulesetHandler(
+            ruleset_config=RulesetConfig(ruleset=[str(rule_file)], pipeline=[]),
+            logger=test_logger,
+        )
+
+        assert sorted(handler.rulesets[0]["eventid"]) == [4624, 4688]
+
+    def test_a_branch_without_a_value_frees_the_rule(self):
+        merged = RulesetHandler._merge_converted_queries([
+            {"rule": ["a"], "channel": ["Security"], "eventid": [4624]},
+            {"rule": ["b"], "channel": ["System"], "eventid": []},
+        ])
+
+        assert merged["rule"] == ["a", "b"]
+        assert merged["channel"] == ["Security", "System"]
+        assert merged["eventid"] == []
+
 
 @pytest.mark.requires_sigma
 class TestSigmaMetadataLineBreaks:

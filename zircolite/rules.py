@@ -663,6 +663,13 @@ class RulesetHandler:
                 merged["required_fields"] = sorted({
                     field for entry in converted for field in entry.get("required_fields", [])
                 })
+            # The branches are ORed: the rule needs one of their channels, and a
+            # branch that names none leaves the rule free of any.
+            for key in ("channel", "eventid"):
+                if key in merged:
+                    branches = [entry.get(key) or [] for entry in converted]
+                    merged[key] = (list(dict.fromkeys(value for branch in branches for value in branch))
+                                   if all(branches) else [])
         return merged
 
     def convert_sigma_rules(self, backend: Any, rule: Any) -> dict[str, Any] | None:
