@@ -42,7 +42,8 @@ Zircolite-<version>-<target>/
 └── docs/  pics/  README.md  LICENSE  THIRD_PARTY_LICENSES
 ```
 
-Keep the directory whole: the executable cannot run without `_internal/`.
+> [!IMPORTANT]
+> Keep the directory whole: the executable cannot run without `_internal/`.
 
 ```shell
 unzip -q Zircolite-<version>-linux-x64.zip -d ~/tools
@@ -119,23 +120,15 @@ table. Each installs the `dev` group (tests, linters, PyInstaller); `pdm install
 `uv sync --no-dev` or `poetry install --without dev` leave it out. Once the environment is active, `python3 -m zircolite`
 works from any directory.
 
-Python 3.15 and free-threaded builds such as `python3.14t` are not supported yet: duckdb
-and google-re2 publish no wheels for them, so the install compiles them from source.
-duckdb's build runs for minutes without output, and google-re2's fails without the abseil
-headers. Left to choose, PDM and uv can pick either kind, so name the interpreter. To PDM,
-`3.14` means the standard build; `pdm python install 3.14` adds one if there is none:
-
-```shell
-pdm use -f 3.14
-pdm install
-```
-
-To uv, a plain `3.14` also matches `3.14t`; `+gil` excludes it, and uv downloads a 3.14 if
-there is none:
-
-```shell
-uv sync --python 3.14+gil
-```
+> [!WARNING]
+> Python 3.15 and free-threaded builds such as `python3.14t` are not supported yet: duckdb
+> and google-re2 have no wheels for them, and building them from source stalls or fails.
+> PDM and uv may pick one on their own, so name the interpreter:
+>
+> ```shell
+> pdm use -f 3.14 && pdm install       # pdm python install 3.14 adds one if needed
+> uv sync --python 3.14+gil            # +gil excludes 3.14t; uv downloads 3.14 if needed
+> ```
 
 Windows ARM64 has no `evtx` package on PyPI; see
 [Internals → Windows ARM64](Internals.md#windows-arm64), or use a binary.
@@ -185,7 +178,8 @@ python3 zircolite.py --events sample.evtx \
 
 The terminal shows a detection table and a summary. Detections go to
 `detected_events.json` and the log to `zircolite.log`, both in the working directory. `-o`
-names the output file, `--csv` writes CSV instead, and `--nolog` writes neither file. Each
+names the output file, `--csv` writes CSV instead (`detected_events.csv`), and `--nolog`
+writes neither file. Each
 detection names the rule, the SQL it ran and the events it matched, with all their fields:
 
 ```json
@@ -213,9 +207,9 @@ detection names the rule, the SQL it ran and the events it matched, with all the
 ]
 ```
 
-Given a directory, Zircolite reads every file with the format's extension, including
-subdirectories. `--fileext`, `--file-pattern`, `--no-recursion`, `--select` and `--avoid`
-narrow that down — see [Advanced → Filtering](Advanced.md#filtering).
+Given a directory, Zircolite reads every file with the format's
+[extensions](#input-formats-1), plain or compressed, including subdirectories. `--fileext`,
+`--file-pattern`, `--no-recursion`, `--select` and `--avoid` narrow that down — see [Advanced → Filtering](Advanced.md#filtering).
 
 ### Interrupting a run
 
@@ -354,12 +348,10 @@ window, metric and the evidence events behind it:
   `-U` installs expect `SystemTime` in ISO 8601. Events whose time cannot be read, or that
   lack a group-by field, are counted in `diagnostics`, and a warning at the end of the run
   names the rule.
-- **One database.** A correlation sees the events of its own database. With several input
-  files and a correlation rule loaded, Zircolite uses the
-  [unified database](Advanced.md#automatic-processing-optimization) whatever auto mode,
-  `--executor` or `--parallel-workers` say; `--no-auto-mode` keeps one database per file,
-  with a warning. Several `--db-input` databases are always analysed apart. While a
-  correlation is loaded, the [event filter](Advanced.md#early-event-filtering) is off.
+- **One database.** A correlation sees the events of its own database, so several input
+  files [force the unified layout](Advanced.md#automatic-processing-optimization). Several
+  `--db-input` databases are always analysed apart. The
+  [event filter](Advanced.md#early-event-filtering) is off while a correlation is loaded.
 - **Cost.** A correlation builds indexed temporary tables from the whole events table, and
   an event inside many windows appears in each of their alerts. `--limit` discards a noisy
   rule's alerts, not the work. `--working-db disk` keeps large inputs out of memory.
@@ -559,10 +551,13 @@ python3 zircolite.py --events export.json.7z --ask-archive-password
 
 The password of an encrypted archive comes from `--ask-archive-password` (a prompt that
 does not echo) or `--archive-password`, otherwise from the `ZIRCOLITE_ARCHIVE_PASSWORD`
-environment variable, which suits unattended runs. Avoid `--archive-password` on shared
-hosts: other local users can read a running process's command line. Without a password,
-detection falls back to the outer name (`data.json.7z` → JSON); a wrong or missing one is
-reported, never guessed at.
+environment variable, which suits unattended runs. Without a password, detection falls back
+to the outer name (`data.json.7z` → JSON); a wrong or missing one is reported, never
+guessed at.
+
+> [!WARNING]
+> Avoid `--archive-password` on shared hosts: other local users can read a running
+> process's command line.
 
 ### SQLite database files
 
@@ -807,7 +802,7 @@ python3 zircolite.py --yaml-config my_config.yaml --events ./other_logs/   # the
 reference for the schema, and `config/zircolite_example.yaml` is the same file. It refuses
 to overwrite an existing file or follow a symlink. Feeding a fresh one back with `-Y`
 changes nothing: keys whose default depends on something else (`output.file`,
-`processing.time_field`) ship commented out.
+`processing.time_field`, `rules.timestamp_format`) ship commented out.
 
 - `input.format` accepts `evtx`, `json`, `json_array`, `xml`, `csv`, `sysmon_linux`,
   `auditd`, `evtxtract` and `sqlite` (`-D`).
@@ -816,8 +811,10 @@ changes nothing: keys whose default depends on something else (`output.file`,
   the file.
 - Invalid configuration stops the run, listing every problem at once.
 
-Command-line arguments override the file, except `--transform-category`, `--add-index` and
-`--remove-index`, which add to what the file lists.
+Command-line arguments override the file, with two exceptions:
+- `--transform-category`, `--add-index` and `--remove-index` add to what the file lists;
+- on/off settings can only be switched on: a flag cannot undo `package: true` or
+  `recursive: false` from the file.
 
 Some options have no equivalent key and must be passed on the command line: `-c`/`--config`,
 `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--ask-archive-password`,
@@ -876,7 +873,7 @@ compatibility:
 
 | Option | Description |
 |--------|-------------|
-| `-e`, `--evtx`, `--events` | Log file or directory |
+| `-e`, `--events` | Log file or directory |
 | `-s`, `--select` | Keep only files whose *name* contains one of these strings (case-insensitive) |
 | `-a`, `--avoid` | Skip files whose *name* contains one of these strings; applied after `--select` |
 | `-f`, `--fileext` | File extension to look for |
@@ -893,14 +890,17 @@ compatibility:
 | Option | Format | Default extension |
 |--------|--------|-------------------|
 | *(none)* | EVTX, or detected | `.evtx` |
-| `-j`, `--json-input` | JSON lines | `.json` |
+| `-j`, `--json-input` | JSON lines | `.json`, `.jsonl`, `.ndjson` |
 | `--json-array-input` | JSON array | `.json` |
 | `-D`, `--db-input` | A saved database, or a directory of them | `.db`, `.sqlite`, `.sqlite3` |
 | `-S`, `--sysmon-linux-input` | Sysmon for Linux | `.log` |
 | `-AU`, `--auditd-input` | Auditd | `.log` |
 | `-x`, `--xml-input` | XML | `.xml` |
 | `--evtxtract-input` | EVTXtract output | `.log` |
-| `--csv-input` | CSV | `.csv` |
+| `--csv-input` | CSV | `.csv`, `.tsv` |
+
+Directories are searched for these extensions plain and as `.gz`, `.bz2`, `.zip` and `.7z`.
+`--fileext` or `--file-pattern` replaces them.
 
 ### Rules and rulesets
 
@@ -922,8 +922,8 @@ compatibility:
 
 | Option | Description |
 |--------|-------------|
-| `-o`, `--outfile` | Detections file (default `detected_events.json`) |
-| `--csv`, `--csv-output` | Write detections as CSV; one ruleset only |
+| `-o`, `--outfile` | Detections file (default `detected_events.json`, or `.csv` with `--csv`) |
+| `--csv` | Write detections as CSV; one ruleset only |
 | `--csv-delimiter` | CSV delimiter, one character (default `;`) |
 | `-L`, `--limit` | Drop the results of any rule matching more than this many events (alerts, for a correlation), counted per database; `-1` disables it |
 | `--keepflat` | Save the flattened events to `flattened_events_<RAND>.json` (JSON lines) |
@@ -1014,5 +1014,5 @@ that cache never contains events or run metadata.
 |------|---------|
 | `0` | The run completed, with or without detections. Files read only in part are named on the console |
 | `1` | The run did not happen or did not finish: no matching file, no rule loaded or left by the rule selection, a `--strict` parse error, an unreadable `--timefield` value or time bound, an inverted time range, a `--limit` of `0` or below `-1`, a missing template, a per-file database name (`save_a.json.db`) that already exists, a failing `--test-rules` case, a failed package, report or timeline, an invalid timeline configuration, or a configuration that cannot be honoured |
-| `2` | The command line cannot run as given: an unknown or conflicting flag, no events path, `--csv` with several rulesets, a `--csv-delimiter` longer than one character, `--all-transforms` with `--transform-category`, an output that is also an input or another output, `--dbfile` on an existing path or with parallel files, an unknown pipeline, a tag that is empty, holds a comma or starts or ends with a dot, a timeline option without `--timeline`, a timeline neither CSV nor JSON lines or with an unknown profile or time zone, `--timeline` with `--test-rules`, or a `--generate-config` that could not be written |
+| `2` | The command line cannot run as given: an unknown or conflicting flag, no events path, `--csv` with several rulesets, a `--csv-delimiter` longer than one character, `--all-transforms` with `--transform-category`, an output that is also an input or another output, `--dbfile` on an existing path or with parallel files, an unknown pipeline, a tag that is empty, holds a comma or starts or ends with a dot, an empty `--rulefilter`, a timeline option without `--timeline`, a timeline neither CSV nor JSON lines or with an unknown profile or time zone, `--timeline` with `--test-rules`, or a `--generate-config` that could not be written |
 | `130` | Interrupted with `Ctrl+C` |

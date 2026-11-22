@@ -1,0 +1,233 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440" role="img" aria-labelledby="t d">
+  <title id="t">Slices of large EVTX files</title>
+  <desc id="d">Without slices, four workers process Security.evtx, 1.3 million records, and four small files: worker 1 spends the whole run on Security.evtx while the other three finish early and sit idle. With slices, Security.evtx is cut into twelve slices of about 65,536 records, each its own database, spread over the four workers after the small files, so every worker finishes at about the same time and the run ends much earlier. The matches of every slice merge back into one entry per rule for Security.evtx in detected_events.json.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+      --sev-0: #687b8a;
+      --sev-unknown: #5a2f96;
+      --amber: #9a6a00;
+      --olive: #4f7a28;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+        --sev-0: #93a6b4;
+        --sev-unknown: #8a5fc6;
+        --amber: #e0a93a;
+        --olive: #8cc152;
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .panel { fill: var(--panel); stroke: var(--rule); }
+    .ink2 { fill: var(--ink-2); }
+    .step { font-weight: 600; }
+    .step .ink2 { font-weight: 400; }
+    .on-bar { fill: var(--paper); font-size: 11px; }
+    .fa { fill: var(--signal); }
+    .fb { fill: var(--sev-0); }
+    .fc { fill: var(--sev-unknown); }
+    .fd { fill: var(--amber); }
+    .fe { fill: var(--olive); }
+    .idle { fill: none; stroke: var(--rule); stroke-width: 2; stroke-dasharray: 4 4; }
+    .wall { fill: none; stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 3 3; }
+    .wall-text { fill: var(--danger); font-weight: 600; font-size: 12px; }
+    .ghost { fill: none; stroke: var(--strip); stroke-width: 1.5; stroke-dasharray: 3 3; opacity: 0.6; }
+    .saved { fill: none; stroke: var(--strip); stroke-width: 1.5; }
+    .saved-head { fill: var(--strip); }
+    .arrow { fill: none; stroke: var(--strip); stroke-width: 1.5; }
+    .head { fill: var(--strip); }
+    .divider { stroke: var(--rule); }
+    .grow { transform-box: fill-box; transform-origin: left center; }
+
+    .scene, .an { animation: 12s linear infinite; }
+    .scene { animation-name: scene; }
+
+    .k1 { animation-name: k1; }
+    .k2 { animation-name: k2; }
+    .k3 { animation-name: k3; }
+    .k4 { animation-name: k4; }
+    .k5 { animation-name: k5; }
+    .k6 { animation-name: k6; }
+    .k7 { animation-name: k7; }
+    .k8 { animation-name: k8; }
+    .k9 { animation-name: k9; }
+    .k10 { animation-name: k10; }
+    .k11 { animation-name: k11; }
+    .k12 { animation-name: k12; }
+    .k13 { animation-name: k13; }
+    .k14 { animation-name: k14; }
+    .k15 { animation-name: k15; }
+    .k16 { animation-name: k16; }
+    .k17 { animation-name: k17; }
+    .k18 { animation-name: k18; }
+    .k19 { animation-name: k19; }
+    .k20 { animation-name: k20; }
+    .k21 { animation-name: k21; }
+    .k22 { animation-name: k22; }
+    .k23 { animation-name: k23; }
+    .k24 { animation-name: k24; }
+    .k25 { animation-name: k25; }
+    .k26 { animation-name: k26; }
+    .k27 { animation-name: k27; }
+    .k28 { animation-name: k28; }
+    .k29 { animation-name: k29; }
+    .k30 { animation-name: k30; }
+    .k31 { animation-name: k31; }
+    .k32 { animation-name: k32; }
+    .k33 { animation-name: k33; }
+    .k34 { animation-name: k34; }
+    .k35 { animation-name: k35; }
+    .k36 { animation-name: k36; }
+    .k37 { animation-name: k37; }
+    .k38 { animation-name: k38; }
+    .k39 { animation-name: k39; }
+    .k40 { animation-name: k40; }
+    .k41 { animation-name: k41; }
+    .k42 { animation-name: k42; }
+    .k43 { animation-name: k43; }
+    .k44 { animation-name: k44; }
+    .k45 { animation-name: k45; }
+    .k46 { animation-name: k46; }
+    .k47 { animation-name: k47; }
+    .k48 { animation-name: k48; }
+    .k49 { animation-name: k49; }
+    .k50 { animation-name: k50; }
+    @keyframes k1 { 0%, 0.00% { transform: scaleX(0); } 35.03%, 100% { transform: none; } }
+    @keyframes k2 { 0%, 34.43% { opacity: 0; } 35.83%, 100% { opacity: 1; } }
+    @keyframes k3 { 0%, 0.00% { transform: scaleX(0); } 7.61%, 100% { transform: none; } }
+    @keyframes k4 { 0%, 7.01% { opacity: 0; } 8.41%, 100% { opacity: 1; } }
+    @keyframes k5 { 0%, 7.61% { transform: scaleX(0); } 13.60%, 100% { transform: none; } }
+    @keyframes k6 { 0%, 13.00% { opacity: 0; } 14.40%, 100% { opacity: 1; } }
+    @keyframes k7 { 0%, 13.60% { opacity: 0; } 15.10%, 100% { opacity: 1; } }
+    @keyframes k8 { 0%, 0.00% { transform: scaleX(0); } 9.64%, 100% { transform: none; } }
+    @keyframes k9 { 0%, 9.04% { opacity: 0; } 10.44%, 100% { opacity: 1; } }
+    @keyframes k10 { 0%, 9.64% { opacity: 0; } 11.14%, 100% { opacity: 1; } }
+    @keyframes k11 { 0%, 0.00% { transform: scaleX(0); } 6.09%, 100% { transform: none; } }
+    @keyframes k12 { 0%, 5.49% { opacity: 0; } 6.89%, 100% { opacity: 1; } }
+    @keyframes k13 { 0%, 6.09% { opacity: 0; } 7.59%, 100% { opacity: 1; } }
+    @keyframes k14 { 0%, 35.03% { opacity: 0; } 37.03%, 100% { opacity: 1; } }
+    @keyframes k15 { 0%, 40.00% { transform: scaleX(0); } 49.64%, 100% { transform: none; } }
+    @keyframes k16 { 0%, 49.04% { opacity: 0; } 50.44%, 100% { opacity: 1; } }
+    @keyframes k17 { 0%, 49.64% { transform: scaleX(0); } 52.56%, 100% { transform: none; } }
+    @keyframes k18 { 0%, 51.96% { opacity: 0; } 53.36%, 100% { opacity: 1; } }
+    @keyframes k19 { 0%, 52.56% { transform: scaleX(0); } 55.48%, 100% { transform: none; } }
+    @keyframes k20 { 0%, 54.88% { opacity: 0; } 56.28%, 100% { opacity: 1; } }
+    @keyframes k21 { 0%, 40.00% { transform: scaleX(0); } 47.61%, 100% { transform: none; } }
+    @keyframes k22 { 0%, 47.01% { opacity: 0; } 48.41%, 100% { opacity: 1; } }
+    @keyframes k23 { 0%, 47.61% { transform: scaleX(0); } 50.53%, 100% { transform: none; } }
+    @keyframes k24 { 0%, 49.93% { opacity: 0; } 51.33%, 100% { opacity: 1; } }
+    @keyframes k25 { 0%, 50.53% { transform: scaleX(0); } 53.45%, 100% { transform: none; } }
+    @keyframes k26 { 0%, 52.85% { opacity: 0; } 54.25%, 100% { opacity: 1; } }
+    @keyframes k27 { 0%, 53.45% { transform: scaleX(0); } 56.37%, 100% { transform: none; } }
+    @keyframes k28 { 0%, 55.77% { opacity: 0; } 57.17%, 100% { opacity: 1; } }
+    @keyframes k29 { 0%, 40.00% { transform: scaleX(0); } 45.99%, 100% { transform: none; } }
+    @keyframes k30 { 0%, 45.39% { opacity: 0; } 46.79%, 100% { opacity: 1; } }
+    @keyframes k31 { 0%, 45.99% { transform: scaleX(0); } 48.91%, 100% { transform: none; } }
+    @keyframes k32 { 0%, 48.31% { opacity: 0; } 49.71%, 100% { opacity: 1; } }
+    @keyframes k33 { 0%, 48.91% { transform: scaleX(0); } 51.83%, 100% { transform: none; } }
+    @keyframes k34 { 0%, 51.23% { opacity: 0; } 52.63%, 100% { opacity: 1; } }
+    @keyframes k35 { 0%, 51.83% { transform: scaleX(0); } 54.75%, 100% { transform: none; } }
+    @keyframes k36 { 0%, 54.15% { opacity: 0; } 55.55%, 100% { opacity: 1; } }
+    @keyframes k37 { 0%, 40.00% { transform: scaleX(0); } 46.09%, 100% { transform: none; } }
+    @keyframes k38 { 0%, 45.49% { opacity: 0; } 46.89%, 100% { opacity: 1; } }
+    @keyframes k39 { 0%, 46.09% { transform: scaleX(0); } 49.01%, 100% { transform: none; } }
+    @keyframes k40 { 0%, 48.41% { opacity: 0; } 49.81%, 100% { opacity: 1; } }
+    @keyframes k41 { 0%, 49.01% { transform: scaleX(0); } 51.93%, 100% { transform: none; } }
+    @keyframes k42 { 0%, 51.33% { opacity: 0; } 52.73%, 100% { opacity: 1; } }
+    @keyframes k43 { 0%, 51.93% { transform: scaleX(0); } 54.85%, 100% { transform: none; } }
+    @keyframes k44 { 0%, 54.25% { opacity: 0; } 55.65%, 100% { opacity: 1; } }
+    @keyframes k45 { 0%, 54.85% { transform: scaleX(0); } 57.77%, 100% { transform: none; } }
+    @keyframes k46 { 0%, 57.17% { opacity: 0; } 58.57%, 100% { opacity: 1; } }
+    @keyframes k47 { 0%, 57.77% { opacity: 0; } 59.77%, 100% { opacity: 1; } }
+    @keyframes k48 { 0%, 58.77% { opacity: 0; } 60.77%, 100% { opacity: 1; } }
+    @keyframes k49 { 0%, 61.77% { opacity: 0; } 64.77%, 100% { opacity: 1; } }
+    @keyframes k50 { 0%, 63.77% { opacity: 0; } 66.77%, 100% { opacity: 1; } }
+    @keyframes scene { 0%, 96.5% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+  <rect class="card" x="0.5" y="0.5" width="959" height="439" rx="14"/>
+  <g class="scene">
+    <text class="step" x="24" y="38">Whole files<tspan class="ink2">: the biggest file keeps one worker busy long after the others</tspan></text>
+    <text class="ink2" x="24" y="75">worker 1</text>
+    <text class="ink2" x="24" y="101">worker 2</text>
+    <text class="ink2" x="24" y="127">worker 3</text>
+    <text class="ink2" x="24" y="153">worker 4</text>
+    <rect class="an grow fa k1" x="110.0" y="62" width="688.0" height="18" rx="3"/>
+    <text class="an mono on-bar k2" x="454.0" y="75" text-anchor="middle">Security.evtx  ·  1.3 million records</text>
+    <rect class="an grow fb k3" x="110.0" y="88" width="148.0" height="18" rx="3"/>
+    <text class="an mono on-bar k4" x="184.0" y="101" text-anchor="middle">a.evtx</text>
+    <rect class="an grow fd k5" x="260.0" y="88" width="116.0" height="18" rx="3"/>
+    <text class="an mono on-bar k6" x="318.0" y="101" text-anchor="middle">c.evtx</text>
+    <g class="an k7"><path class="idle" d="M382.0 97.5H800.0"/></g>
+    <rect class="an grow fc k8" x="110.0" y="114" width="188.0" height="18" rx="3"/>
+    <text class="an mono on-bar k9" x="204.0" y="127" text-anchor="middle">b.evtx</text>
+    <g class="an k10"><path class="idle" d="M304.0 123.5H800.0"/><text class="ink2" x="550.0" y="118" text-anchor="middle" font-size="11">idle</text></g>
+    <rect class="an grow fe k11" x="110.0" y="140" width="118.0" height="18" rx="3"/>
+    <text class="an mono on-bar k12" x="169.0" y="153" text-anchor="middle">d.evtx</text>
+    <g class="an k13"><path class="idle" d="M234.0 149.5H800.0"/></g>
+    <g class="an k14"><path class="wall" d="M801 54V168"/><text class="wall-text" x="808" y="62">wall time</text></g>
+    <path class="divider" d="M24 196.5h912"/>
+    <text class="step" x="24" y="230">Slices<tspan class="ink2">: the same file cut into ~65,536-record slices, each its own database</tspan></text>
+    <text class="ink2" x="24" y="281">worker 1</text>
+    <text class="ink2" x="24" y="307">worker 2</text>
+    <text class="ink2" x="24" y="333">worker 3</text>
+    <text class="ink2" x="24" y="359">worker 4</text>
+    <rect class="an grow fc k15" x="110.0" y="268" width="188.0" height="18" rx="3"/>
+    <text class="an mono on-bar k16" x="204.0" y="281" text-anchor="middle">b.evtx</text>
+    <rect class="an grow fa k17" x="300.0" y="268" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k18" x="327.8" y="281" text-anchor="middle" font-size="10">1</text>
+    <rect class="an grow fa k19" x="357.5" y="268" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k20" x="385.2" y="281" text-anchor="middle" font-size="10">2</text>
+    <rect class="an grow fb k21" x="110.0" y="294" width="148.0" height="18" rx="3"/>
+    <text class="an mono on-bar k22" x="184.0" y="307" text-anchor="middle">a.evtx</text>
+    <rect class="an grow fa k23" x="260.0" y="294" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k24" x="287.8" y="307" text-anchor="middle" font-size="10">3</text>
+    <rect class="an grow fa k25" x="317.5" y="294" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k26" x="345.2" y="307" text-anchor="middle" font-size="10">4</text>
+    <rect class="an grow fa k27" x="375.0" y="294" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k28" x="402.8" y="307" text-anchor="middle" font-size="10">5</text>
+    <rect class="an grow fd k29" x="110.0" y="320" width="116.0" height="18" rx="3"/>
+    <text class="an mono on-bar k30" x="168.0" y="333" text-anchor="middle">c.evtx</text>
+    <rect class="an grow fa k31" x="228.0" y="320" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k32" x="255.8" y="333" text-anchor="middle" font-size="10">6</text>
+    <rect class="an grow fa k33" x="285.5" y="320" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k34" x="313.2" y="333" text-anchor="middle" font-size="10">7</text>
+    <rect class="an grow fa k35" x="343.0" y="320" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k36" x="370.8" y="333" text-anchor="middle" font-size="10">8</text>
+    <rect class="an grow fe k37" x="110.0" y="346" width="118.0" height="18" rx="3"/>
+    <text class="an mono on-bar k38" x="169.0" y="359" text-anchor="middle">d.evtx</text>
+    <rect class="an grow fa k39" x="230.0" y="346" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k40" x="257.8" y="359" text-anchor="middle" font-size="10">9</text>
+    <rect class="an grow fa k41" x="287.5" y="346" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k42" x="315.2" y="359" text-anchor="middle" font-size="10">10</text>
+    <rect class="an grow fa k43" x="345.0" y="346" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k44" x="372.8" y="359" text-anchor="middle" font-size="10">11</text>
+    <rect class="an grow fa k45" x="402.5" y="346" width="55.5" height="18" rx="3"/>
+    <text class="an mono on-bar k46" x="430.2" y="359" text-anchor="middle" font-size="10">12</text>
+    <g class="an k47"><path class="wall" d="M461.0 260V364"/><text class="wall-text" x="454.0" y="256" text-anchor="end">wall time</text></g>
+    <g class="an k48"><path class="ghost" d="M801 366V386"/><path class="saved" d="M466.0 376H796"/><path class="saved-head" d="M801 376l-6-4v8z"/><text class="ink2" x="630.0" y="392" text-anchor="middle">time saved</text></g>
+    <g class="an k49"><path class="arrow" d="M417.0 277H476.0M434.5 303H476.0M402.5 329H476.0M462.0 355H476.0M476.0 277V355M476.0 316.0H534"/><path class="head" d="M540 316.0l-6-4v8z"/></g>
+    <g class="an k50"><rect class="panel" x="540.5" y="286.0" width="396" height="60" rx="6"/><text class="mono" x="556" y="308.0">detected_events.json</text><text class="ink2" x="556" y="329.0">Security.evtx: one entry per rule, slices merged in order</text></g>
+  </g>
+  <text class="ink2" x="480" y="424" text-anchor="middle">Same work on the same time scale. Slicing applies in parallel runs when the ruleset and outputs allow it.</text>
+</svg>

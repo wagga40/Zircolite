@@ -737,14 +737,16 @@ parallel:
   # Maximum number of workers. null = auto-detect, which takes the smallest of:
   #   - memory:    (available RAM x 0.85) / estimated memory per file
   #   - CPU:       2x CPU cores
-  #   - file count: at most 3x CPU cores, and never more than the file count
+  #   - file count: at most 3x CPU cores, and never more than the number of
+  #                 files and EVTX slices
   # then applies a floor of half the CPU cores when memory is not the
   # constraint, and a hard ceiling of 32 to avoid context-switching overhead.
   # Process workers also stop at the CPU count and at
   # (available RAM x 0.85) / (128 MB + estimated memory per file).
   max_workers: null
 
-  # Never drop below this many workers
+  # Floor for process workers when max_workers is unset; the file, CPU and
+  # memory caps above still apply
   min_workers: 1
 
   # System memory usage above which new file submissions are deferred
@@ -757,6 +759,8 @@ parallel:
 # Memory per file is estimated from the average input size, since smaller
 # files carry proportionally more per-event overhead:
 #   < 10 MB  -> 5.0x    < 50 MB -> 4.0x    >= 50 MB -> 3.5x
+# Uncompressed EVTX averaging 100 MB or more counts at 2.5x, and 2.0x from
+# 512 MB, since its records are bulkier than the rows they become.
 # These multipliers are informational; they are not configurable.
 """
 

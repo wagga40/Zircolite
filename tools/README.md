@@ -2,9 +2,11 @@
 
 Scripts for packaging, benchmarking, Sigma regression tests and the docs pictures and tour.
 
-`tests/test_tools.py` runs the benchmark and regression tools over tracked fixtures.
-Release-script unit tests use temporary checkouts; end-to-end validation requires a
-PyInstaller build or a Windows ARM64 host.
+`tests/test_tools.py` runs the benchmark and regression tools over tracked fixtures, and
+`tests/test_compact_storage_benchmark.py` the storage experiment. Release-script unit tests
+use temporary checkouts; end-to-end validation requires a PyInstaller build or a Windows
+ARM64 host. `process_tree.py` is a shared helper, not a script: it enumerates a process's
+descendants for `throughput-benchmark.py` and `tests/test_frozen_binary.py`.
 
 ## package-release.py
 
@@ -203,8 +205,7 @@ pdm run python tools/throughput-benchmark.py --events /path/to/logs --ruleset ru
   template and timeline runs also check their underlying JSON detections. Packages
   verify ZIP and embedded payload checksums, then compare every decoded Parquet schema
   and row, including event IDs, links and full-text values, plus manifest metadata.
-  The Explore index also compares physical row positions, which determine chronological
-  order. Other tables compare independently of row order. Creation time and physical
+  Tables compare independently of row order. Creation time and physical
   Parquet encoding are excluded. Validation runs
   outside the timed region, alongside JSON detection parity.
 - `--warmup` excludes initial passes from reported measurements (default: `0`).
@@ -396,8 +397,10 @@ Chromium) and Pillow outside the project's environment, and `img2webp` and `webp
    local path. It then visits every view and the Run details dialog looking for the home
    directory or the user name, and plays the storyboard at 1280×800 in the light theme,
    capturing frames with the DevTools screencast plus a screenshot at the start of every
-   hold. Each hold checks the page for local paths again. `--dry` plays the storyboard
-   without capturing and saves one screenshot per beat, to check its targets quickly.
+   hold. Each hold checks the page for local paths again. To check its targets quickly,
+   run it directly with `--dry`, which saves one screenshot per beat instead of capturing,
+   and `--only <beat,…>` for the beats after the overview:
+   `uv run --no-project --with playwright==1.62.0 python -I tools/viewer-tour/record.py --package <dir> --viewer gui/viewer --out <work> --dry`.
 2. `encode.py` shortens the waits for data to 0.2 s, keeps at most 15 frames a second
    (5 while the drawer scrolls), merges identical frames and encodes them losslessly. It
    writes the frame shown late in each beat, decoded back from the WebP, to `review/` in

@@ -17,6 +17,7 @@ The mirror runs on one x86_64 Linux runner:
 | `external_tests` | ubuntu-latest | same, on the host label; push and manual runs only, no `pull_request` |
 | `tests` (`viewer` job) | ubuntu-latest | same, in the Ubuntu job container |
 | `build_pyinstaller` | linux x64/arm64, windows x64/arm64, macOS arm64; verify on clean runners and older distributions; release | linux x64 build, binary tests and package smoke in one job — 1 of 5 legs, no release |
+| `docs` | none: Pages serves `docs/` from master | copies `docs/` from master to the runner host's web root, on the host label |
 
 Windows, macOS and arm64 validation requires the GitHub matrix.
 
@@ -54,6 +55,11 @@ libraries again, since nothing caches them between jobs here.
 See the comment at the top of `external_tests.yml` — the harness computes its
 own bind-mount paths, so it only works where the Docker daemon and the job share
 a filesystem.
+
+**`docs` exists only here.** GitHub Pages publishes `docs/` from master without a
+workflow; this one copies it to `/srv/docs/Zircolite/` on the runner host, which
+its web server exposes. It runs on the host label, on pushes to master that touch
+`docs/` and on manual runs, never on `pull_request`.
 
 **`external_tests` does not run on `pull_request`.** On GitHub it does, on a
 disposable VM. Here it would run a pull request's code on the runner host
@@ -102,7 +108,8 @@ includes the event name, as on GitHub, so a push does not cancel a manual run.
 The `ubuntu-latest` jobs need nothing beyond a working Docker-backed runner
 that can pull from `ghcr.io` and `quay.io`; `build_pyinstaller` also reaches the
 AlmaLinux mirrors for node.
-The `external_tests` job runs directly on the runner host and needs:
+The `external_tests` and `docs` jobs run directly on the runner host; `docs` needs
+only `node` and write access to `/srv/docs`. `external_tests` needs:
 
 - `docker`, with a daemon able to **build** images (see below)
 - `python3` with `venv`
