@@ -42,29 +42,17 @@ silicon, Windows x64 and ARM64).
 docker pull wagga40/zircolite:latest
 ```
 
-**From source** with [PDM](https://pdm-project.org/latest/), Python 3.11 to 3.14:
+**From source** with [PDM](https://pdm-project.org/latest/) (or `uv sync --python 3.14+gil`), Python 3.11 to 3.14:
 
 ```shell
 git clone https://github.com/wagga40/Zircolite.git
 cd Zircolite
-pdm use -f 3.14
-pdm install
+pdm use -f 3.14      # not 3.15 or a free-threaded build, which are not supported yet
+pdm install          # compiles the native flattening kernel when a C compiler is present
 ```
 
-`pdm use` keeps PDM away from Python 3.15 and free-threaded builds, which are
-[not supported yet](docs/Usage.md#from-source); any of 3.11 to 3.13 works as well. With
-[uv](https://docs.astral.sh/uv/):
-
-```shell
-git clone https://github.com/wagga40/Zircolite.git
-cd Zircolite
-uv sync --python 3.14+gil
-```
-
-Source installs compile a native flattening kernel and need a C compiler for it; without
-one they fall back to a slower Python kernel. See
-[Installation](docs/Usage.md#requirements-and-installation) for compiler packages, binary
-details (macOS quarantine, checksums) and Docker permissions.
+[Installation](docs/Usage.md#requirements-and-installation) covers compilers, macOS
+quarantine, checksums and Docker permissions.
 
 ## Quick start
 
@@ -86,19 +74,9 @@ python3 zircolite.py --events logs/ --package
 python3 zircolite.py --events logs/ --timeline
 ```
 
-With a binary, run `./Zircolite` instead of `python3 zircolite.py`. From source, prefix the
-command with `pdm run` (or `uv run`) unless the environment is active. With
-Docker, mount the logs and give absolute paths:
-
-```shell
-docker run --rm --tty -v $PWD:/case/input:ro -v $PWD:/case/output \
-    wagga40/zircolite:latest --events /case/input -o /case/output/detected_events.json
-```
-
-On a Linux host, add `--user "$(id -u):$(id -g)"` and `-l /case/output/zircolite.log`: the
-image runs as an unprivileged user that cannot write to a directory you own.
-
-Detections go to `detected_events.json`. For logs to try it on, see
+With a binary, run `./Zircolite`; from source, prefix with `pdm run` (or `uv run`) unless
+the environment is active; with [Docker](docs/Usage.md#docker), mount the logs. Detections
+go to `detected_events.json`. For logs to try it on, see
 [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES).
 
 > [!IMPORTANT]
@@ -130,16 +108,14 @@ came from. See [Zircolite Viewer](docs/Viewer.md).
 
 ## Benchmark
 
-Median wall time on a 10-core Apple M1 Max, each tool at its defaults with its own rules:
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/pics/benchmark-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/pics/benchmark-light.svg">
+  <img alt="Median wall time on a 10-core M1 Max, each tool at its defaults with its own rules. One channel: Zircolite 5.0 s, Hayabusa 23.2 s, Chainsaw 47.0 s. Eleven channels: Zircolite 19.2 s, Hayabusa 498.9 s, Chainsaw 176.5 s" src="docs/pics/benchmark-light.svg">
+</picture>
 
-| Tool | 4 Sysmon EVTX, 478 MB | 8 EVTX over 11 channels, 13.3 GB |
-|------|----------------------:|---------------------------------:|
-| **Zircolite** | **7.7 s** | **30.2 s** |
-| Hayabusa 4.2.0 | 23.3 s | 500.3 s |
-| Chainsaw 2.17.1 | 48.3 s | 183.0 s |
-
-Zircolite uses more memory than the others, through its parallel workers (`--no-parallel`
-turns them off), and the rule sets differ, so detection counts do not compare. See
+Zircolite uses the most memory, through its parallel workers (`--no-parallel` turns them
+off), and the rule sets differ, so detection counts do not compare. See
 [Benchmark](docs/Benchmark.md) for memory, setup and how to reproduce it.
 
 ## Tutorials, references and related projects

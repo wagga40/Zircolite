@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 358" width="960" height="358" role="img" aria-labelledby="t d">
+  <title id="t">Zircolite, Hayabusa and Chainsaw: median wall time</title>
+  <desc id="d">Median wall time of three runs on a 10-core Apple M1 Max, each tool at its defaults with its own rules. One channel, 4 Sysmon EVTX files, 478 MB, 452,554 events: Zircolite 5.0 s, Hayabusa 4.4.0 23.2 s, Chainsaw 2.18.0 47.0 s. Eleven channels, 8 EVTX files, 13.3 GB, 1.72 million events: Zircolite 19.2 s, Hayabusa 4.4.0 498.9 s, Chainsaw 2.18.0 176.5 s.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --other: #9fb0bb;
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .ink2 { fill: var(--ink-2); font-weight: 400; }
+    .step { font-weight: 600; }
+    .strong { font-weight: 600; }
+    .divider { stroke: var(--rule); }
+    .zl { fill: var(--signal); }
+    .other { fill: var(--other); }
+    .value { font-variant-numeric: tabular-nums; }
+    .zl-text { fill: var(--signal); font-weight: 600; }
+    .other-text { fill: var(--ink-2); }
+    .grow { transform-box: fill-box; transform-origin: left center; animation: grow 0.9s cubic-bezier(.2,.7,.2,1) backwards; }
+    .fade { animation: fade 0.4s ease-out backwards; }
+    @keyframes grow { from { transform: scaleX(0); } }
+    @keyframes fade { from { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+  <rect class="card" x="0.5" y="0.5" width="959" height="357" rx="14"/>
+  <text class="step" x="24" y="40">One channel<tspan class="ink2">  4 Sysmon EVTX · 478 MB · 452,554 events</tspan></text>
+  <text class="strong" x="24" y="71">Zircolite</text>
+  <rect class="bar zl grow" style="animation-delay:0.00s" x="190" y="56" width="67.0" height="22" rx="4"/>
+  <text class="value zl-text fade" style="animation-delay:0.70s" x="265.0" y="71">5.0 s</text>
+  <text x="24" y="103">Hayabusa 4.4.0</text>
+  <rect class="bar other grow" style="animation-delay:0.12s" x="190" y="88" width="311.0" height="22" rx="4"/>
+  <text class="value other-text fade" style="animation-delay:0.82s" x="509.0" y="103">23.2 s</text>
+  <text x="24" y="135">Chainsaw 2.18.0</text>
+  <rect class="bar other grow" style="animation-delay:0.24s" x="190" y="120" width="630.0" height="22" rx="4"/>
+  <text class="value other-text fade" style="animation-delay:0.94s" x="828.0" y="135">47.0 s</text>
+  <path class="divider" d="M24 162.0h912"/>
+  <text class="step" x="24" y="192">Eleven channels<tspan class="ink2">  8 EVTX · 13.3 GB · 1.72 million events</tspan></text>
+  <text class="strong" x="24" y="223">Zircolite</text>
+  <rect class="bar zl grow" style="animation-delay:0.36s" x="190" y="208" width="24.2" height="22" rx="4"/>
+  <text class="value zl-text fade" style="animation-delay:1.06s" x="222.2" y="223">19.2 s</text>
+  <text x="24" y="255">Hayabusa 4.4.0</text>
+  <rect class="bar other grow" style="animation-delay:0.48s" x="190" y="240" width="630.0" height="22" rx="4"/>
+  <text class="value other-text fade" style="animation-delay:1.18s" x="828.0" y="255">498.9 s</text>
+  <text x="24" y="287">Chainsaw 2.18.0</text>
+  <rect class="bar other grow" style="animation-delay:0.60s" x="190" y="272" width="222.9" height="22" rx="4"/>
+  <text class="value other-text fade" style="animation-delay:1.30s" x="420.9" y="287">176.5 s</text>
+  <text class="ink2" x="480" y="344" text-anchor="middle">Median of three runs on a 10-core M1 Max, each tool at its defaults with its own rules. Shorter is better.</text>
+</svg>

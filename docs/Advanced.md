@@ -65,8 +65,8 @@ transforms:
 | `file` | A `.py` file, relative to `transforms_dir`, with `type: python_file` |
 | `alias` | `true` writes to a new field; `false` replaces the value |
 | `alias_name` | The new field's name, with `alias: true` |
-| `source_condition` | Input types it applies to: `evtx_input`, `json_input`, `json_array_input`, `xml_input`, `csv_input`, `sysmon_linux_input`, `auditd_input`, `evtxtract_input` |
-| `enabled` | Whether it runs |
+| `source_condition` | Input types it applies to: `evtx_input`, `json_input`, `json_array_input`, `xml_input`, `csv_input`, `sysmon_linux_input`, `auditd_input`, `evtxtract_input`, `db_input` |
+| `enabled` | Whether it runs, when the file has no `enabled_transforms` list. The shipped one has a list, which decides alone |
 
 `transforms_dir` defaults to `transforms/` beside the config file: `config/transforms/` for
 the shipped one, `/opt/zircolite/transforms/` for `-c /opt/zircolite/my.yaml`. An absolute
@@ -77,11 +77,12 @@ path works too. Transforms run before [splitting](Usage.md#field-splitting).
 The function is named `transform` and takes one argument, the field's value. Numbers can
 arrive as numbers; use `str(param)` when you expect text.
 
-- **Allowed:** common built-ins (`len`, `int`, `str`, `enumerate`, `min`, `sum`, …), the
-  modules `re`, `base64`, `chardet` and `math` (their public functions only), writes into a
-  `dict`, `list` or `set`, and augmented assignment (`+=`, …). `bytes`, `sorted`, `tuple` and
-  `zip` are not built-ins here (RestrictedPython 9 removed them): decode hex with
-  `base64.b16decode(value, casefold=True)`.
+- **Allowed:** common built-ins (`len`, `int`, `str`, `tuple`, `enumerate`, `min`, `sum`, …),
+  the modules `re`, `base64`, `chardet` and `math` (their public functions only), writes
+  into a `dict`, `list` or `set`, and augmented assignment (`+=`, …). `--list-builtins`
+  below prints the exact set.
+- **Missing:** `bytes`, `sorted` and `zip` (RestrictedPython 9 removed them). Decode hex
+  with `base64.b16decode(value, casefold=True)`.
 - **Blocked:** file and network access, system calls, other imports, and writes to object
   attributes.
 
@@ -270,7 +271,7 @@ span files.
 
 Given several files, auto mode weighs them against free RAM and CPUs, then picks the layout
 and whether to run in parallel. In a container, free RAM is what its cgroup v2 limit leaves
-([how it is read](Internals.md#stage-2-parquet)):
+([memory budget](Internals.md#memory-budget)):
 
 ```
 [+] Analyzing workload...
@@ -281,48 +282,64 @@ and whether to run in parallel. In a container, free RAM is what its cgroup v2 l
     [>] Parallel    ENABLED (4 workers)
 ```
 
-**Layout.** The first matching row decides. With correlation rules loaded and several
-files, the layout is unified unless `--no-auto-mode` is set, and `--executor process` and
-`--parallel-workers` are ignored.
+**Layout.** One file is always per-file. For several, the first question answered "yes"
+decides:
 
-| # | Condition | Layout | Why |
-|---|-----------|--------|-----|
-| 1 | One file | Per-file | Nothing to unify |
-| 2 | Under 2 GB of RAM free | Per-file | Memory is tight |
-| 3 | Estimated footprint over 85% of free RAM | Per-file | Avoid running out |
-| 4 | 10+ files averaging 5 MB or less, and for EVTX no more than 1,000 records each on average | Unified | Less overhead |
-| 5 | Fewer than 5 files averaging 50 MB or more | Per-file | Memory-efficient |
-| 6 | 8 GB+ RAM and 3+ files | Per-file | Leaves the files free to run in parallel |
-| 7 | Any other run of 10+ files | Unified | Enables cross-file correlation |
-| 8 | Anything else | Per-file | Default |
+```mermaid
+%%{init: {"flowchart": {"rankSpacing": 22, "nodeSpacing": 40}}}%%
+flowchart TD
+    A([Several files]) --> C{{"Correlation rules loaded?"}}
+    C -->|no| M{{"Under 2 GB free, or estimated<br/>footprint over 85% of free RAM?"}}
+    C -->|yes| U1[Unified]
+    M -->|no| S{{"10+ files averaging 5 MB or less,<br/>EVTX averaging 1,000 records or less?"}}
+    M -->|yes| P1[Per-file]
+    S -->|no| L{{"Fewer than 5 files<br/>averaging 50 MB or more?"}}
+    S -->|yes| U2[Unified]
+    L -->|no| R{{"8 GB+ RAM and 3+ files?"}}
+    L -->|yes| P2[Per-file]
+    R -->|no| T{{"10+ files?"}}
+    R -->|yes| P3[Per-file]
+    T -->|no| P4[Per-file]
+    T -->|yes| U3[Unified]
 
-The footprint is an estimate: an in-memory database is 3.5 to 5 times larger than the logs
-it holds, so rule 3 triggers at roughly a quarter to a sixth of free RAM. Uncompressed EVTX
-is the exception once its files average 100 MB: their records are bulkier than the rows they
-become, so they count at 2.5 times their size, and at 2 times from 512 MB. The same estimate
-sizes the worker pool below.
+    classDef unified fill:#e8f1fb,stroke:#3b82c4,color:#123
+    classDef perfile fill:#eef7ee,stroke:#3f9a4b,color:#123
+    class U1,U2,U3 unified
+    class P1,P2,P3,P4 perfile
+```
 
-Rule 4 counts EVTX records from the chunk headers, without parsing them: Windows allocates
-logs ahead of their records, so a small file may hold a few events or tens of thousands. A
-unified database keeps every record on one core, while per-file runs pay a fixed cost per
-file but spread the files over workers. Small files averaging more than 1,000 records go
-per-file instead: on a 1,692-file collection holding 4.6 million records, that took 53 s
-against 214 s unified.
+- **Footprint.** An in-memory database is 3.5 to 5 times the size of its logs. Uncompressed
+  EVTX averaging 100 MB or more counts at 2.5 times, and 2 times from 512 MB, because its
+  records are bulkier than the rows they become.
+- **Small EVTX files.** Windows allocates logs ahead of their records, so record counts come
+  from the chunk headers, not the size. Small files averaging more than 1,000 records go
+  per-file, to spread over workers: on 1,692 files holding 4.6 million records, that took
+  53 s against 214 s unified.
+- **Correlations** force the unified layout with several files, ignoring `--executor process`
+  and `--parallel-workers`; only `--no-auto-mode` keeps per-file, with a warning.
 
-**Parallelism** applies to per-file runs only, again first match:
+**Parallelism** applies to per-file runs only:
 
-| # | Condition | Parallel |
-|---|-----------|----------|
-| 1 | One file | No |
-| 2 | Under 1 GB of RAM free | No |
-| 3 | Fewer than 2 workers affordable | No |
-| 4 | The **largest** file's estimate over 60% of usable RAM | No |
-| 5 | Several files, enough memory | Yes |
+```mermaid
+flowchart LR
+    A([Per-file run of<br/>several files]) --> B{{"Under 1 GB free?"}}
+    B -->|no| W{{"2+ workers affordable?"}}
+    W -->|yes| L{{"Largest file's estimate over<br/>60% of usable RAM?"}}
+    L -->|no| Y[Parallel]
+    B -->|yes| N[One file at a time]
+    W -->|no| N
+    L -->|yes| N
 
-In a parallel run, an EVTX file holding 131,072 records or more is split into slices of
-about 65,536 records, each a working database of its own, so one big file no longer keeps a
-single worker busy after the others are done. The detections still list each rule once per
-file ([how slices work](Internals.md#slices-of-large-evtx-files)).
+    classDef yes fill:#eef7ee,stroke:#3f9a4b,color:#123
+    classDef no fill:#fbeaea,stroke:#c0443c,color:#321
+    class Y yes
+    class N no
+```
+
+In a parallel run, an EVTX file of 131,072 records or more is cut into slices of about
+65,536 records, each a working database, so one big file no longer keeps a single worker
+busy after the others finish. The detections still list each rule once per file. This
+happens when the ruleset and outputs allow it ([slices](Internals.md#slices-of-large-evtx-files)).
 
 **Overriding it:**
 
@@ -386,7 +403,8 @@ rule claims, is **kept**. Zircolite reports the result at load time and in the s
 ```
 
 The second line names the channels where some rule accepts any EventID, so nothing is
-dropped there. "Match rate" is the share of events the filter kept, not the rule matches.
+dropped there. "Match rate" is the share of events read that passed the event and time
+filters, not the rule matches.
 
 The filter is off:
 
@@ -501,8 +519,8 @@ python3 zircolite.py --events sample.evtx --navigator-output
 ```
 
 Pair one `--templateOutput` with each `--template` to write several at once. The shortcuts
-write `timesketch-<RAND>.json` and `navigator-<RAND>.json` (or a name you give), so repeated
-exports never overwrite each other. Like `-c` and `-r`, they prefer a template of that name
+write `timesketch-<RAND>.json` and `navigator-<RAND>.json` (or the name given to
+`--navigator-output`), so repeated exports never overwrite each other. Like `-c` and `-r`, they prefer a template of that name
 in the working directory's `templates/`.
 
 ### Available templates

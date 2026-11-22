@@ -22,12 +22,11 @@ python3 zircolite.py --events logs/ --package --package-dir /cases/host1
 `--package-dir`, which must exist. In a [run configuration](Usage.md#yaml-configuration)
 the keys are `output.package` and `output.package_dir`.
 
-Use `--package-explore-index` to make a package for repeated timeline, host,
-channel or EventID investigations. It also enables `--package`. In YAML, set
-`output.package_explore_index: true`. The extra Parquet file holds event IDs, times
-and the available pivot fields in chronological order. Explore uses it to find
-rows and reads the original event for the selected columns, details and exports.
-Building and loading the index adds work and increases the ZIP size.
+`--package-explore-index` (it implies `--package`; YAML `output.package_explore_index`)
+adds a chronological index of event ids, times, hosts, channels and EventIDs. Explore uses it
+in time order, with no column sort, when every search term is one the index covers. On the
+1.87-million-event T001 capture it made paging through all events about 3.5 times faster and
+host, channel or EventID pivots up to 2 times faster, for 4.6% more zip.
 
 - **Every event is kept.** The [event filter](Advanced.md#early-event-filtering) is off for
   the run. The time and file filters still apply: use them to make a smaller package.
@@ -37,30 +36,32 @@ Building and loading the index adds work and increases the ZIP size.
   stops the run there. duckdb is never allowed to download anything, and extensions other
   DuckDB programs installed in `~/.duckdb/extensions` are neither needed nor used.
 - **A package is whole or absent.** It is assembled in a `tmp-zircolite-package-*`
-  directory inside the destination and moved into place when complete. That directory needs
-  space for the temporary event spool, Parquet and final zip. With sufficient free space,
-  plain temporary chunks save compression time; when space is low, new chunks use gzip.
-  If building the package fails after the run, Zircolite exits `1` once its detections
-  are written.
+  directory inside the destination, which needs room for the event spool, the Parquet files
+  and the zip ([how much](Internals.md#stage-1-the-spool)), and moved into place when
+  complete. If building it fails, Zircolite exits `1` once the detections are written.
 - **The command line is not recorded**, so an archive password cannot leak into it. The
   package keeps the settings that shape what it shows: processing mode, time field, time
   bounds, `--limit`, number of rules.
 
-Repeated exports reuse a verified cache of the compressed viewer assets. Event data is
-always exported afresh. `ZIRCOLITE_CACHE_DIR` changes the cache location;
-`ZIRCOLITE_NO_CACHE=1` disables it. The [package pipeline](Internals.md#package-pipeline)
-describes the disk-space and memory choices.
+Repeated exports reuse a verified cache of the viewer's own files, never of event data
+([cache variables](Usage.md#performance)).
 
-The browser holds the events in WebAssembly memory, which stops at 4 GB, so Zircolite
-refuses a package whose events exceed 1 GiB as Parquet and suggests narrowing the run with
-`--after`/`--before` or `-s`. A full-text index over 1 GiB is left out, with a warning:
-bare-word searches then scan every field, which is slower.
+### Size limits
+
+The browser holds the data in WebAssembly memory, which stops at 4 GB.
+
+| Over 1 GiB as Parquet | Result |
+|-----------------------|--------|
+| The events | The package is refused. Narrow the run with `--after`/`--before` or `-s` |
+| The full-text index | Left out, with a warning: bare-word searches scan every field, more slowly |
+| The Explore index | Left out, with a note |
 
 ### Who should see a package
 
-A package holds everything the logs recorded: account and host names, command lines, IP
-addresses, file paths. Share and store it as you would the logs themselves. The
-`README.txt` inside says the same.
+> [!WARNING]
+> A package holds everything the logs recorded: account and host names, command lines, IP
+> addresses, file paths. Share and store it as you would the logs themselves. The
+> `README.txt` inside says the same.
 
 ## Opening a package
 
@@ -81,22 +82,14 @@ rule matched) apply to every view, unless a view says otherwise. Each active fil
 a chip with an ×. The filters, the view, the table columns and the open event live in the
 page's address, so **Back** steps through an investigation and a bookmark reopens it.
 
-**Top bar.** **Syntax** opens the search help. **Run details** shows the run summary — events,
-inputs, time range, rules matched, alerts, processing mode, time field, filter state, and the
-Zircolite version that made the package — followed by its warnings: a `--limit`, narrowed
-time bounds, events without a readable time, inputs read in part or failed, a missing
-full-text index. The theme switch offers Auto, Light and Dark.
+**Top bar.** **Syntax** opens the search help, **Run details** the run summary and its
+warnings (a `--limit`, narrowed time bounds, inputs read in part, a missing full-text
+index…), and the theme switch offers Auto, Light and Dark.
 
-**While the page works.** A query that takes more than a moment shows a bar under the top bar
-and, at the foot of the view, what the page is doing and for how long. When the page can tell
-how far it has got, the bar fills and says so: loading the full-text index, a search of every
-field, or a search of a large field such as `CommandLine:*mimikatz*`, which runs in parts.
-Other queries cannot report their progress, so the bar only sweeps. A panel still waiting for
-its first answer says what it is doing over the outline of the rows to come; a panel
-answering a new question dims its previous answer until then.
-
-**Stop** cancels every query of the page; **Run again** restarts them. It is at the foot of the
-view, except while Explore's events or an SQL query load: their own Stop then stands beside them.
+**While the page works.** A slow query shows a bar under the top bar, and the foot of the view
+says what is running and for how long. The bar fills when progress is known (the full-text
+index, a search of every field or of a large field) and sweeps otherwise. **Stop** cancels
+every query; **Run again** restarts them.
 
 **Keys.** `/` focuses the search, `?` opens the help, `Esc` closes what is on top, `j` and
 `k` move through events in Explore, and `Enter` opens one.
@@ -107,22 +100,15 @@ Process, Network, File and registry, and Other. Each value has + (filter for it)
 (filter it out) and **Copy**. **Show JSON** and **Copy JSON** give the whole event, and
 **Events on _host_ within 5 minutes** shows what happened around it.
 
-A value holding encoded text gets a **Decode** button, which lists what it decodes to:
-- a PowerShell encoded command (`-enc` and the other prefixes of `-EncodedCommand`);
-- Base64, including gzip- or deflate-packed payloads as droppers write them;
-- URL escapes;
-- hex.
+A value holding encoded text gets a **Decode** button. It decodes PowerShell encoded commands
+(`-enc` and the other `-EncodedCommand` prefixes, only when they decode to UTF-16 text),
+Base64 including gzip- or deflate-packed payloads, URL escapes and hex, two levels deep.
+Results show as plain text, only when they read as text, first 64 KiB. A payload that breaks
+off shows what it unpacked, marked **cut short**.
 
-A decoding is offered only when it reads as text, and it shows as plain text, never as a page;
-the first 64 KiB are kept. An encoded command must decode to UTF-16 text, as PowerShell writes it,
-so another tool's `-e` argument (`gpg -e`, `schtasks /ec`) is not read as one. A packed payload
-that breaks off, or ends in bytes that do not unpack, shows what it unpacked to up to there,
-marked **cut short**. Decoded text can be decoded again, two levels deep, for Base64 inside
-Base64.
-
-Logs come from the attacker's host, so each value is bounded: at most 16 decodings, 4 MiB of
-unpacked payloads, and the first 512 KiB searched. Encoded commands are tried first. When a
-limit is reached, the decodings say which one.
+> [!NOTE]
+> Logs come from the attacker's host, so decoding is bounded per value: 16 decodings, 4 MiB
+> unpacked, the first 512 KiB searched. A decoding that hits a limit says which.
 
 **Show in all events** clears the search, the time range and **Detections only**, returns to
 time order, and scrolls the events table to the event, centred. It shows what happened just
@@ -158,6 +144,8 @@ every field with its coverage; open one for its ten most frequent values, each w
 or show it as a column. **Export CSV** writes the shown columns, in the order shown, for up to
 500,000 events, defusing spreadsheet formulas; **Export JSON** writes every field for up to
 100,000 events, one object per line.
+
+![Explore with a column filter on CommandLine and the Image column's menu open on its rarest values](pics/viewer-explore-filters.webp)
 
 **Column filters.** Under each column name is a filter cell; type, then press `Enter`:
 
@@ -195,12 +183,11 @@ kept in the link, Back undoes it, and every view applies it. A column whose term
 filter describes, such as two contains, shows them read-only; edit them in the search bar, or
 clear them from the cell.
 
-**Sorting and columns.** Click a column's name to sort by it, and again to reverse; click
-**Time (UTC)** to go back to time order. Ties stay in time order. Text sorts by its first 128
-characters, ignoring case. Drag a column's name to move it, or use **Move left** and **Move right**
-in its menu. Drag the edge of its header to resize it; with the keyboard, focus the edge and
-use the arrow keys. `Delete` or a double click gives the column back its share of the width.
-The order, widths and sort are kept in the link.
+**Sorting and columns.** Click a column's name to sort, again to reverse, and **Time (UTC)**
+to return to time order; ties stay in time order, and text sorts by its first 128 characters,
+ignoring case. Drag a name to move the column (or **Move left**/**Move right**), drag a header
+edge to resize it (arrow keys on a focused edge, `Delete` or a double click to reset). The
+order, widths and sort are kept in the link.
 
 When the results hold one kind of event, such as Security 4624 or Sysmon 1, **Columns for…**
 shows the fields that tell those events apart, the host first. The search's own EventID and
@@ -246,65 +233,40 @@ only, never the search, and the count above the table counts what they keep.
 
 ### Stacking
 
+![Stacking Image and User, rarest first](pics/viewer-stacking.webp)
+
 Least-frequency analysis: each value of one to three fields among the filtered events, rarest
 first, with its events, hosts, events with detections, and first and last times. What few
 events on few hosts carry is where unusual activity tends to be. Presets are offered when the
 package has their fields: `Image`, `CommandLine`, `ParentImage + Image`, `Image + User`,
 `ServiceName + ImagePath`, `TaskName`, `QueryName`, `DestinationIp + DestinationPort` and
-`TargetFilename`. **Add a field** stacks any other. Values are grouped ignoring case. Events
+`TargetFilename`, with Security 4688's `NewProcessName`, `ParentProcessName`,
+`TargetUserName` or `SubjectUserName` standing in for Sysmon's names. **Add a field** stacks any other. Values are grouped ignoring case. Events
 without a stacked field are left out unless **Include missing values** is on, which lists them
 as `(missing)`. Each column sorts and filters like [Entities](#entities). A row opens exactly its
 events in Explore. Up to 1,000 rows show.
 
 ### Logons
 
-Windows logons under the current filters, for following an account across hosts:
+![The Logons view: lateral movement drawn from source addresses to the hosts they reached, above the table of links](pics/viewer-logons.webp)
 
-- **Lateral movement**: who reached which host. A link runs from a source address to the host that
-  recorded a network (3) or Remote Desktop (10) logon (Security 4624), or from the host that used
-  explicit credentials (4648) to the target server. Each link counts its events and accounts, with
-  the three accounts that used it most, and first and last times. Logons from the host itself
-  (`-`, `::1`, `127.0.0.1`) and credentials used for the host itself (`localhost`, or the host's
-  own name or short name) are left out. A graph above the table draws the table's first 60 links,
-  sources on the left, hosts on the right, the line's width growing with its events; a host that
-  reached others as well is drawn on both sides, since nothing in a logon tells which address is
-  which host. A link, in the graph or the table, opens exactly its events.
-- **Logons and failures**: Security 4624 and 4625, grouped by host, account, logon type and
-  source address and workstation, failures first. Each row counts successes, failures,
-  distinct sessions (`TargetLogonId`) and first and last times. Logon types are named
-  (`3 Network`, `10 RemoteInteractive`). Failure reasons are named from `SubStatus`, or from
-  `Status` when `SubStatus` is `0x0` (`bad password`, `no such user`, `locked out`...).
-- **Explicit credentials**: Security 4648, recorded on the host where a process used another
-  account's credentials, with the target server and the process.
-- **Sessions**: each successful logon with its logoff (4634 or 4647) on the same host and logon
-  ID, and its length in minutes. A logon ID is used again after a reboot, so a logoff after the
-  next logon with that ID belongs to the next session. A session with no logoff before that next
-  logon reads "no logoff". The page's filters choose the logons, never the logoffs. Clicking a
-  session's host opens its activity in Explore, in place of the search and with **Detections
-  only** off: the events on that host that carry its logon ID (`TargetLogonId`, `SubjectLogonId`,
-  or Sysmon's `LogonId`). The activity runs from logon to logoff, to the next logon with the ID, or
-  to the end of the logs while the session is open.
+Windows logons under the current filters, for following an account across hosts. Each table
+sorts and filters like [Entities](#entities), and a row opens exactly its events in Explore.
 
-  **Special privileges** lists what Security 4672 gave the session, such as `SeDebugPrivilege`,
-  the mark of an administrator logon; filter the column with `*` to keep privileged sessions only.
-  Windows writes 4672 with the logon or a few seconds before it, so a 4672 counts for a session
-  when it comes at most 5 seconds before its logon and 2 seconds after, on the same host with the
-  same logon ID. The activity of a privileged session starts at its 4672, and a session with no
-  logoff ends where the next logon with its ID begins, 4672 included. The column is left out when
-  the package has no `SubjectLogonId` or `PrivilegeList` field.
-- **Remote Desktop**: authentications (TerminalServices-RemoteConnectionManager 1149),
-  LocalSessionManager logons, shell starts, disconnections and reconnections (21, 22, 24, 25), and
-  Security session reconnections and disconnections (4778, 4779). Each kind is its own row,
-  because each records the account and source in fields of its own.
+| Table | Built from |
+|-------|-----------|
+| **Lateral movement** | Who reached which host: a source address to the host that recorded a network (3) or Remote Desktop (10) logon (4624), or a host that used explicit credentials (4648) to the target server. Local logons are left out. The graph draws the first 60 links, wider for more events |
+| **Logons and failures** | 4624 and 4625 by host, account, logon type and source, failures first, with named logon types and failure reasons (`SubStatus`, or `Status`) |
+| **Explicit credentials** | 4648: a process on one host using another account's credentials, with the target server |
+| **Sessions** | Each logon with its logoff (4634, 4647) on the same host and logon ID, and its length. A session's host opens its activity: the events carrying its logon ID until logoff |
+| **Remote Desktop** | RemoteConnectionManager 1149, LocalSessionManager 21, 22, 24, 25, and Security 4778, 4779, one row per kind |
 
-**Remote logon types only** keeps types 3 and 10; **Hide computer accounts** leaves out names
-ending in `$`. Both apply to the logons and the sessions, and hiding computer accounts to the
-lateral movement links too. They are off by default so nothing is hidden unless asked, and are
-disabled when the package lacks `LogonType` or `TargetUserName`. A table
-whose fields the package lacks says so in its place. Each column sorts and
-filters like [Entities](#entities), and a row opens exactly its events in Explore. Fields the
-package lacks are left out. Without a `Channel` field, events are told apart by their event ID
-alone, and Remote Desktop kinds outside Security are not listed.
+- **Special privileges** shows what 4672 granted a session (`SeDebugPrivilege` marks an
+  administrator logon). A 4672 counts when it is on the same host and logon ID, at most
+  5 s before the logon or 2 s after it. Filter the column with `*` for privileged sessions.
+- **Remote logon types only** keeps types 3 and 10; **Hide computer accounts** drops names
+  ending in `$`. Both are off by default.
+- Tables and columns whose fields the package lacks say so, or are left out.
 
 ### Processes
 
@@ -320,16 +282,10 @@ is the latest earlier start of the parent PID on the same host (`ParentProcessId
 `ProcessId` in event 4688). Links are made across every start in the package, so a filter
 never changes who started what.
 
-The **Activity** column counts what Sysmon recorded under each process's `ProcessGuid`, in every
-event of the package:
-- network connections (event 3);
-- DNS queries (22);
-- files created (11);
-- registry changes (12 to 14).
-
-Selecting a process adds a button per kind it has, which opens exactly those events in Explore,
-in place of the search. The event view shows the same counts, under **Process activity**, for
-any Sysmon event with a `ProcessGuid`.
+The **Activity** column counts what Sysmon recorded under each `ProcessGuid` across the
+package: network connections (3), DNS queries (22), files created (11) and registry changes
+(12–14). A selected process gets one button per kind, opening exactly those events in
+Explore; the event drawer shows the same counts under **Process activity**.
 
 ### SQL
 
@@ -377,7 +333,7 @@ A console for one query at a time over the package's tables; see
 
 ## The SQL console
 
-The SQL view runs one query at a time over five tables:
+The SQL view runs one query at a time over these tables:
 
 | Table | One row per | Columns |
 |-------|-------------|---------|
@@ -386,6 +342,7 @@ The SQL view runs one query at a time over five tables:
 | `hits` | rule and event it matched | `rule_idx`, `_zl_uid` |
 | `alerts` | correlation alert | `alert_idx`, `rule_idx`, `_zl_part`, `alert_id`, `group_keys`, `occurrence_time`, `window_start`, `window_end`, `metric_name`, `metric_value`, `event_count`, `child_alert_ids` |
 | `alert_events` | evidence event of an alert | `alert_idx`, `_zl_uid`, `ord` |
+| `explore` | event, in time order; only with `--package-explore-index` | `_zl_pos`, `_zl_uid`, `_zl_time`, the host, channel and EventID fields |
 
 ```sql
 -- Hosts by events with detections
@@ -425,12 +382,8 @@ ORDER BY e._zl_time
   `npm run smoke -- <dir>` (opens it in Chromium, Firefox and WebKit), `npm run e2e -- <dir>`
   and `npm run views -- <dir>` (cross-check Explore and every view), `npm run perf -- <dir>`
   and `npm run shot -- <dir> <out.png>`. They need `npx playwright install chromium firefox webkit`.
-- From `gui/source/`, run `npm run wasm-pivots -- <extracted-package-dir>` on a package
-  created with `--package-explore-index`. This browser-free smoke check compares both time
-  directions on the local Node DuckDB-WASM runtime. Add `--full` for five measured runs
-  per direction and applicable host, channel, event ID and time pivots. The report gives
-  median milliseconds to build the result list, count it and read its first 200 rows.
-  It also checks the ordered position and UID of every event and the first page's values.
+- `npm run wasm-pivots -- <dir> [--full]` checks and times an Explore-index package in
+  Node's DuckDB-WASM, without a browser.
 - The ATT&CK catalogue is MITRE ATT&CK Enterprise 19.2; MITRE's notice travels in every
   package as `THIRD_PARTY_NOTICES.txt`. To update it, run
   `node scripts/attack-catalog.mjs enterprise-attack-X.Y.json` in `gui/source/`, refresh
