@@ -46,7 +46,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where attack attempts to elevate privileges via customize Runas tool.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Administrator activity"
     ],
@@ -601,7 +603,9 @@
       "Security"
     ],
     "description": "Detects scenarios where attack attempts to elevate privileges via the command runas.",
-    "eventid": [],
+    "eventid": [
+      4624
+    ],
     "falsepositives": [
       "Administrator activity"
     ],
@@ -683,7 +687,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to disable Defender security features",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -1230,7 +1236,9 @@
   },
   {
     "author": "mdecrevoisier",
-    "channel": [],
+    "channel": [
+      "Security"
+    ],
     "description": "Detects scenarios where an attacker attempts to enable insecure guest authentication in order to access a remote storage device (NAS) in order to perform some data exfiltration or lateral movement.",
     "eventid": [
       31018
@@ -1905,7 +1913,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to create a hard link.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "admin activity on file server"
     ],
@@ -2027,7 +2037,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker enumerates scheduled task configuration.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Administrator checking task status"
     ],
@@ -2983,7 +2995,9 @@
       "Windows PowerShell"
     ],
     "description": "Detects scenarios where an attacker enables the WSL to cary out malicious activities in a virtual instance to avoid detection.",
-    "eventid": [],
+    "eventid": [
+      800
+    ],
     "falsepositives": [
       "developer computer (with Visual Studio Code)",
       "administrator activity"
@@ -4127,7 +4141,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker disabled the Windows Firewall to evade defense.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Administrator activity"
     ],
@@ -4424,7 +4440,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker abuse the at command to elevate privilages. Note that at command is deprecated since Windows 8 and replaced by schtask.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -4463,7 +4481,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker enables a disabled builtin account via command line.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -4751,7 +4771,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to enable the Image File Execution Options (IFEO) debugger for sethc.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -4873,7 +4895,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to enumerate or to establish a connection to a network share.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Pentest"
     ],
@@ -4912,7 +4936,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to abuse certutil command to download obfuscated malicious payload using the Tchopper tool.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -6087,7 +6113,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker modify the original service executable path with a malicious one.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "administrator reconfiguring service"
     ],
@@ -6255,7 +6283,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to disable Defender security features by modifying service configuration in registry.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -6628,7 +6658,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to disable Defender security features",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -7444,7 +7476,9 @@
       "Security"
     ],
     "description": "Detects scenarios where an attacker perform a password reset event. This does not require any knowledge of a user\u2019s current password, but it does require to have the \"Reset Password\" right. Correlate the event ID 4724, 4624 and 5145 using the \"SubjectLogonId\" field to identify the source of the reset.",
-    "eventid": [],
+    "eventid": [
+      4724
+    ],
     "falsepositives": [
       "None"
     ],
@@ -7486,7 +7520,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker abuses the Netsh DLL feature to perform some code execution.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Administrator activity"
     ],
@@ -8363,7 +8399,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to replace the original sethc.exe file by cmd.exe.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -8826,7 +8864,9 @@
       "PowerShellCore/Operational"
     ],
     "description": "Detects if a member is added to a local group via PowerShell.",
-    "eventid": [],
+    "eventid": [
+      4103
+    ],
     "falsepositives": [
       "Pentest",
       "Administrator activity",
@@ -8910,7 +8950,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to extract current Windows firewall configuration to prepare an attack.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Administrator activity"
     ],
@@ -9158,7 +9200,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker executes Chrome in headless mode in order to download a payload. Document Object Model (DOM) may also be abused to download obfuscated data from attacker repositary.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -9448,7 +9492,9 @@
       "Security"
     ],
     "description": "Detects scenarios where an attacker abuse RPC, NTLM relay and others components to escalate privileges.",
-    "eventid": [],
+    "eventid": [
+      4624
+    ],
     "falsepositives": [
       "None"
     ],
@@ -9531,7 +9577,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to create a service that triggers TSCON in order to preform local RDP session hijack.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -9569,7 +9617,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker disabled the Windows Firewall to evade defense.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Administrator activity"
     ],
@@ -9608,7 +9658,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attemptes to download a payload directly via console.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Shortcuts to website (--pin-url)",
       "Websites launched from console"
@@ -9650,7 +9702,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker modify the configuration of a service to trigger an action when the service is crashed.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "administrator reconfiguring service"
     ],
@@ -9901,7 +9955,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker starts SQL Server service in single mode to perform password recovery actions using, for example, the native sqlcmd tool. Indeed, when the SQL Server is started in single user mode, all the users who are a member of the host\u2019s local administrator group can connect to the SQL instance.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Master database restore procedure",
       "Maintenance operation",
@@ -10867,7 +10923,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker modify the permissions of a service in order to abuse its privileges",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "administrator reconfiguring service"
     ],
@@ -11408,7 +11466,9 @@
       "PowerShellCore/Operational"
     ],
     "description": "Detects if a member is added to a domain group via PowerShell.",
-    "eventid": [],
+    "eventid": [
+      4103
+    ],
     "falsepositives": [
       "Pentest",
       "Administrator activity",
@@ -11706,7 +11766,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to delete existing Windows native backup by reducing the allocated backup storage.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "administrator cleaning outdated backup"
     ],
@@ -11953,7 +12015,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to change Defender default action to allow any threats",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "None"
     ],
@@ -12289,7 +12353,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attempts to delete or resize existing VSS backup.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "administrator cleaning outdated backup"
     ],
@@ -12409,7 +12475,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker modify the configuration of a service to trigger an action when the service is crashed.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "administrator reconfiguring service"
     ],
@@ -13333,7 +13401,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker configure the Windows firewall to allow incoming connections to perform stealthy lateral movement.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Unknown"
     ],
@@ -13534,7 +13604,9 @@
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects scenarios where an attacker attemps to create an IFM for dumping credentials.",
-    "eventid": [],
+    "eventid": [
+      1
+    ],
     "falsepositives": [
       "Administrator manipulating VSS backup"
     ],

@@ -4,7 +4,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Office apps spawning LOLBin child processes. BROAD hunting rule for CVE-2026-20957 Excel integer underflow RCE exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des applications Microsoft Office lan\u00e7ant des processus enfants suspects. Comportement couramment observ\u00e9 lors de l'exploitation de vuln\u00e9rabilit\u00e9s Office, incluant CVE-2026-20957 (RCE via integer underflow Excel). R\u00e8gle BROAD : bruit attendu depuis les add-ins et l'automatisation l\u00e9gitime. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Office apps spawning LOLBin child processes. BROAD hunting rule for CVE-2026-20957 Excel integer underflow RCE exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des applications Microsoft Office lan\u00e7ant des processus enfants suspects. Comportement couramment observ\u00e9 lors de l'exploitation de vuln\u00e9rabilit\u00e9s Office, incluant CVE-2026-20957 (RCE via integer underflow Excel). R\u00e8gle BROAD : bruit attendu depuis les add-ins et l'automatisation l\u00e9gitime. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -48,7 +48,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects renderer (Office, PDF, Photos) spawning a LOLBin with suspicious CLI indicators. BROAD rule for hunting CVE-2025-50165 exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un contexte de rendu (Office, lecteur PDF, Photos) lan\u00e7ant un LOLBin avec des indicateurs CLI suspects (encoded PowerShell, IEX, t\u00e9l\u00e9chargement HTTP). R\u00e8gle BROAD pour le hunting de cha\u00eenes d'exploitation CVE-2025-50165. Bruits attendus depuis les add-ins enterprise ; tuner par signataire ou chemin. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects renderer (Office, PDF, Photos) spawning a LOLBin with suspicious CLI indicators. BROAD rule for hunting CVE-2025-50165 exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un contexte de rendu (Office, lecteur PDF, Photos) lan\u00e7ant un LOLBin avec des indicateurs CLI suspects (encoded PowerShell, IEX, t\u00e9l\u00e9chargement HTTP). R\u00e8gle BROAD pour le hunting de cha\u00eenes d'exploitation CVE-2025-50165. Bruits attendus depuis les add-ins enterprise ; tuner par signataire ou chemin. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -93,7 +93,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Office-related COM and ActiveX registry activity useful for CVE-2026-21509 hunting. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte une activit\u00e9 registre COM/ActiveX li\u00e9e \u00e0 Office utile au hunting CVE-2026-21509. Cette r\u00e8gle BROAD couvre les chemins adjacents au CLSID strict pour rep\u00e9rer les variantes. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Office-related COM and ActiveX registry activity useful for CVE-2026-21509 hunting. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte une activit\u00e9 registre COM/ActiveX li\u00e9e \u00e0 Office utile au hunting CVE-2026-21509. Cette r\u00e8gle BROAD couvre les chemins adjacents au CLSID strict pour rep\u00e9rer les variantes. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4657
     ],
@@ -113,13 +113,13 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "NewProcessName",
+      "ObjectName",
       "OperationType",
-      "TargetObject"
+      "ProcessName"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ((TargetObject LIKE '%\\\\Software\\\\Classes\\\\CLSID\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Software\\\\Classes\\\\Wow6432Node\\\\CLSID\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Software\\\\Classes\\\\Interface\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Software\\\\Classes\\\\TypeLib\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Software\\\\Microsoft\\\\Office\\\\%' ESCAPE '\\') AND (TargetObject LIKE '%EAB22AC3-30C1-11CF-A7EB-0000C05BAE0B%' ESCAPE '\\' OR TargetObject LIKE '%ActiveX%' ESCAPE '\\' OR TargetObject LIKE '%HTMLDocument%' ESCAPE '\\' OR TargetObject LIKE '%Scriptlet%' ESCAPE '\\' OR TargetObject LIKE '%WebBrowser%' ESCAPE '\\' OR TargetObject LIKE '%Compatibility Flags%' ESCAPE '\\') AND (NewProcessName LIKE '%\\\\reg.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\cscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\winword.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\excel.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\outlook.exe' ESCAPE '\\') AND (NOT COALESCE((NewProcessName LIKE '%\\\\Program Files\\\\Tenable\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\Qualys\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\Rapid7\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\CrowdStrike\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\SentinelOne\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\Tenable\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\Qualys\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\Rapid7\\\\%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ((ObjectName LIKE '%\\\\Software\\\\Classes\\\\CLSID\\\\%' ESCAPE '\\' OR ObjectName LIKE '%\\\\Software\\\\Classes\\\\Wow6432Node\\\\CLSID\\\\%' ESCAPE '\\' OR ObjectName LIKE '%\\\\Software\\\\Classes\\\\Interface\\\\%' ESCAPE '\\' OR ObjectName LIKE '%\\\\Software\\\\Classes\\\\TypeLib\\\\%' ESCAPE '\\' OR ObjectName LIKE '%\\\\Software\\\\Microsoft\\\\Office\\\\%' ESCAPE '\\') AND (ObjectName LIKE '%EAB22AC3-30C1-11CF-A7EB-0000C05BAE0B%' ESCAPE '\\' OR ObjectName LIKE '%ActiveX%' ESCAPE '\\' OR ObjectName LIKE '%HTMLDocument%' ESCAPE '\\' OR ObjectName LIKE '%Scriptlet%' ESCAPE '\\' OR ObjectName LIKE '%WebBrowser%' ESCAPE '\\' OR ObjectName LIKE '%Compatibility Flags%' ESCAPE '\\') AND (ProcessName LIKE '%\\\\reg.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\cscript.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\winword.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\excel.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\outlook.exe' ESCAPE '\\') AND (NOT COALESCE((ProcessName LIKE '%\\\\Program Files\\\\Tenable\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\Qualys\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\Rapid7\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\CrowdStrike\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\SentinelOne\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\Tenable\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\Qualys\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\Rapid7\\\\%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "hatchepsoute",
@@ -137,7 +137,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects suspicious child processes spawned by Edge in IE-compatibility mode or iexplore.exe (CVE-2025-30397, CVSS 7.5). jscript9.dll memory corruption in MSHTML may trigger RCE via renderer or browser process spawning unexpected children. Covers all shell/LOLBin children; tune by excluding known admin/update tooling. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus enfant suspect lanc\u00e9 dans le contexte MSHTML ou Edge IE mode, compatible avec une cha\u00eene d\u2019exploitation de la CVE-2025-30397. Ce signal large fournit une alerte pr\u00e9coce sans prouver l\u2019ex\u00e9cution r\u00e9ussie. Le SOC L1 doit v\u00e9rifier les images parent et enfant, les lignes de commande, l\u2019utilisateur, le document ou l\u2019URL si disponible et l\u2019activit\u00e9 r\u00e9seau proche.\n",
+    "description": "Detects suspicious child processes spawned by Edge in IE-compatibility mode or iexplore.exe (CVE-2025-30397, CVSS 7.5). jscript9.dll memory corruption in MSHTML may trigger RCE via renderer or browser process spawning unexpected children. Covers all shell/LOLBin children; tune by excluding known admin/update tooling. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un processus enfant suspect lanc\u00e9 dans le contexte MSHTML ou Edge IE mode, compatible avec une cha\u00eene d\u2019exploitation de la CVE-2025-30397. Ce signal large fournit une alerte pr\u00e9coce sans prouver l\u2019ex\u00e9cution r\u00e9ussie. Le SOC L1 doit v\u00e9rifier les images parent et enfant, les lignes de commande, l\u2019utilisateur, le document ou l\u2019URL si disponible et l\u2019activit\u00e9 r\u00e9seau proche.",
     "eventid": [
       4688
     ],
@@ -187,7 +187,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects attempts to disable/stop security tools via CLI utilities (taskkill, sc, net, PS, wmic, WMI). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects attempts to disable/stop security tools via CLI utilities (taskkill, sc, net, PS, wmic, WMI). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -226,7 +226,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects LOLBin spawned from user-land apps (Office, browser, explorer); possible CVE-2026-20822 EoP early stage. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un LOLBin lanc\u00e9 par une application utilisateur telle qu\u2019Office, un navigateur ou l\u2019Explorateur, signal pr\u00e9coce possible de la CVE-2026-20822. Ce signal large ne prouve pas une \u00e9l\u00e9vation r\u00e9ussie. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, l\u2019utilisateur, la ligne de commande, l\u2019int\u00e9grit\u00e9 et l\u2019activit\u00e9 SYSTEM proche.\n",
+    "description": "Detects LOLBin spawned from user-land apps (Office, browser, explorer); possible CVE-2026-20822 EoP early stage. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un LOLBin lanc\u00e9 par une application utilisateur telle qu\u2019Office, un navigateur ou l\u2019Explorateur, signal pr\u00e9coce possible de la CVE-2026-20822. Ce signal large ne prouve pas une \u00e9l\u00e9vation r\u00e9ussie. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, l\u2019utilisateur, la ligne de commande, l\u2019int\u00e9grit\u00e9 et l\u2019activit\u00e9 SYSTEM proche.",
     "eventid": [
       4688
     ],
@@ -270,7 +270,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Azure Monitor Agent spawning anomalous child process with suspicious CLI context. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte les processus enfants anormaux lanc\u00e9s par Azure Monitor Agent avec filtrage contextuel. La r\u00e8gle BROAD conserve la visibilit\u00e9 sur les LOLBins dans System32/SysWOW64 pour \u00e9viter de masquer une exploitation ou une activit\u00e9 post-exploitation li\u00e9e \u00e0 CVE-2025-62550. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Azure Monitor Agent spawning anomalous child process with suspicious CLI context. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte les processus enfants anormaux lanc\u00e9s par Azure Monitor Agent avec filtrage contextuel. La r\u00e8gle BROAD conserve la visibilit\u00e9 sur les LOLBins dans System32/SysWOW64 pour \u00e9viter de masquer une exploitation ou une activit\u00e9 post-exploitation li\u00e9e \u00e0 CVE-2025-62550. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -316,7 +316,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Broad detection for Office apps spawning LOLBins or script engines. Hunting and triage rule consistent with CVE-2025-62562 exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des applications Microsoft Office lan\u00e7ant des LOLBins communs ou des moteurs de script. R\u00e8gle BROAD pour le triage et le hunting. Coh\u00e9rent avec les cha\u00eenes d'exploitation Office incluant CVE-2025-62562. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Broad detection for Office apps spawning LOLBins or script engines. Hunting and triage rule consistent with CVE-2025-62562 exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des applications Microsoft Office lan\u00e7ant des LOLBins communs ou des moteurs de script. R\u00e8gle BROAD pour le triage et le hunting. Coh\u00e9rent avec les cha\u00eenes d'exploitation Office incluant CVE-2025-62562. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -361,7 +361,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Alerts when Windows records an Application Error event for ikeext.dll or an unexpected termination of the IKEEXT service. This may indicate an attempted exploitation of CVE-2026-33824, but the crash or service stop alone does not prove compromise and can result from VPN drivers, maintenance, corrupted files, or resource exhaustion. SOC L1 should verify preceding IKE traffic on UDP ports 500 or 4500, host patch status, exception and module details, service restart history, and suspicious process or network activity near the event time.\nD\u00e9clenche une alerte lorsque Windows enregistre un \u00e9v\u00e9nement Application Error pour ikeext.dll ou un arr\u00eat inattendu du service IKEEXT. Cela peut indiquer une tentative d\u2019exploitation de la CVE-2026-33824, mais le crash ou l\u2019arr\u00eat du service seul ne prouve pas une compromission et peut r\u00e9sulter de pilotes VPN, d\u2019une maintenance, de fichiers corrompus ou d\u2019un \u00e9puisement des ressources. Le SOC L1 doit v\u00e9rifier le trafic IKE ant\u00e9rieur sur les ports UDP 500 ou 4500, l\u2019\u00e9tat des correctifs de l\u2019h\u00f4te, les d\u00e9tails de l\u2019exception et du module, l\u2019historique des red\u00e9marrages du service ainsi que les activit\u00e9s processus ou r\u00e9seau suspectes proches de l\u2019heure de l\u2019\u00e9v\u00e9nement.\n",
+    "description": "Alerts when Windows records an Application Error event for ikeext.dll or an unexpected termination of the IKEEXT service. This may indicate an attempted exploitation of CVE-2026-33824, but the crash or service stop alone does not prove compromise and can result from VPN drivers, maintenance, corrupted files, or resource exhaustion. SOC L1 should verify preceding IKE traffic on UDP ports 500 or 4500, host patch status, exception and module details, service restart history, and suspicious process or network activity near the event time. D\u00e9clenche une alerte lorsque Windows enregistre un \u00e9v\u00e9nement Application Error pour ikeext.dll ou un arr\u00eat inattendu du service IKEEXT. Cela peut indiquer une tentative d\u2019exploitation de la CVE-2026-33824, mais le crash ou l\u2019arr\u00eat du service seul ne prouve pas une compromission et peut r\u00e9sulter de pilotes VPN, d\u2019une maintenance, de fichiers corrompus ou d\u2019un \u00e9puisement des ressources. Le SOC L1 doit v\u00e9rifier le trafic IKE ant\u00e9rieur sur les ports UDP 500 ou 4500, l\u2019\u00e9tat des correctifs de l\u2019h\u00f4te, les d\u00e9tails de l\u2019exception et du module, l\u2019historique des red\u00e9marrages du service ainsi que les activit\u00e9s processus ou r\u00e9seau suspectes proches de l\u2019heure de l\u2019\u00e9v\u00e9nement.",
     "eventid": [
       1000,
       7031,
@@ -408,7 +408,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Notepad or Notepad++ spawning LOLBin/shell child process; hunting signal for CVE-2026-20841 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte Notepad ou Notepad++ lan\u00e7ant un shell ou un LOLBin, signal de hunting compatible avec la CVE-2026-20841. Ce comportement peut aussi venir d\u2019une automatisation l\u00e9gitime. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, l\u2019utilisateur, la ligne de commande, le fichier ouvert et l\u2019activit\u00e9 r\u00e9seau.\n",
+    "description": "Notepad or Notepad++ spawning LOLBin/shell child process; hunting signal for CVE-2026-20841 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte Notepad ou Notepad++ lan\u00e7ant un shell ou un LOLBin, signal de hunting compatible avec la CVE-2026-20841. Ce comportement peut aussi venir d\u2019une automatisation l\u00e9gitime. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, l\u2019utilisateur, la ligne de commande, le fichier ouvert et l\u2019activit\u00e9 r\u00e9seau.",
     "eventid": [
       4688
     ],
@@ -457,7 +457,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects WinRAR executing archive extraction with path traversal sequences, indicating CVE-2025-6218 exploitation attempt. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte WinRAR extrayant une archive avec des s\u00e9quences de path traversal, indicateur d'exploitation de CVE-2025-6218. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects WinRAR executing archive extraction with path traversal sequences, indicating CVE-2025-6218 exploitation attempt. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte WinRAR extrayant une archive avec des s\u00e9quences de path traversal, indicateur d'exploitation de CVE-2025-6218. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -504,7 +504,7 @@
     "channel": [
       "System"
     ],
-    "description": "Detects Netlogon service unexpected termination (Event 7034) on Windows servers, a host-side indicator of CVE-2026-41089 exploit attempt or failed crash. MEDIUM. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte les crashs du service Netlogon (Event 7034) sur les serveurs Windows, indicateurs fiables c\u00f4t\u00e9 h\u00f4te d'une tentative d'exploitation de CVE-2026-41089. R\u00e8gle MEDIUM : un seul crash peut \u00eatre non li\u00e9 \u00e0 l'exploitation. Corr\u00e9ler avec la r\u00e8gle r\u00e9seau BROAD (UDP/389 oversized) ou la r\u00e8gle STRICT (processus enfant lsass) pour une confiance accrue. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Netlogon service unexpected termination (Event 7034) on Windows servers, a host-side indicator of CVE-2026-41089 exploit attempt or failed crash. MEDIUM. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte les crashs du service Netlogon (Event 7034) sur les serveurs Windows, indicateurs fiables c\u00f4t\u00e9 h\u00f4te d'une tentative d'exploitation de CVE-2026-41089. R\u00e8gle MEDIUM : un seul crash peut \u00eatre non li\u00e9 \u00e0 l'exploitation. Corr\u00e9ler avec la r\u00e8gle r\u00e9seau BROAD (UDP/389 oversized) ou la r\u00e8gle STRICT (processus enfant lsass) pour une confiance accrue. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       7034
     ],
@@ -548,7 +548,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Office apps spawning LOLBins or script engines. BROAD hunting rule for CVE-2025-62554 post-exploitation chains; expect add-in noise. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des applications Microsoft Office lan\u00e7ant des LOLBins communs ou des moteurs de script. R\u00e8gle BROAD pour le hunting et le triage des cha\u00eenes d'exploitation client-side, incluant CVE-2025-62554 (type confusion Office). Ne d\u00e9tecte pas l'exploit lui-m\u00eame mais les comportements post-ex\u00e9cution. Bruit attendu depuis les add-ins ; tuner par signataire ou pattern de commande parent. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Office apps spawning LOLBins or script engines. BROAD hunting rule for CVE-2025-62554 post-exploitation chains; expect add-in noise. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des applications Microsoft Office lan\u00e7ant des LOLBins communs ou des moteurs de script. R\u00e8gle BROAD pour le hunting et le triage des cha\u00eenes d'exploitation client-side, incluant CVE-2025-62554 (type confusion Office). Ne d\u00e9tecte pas l'exploit lui-m\u00eame mais les comportements post-ex\u00e9cution. Bruit attendu depuis les add-ins ; tuner par signataire ou pattern de commande parent. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -594,7 +594,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects LOLBin or shell spawned by spoolsv.exe, indicating potential Print Spooler RCE (CVE-2026-23669). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un LOLBin ou un shell lanc\u00e9 par spoolsv.exe, signal possible d\u2019une RCE Print Spooler li\u00e9e \u00e0 la CVE-2026-23669. Ce signal ne prouve pas seul l\u2019exploitation. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, l\u2019utilisateur, la ligne de commande, l\u2019h\u00f4te et les connexions associ\u00e9es.\n",
+    "description": "Detects LOLBin or shell spawned by spoolsv.exe, indicating potential Print Spooler RCE (CVE-2026-23669). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un LOLBin ou un shell lanc\u00e9 par spoolsv.exe, signal possible d\u2019une RCE Print Spooler li\u00e9e \u00e0 la CVE-2026-23669. Ce signal ne prouve pas seul l\u2019exploitation. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, l\u2019utilisateur, la ligne de commande, l\u2019h\u00f4te et les connexions associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -644,7 +644,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects mmc.exe spawning a suspicious child process, indicating potential CVE-2025-26633 exploitation (CVSS 7.0). Malicious .msc files bypass MotW/SmartScreen and execute code via MMC. Covers broad set of interpreter and LOLBin children for hunting and early warning. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nRegle BROAD : detecte mmc.exe qui spawne un processus enfant suspect (interpreteur, LOLBin, outil de telechargement), signe potentiel d'exploitation de CVE-2025-26633 (CVSS 7.0, contournement MotW/SmartScreen via .msc malveillant). Utilisee pour le hunting et l'early warning L1. Les faux positifs sont possibles si des fichiers .msc legitimes lancent des scripts en contexte d'administration. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects mmc.exe spawning a suspicious child process, indicating potential CVE-2025-26633 exploitation (CVSS 7.0). Malicious .msc files bypass MotW/SmartScreen and execute code via MMC. Covers broad set of interpreter and LOLBin children for hunting and early warning. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Regle BROAD : detecte mmc.exe qui spawne un processus enfant suspect (interpreteur, LOLBin, outil de telechargement), signe potentiel d'exploitation de CVE-2025-26633 (CVSS 7.0, contournement MotW/SmartScreen via .msc malveillant). Utilisee pour le hunting et l'early warning L1. Les faux positifs sont possibles si des fichiers .msc legitimes lancent des scripts en contexte d'administration. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -693,7 +693,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Office apps spawning LOLBins or script engines. BROAD triage and hunting rule consistent with CVE-2025-62557 exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des applications Microsoft Office lan\u00e7ant des LOLBins communs ou des moteurs de script. R\u00e8gle BROAD pour le triage et le hunting. Coh\u00e9rent avec les cha\u00eenes d'exploitation Office incluant CVE-2025-62557. Bruit attendu depuis les add-ins enterprise. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Office apps spawning LOLBins or script engines. BROAD triage and hunting rule consistent with CVE-2025-62557 exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des applications Microsoft Office lan\u00e7ant des LOLBins communs ou des moteurs de script. R\u00e8gle BROAD pour le triage et le hunting. Coh\u00e9rent avec les cha\u00eenes d'exploitation Office incluant CVE-2025-62557. Bruit attendu depuis les add-ins enterprise. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -740,7 +740,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects suspicious shell spawned by an IDE (IntelliJ, VS Code, PyCharm) with download or exfil patterns, consistent with CVE-2025-64671 command injection. BROAD. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution suspecte d'un shell spawn\u00e9 par un IDE (IntelliJ IDEA, VS Code, PyCharm, WebStorm) avec des indicateurs de t\u00e9l\u00e9chargement ou d'exfiltration, coh\u00e9rent avec CVE-2025-64671 (CWE-77, injection de commande via m\u00e9tadonn\u00e9es de projet). R\u00e8gle BROAD : les d\u00e9veloppeurs lancent l\u00e9gitimement des shells depuis les IDE, tuner par contexte utilisateur ou destination r\u00e9seau. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious shell spawned by an IDE (IntelliJ, VS Code, PyCharm) with download or exfil patterns, consistent with CVE-2025-64671 command injection. BROAD. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'ex\u00e9cution suspecte d'un shell spawn\u00e9 par un IDE (IntelliJ IDEA, VS Code, PyCharm, WebStorm) avec des indicateurs de t\u00e9l\u00e9chargement ou d'exfiltration, coh\u00e9rent avec CVE-2025-64671 (CWE-77, injection de commande via m\u00e9tadonn\u00e9es de projet). R\u00e8gle BROAD : les d\u00e9veloppeurs lancent l\u00e9gitimement des shells depuis les IDE, tuner par contexte utilisateur ou destination r\u00e9seau. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -786,7 +786,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Office or shell relay spawning suspicious child process consistent with CVE-2025-21298 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte Office ou un relais shell qui lance un processus enfant suspect compatible avec la CVE-2025-21298. Ce signal large fournit une alerte pr\u00e9coce, mais le processus enfant seul ne prouve pas un document RTF malveillant ni la r\u00e9ussite de l\u2019exploitation. Le SOC L1 doit v\u00e9rifier les images, les lignes de commande, l\u2019utilisateur, le contexte du document et les activit\u00e9s fichiers ou r\u00e9seau proches.\n",
+    "description": "Detects Office or shell relay spawning suspicious child process consistent with CVE-2025-21298 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte Office ou un relais shell qui lance un processus enfant suspect compatible avec la CVE-2025-21298. Ce signal large fournit une alerte pr\u00e9coce, mais le processus enfant seul ne prouve pas un document RTF malveillant ni la r\u00e9ussite de l\u2019exploitation. Le SOC L1 doit v\u00e9rifier les images, les lignes de commande, l\u2019utilisateur, le contexte du document et les activit\u00e9s fichiers ou r\u00e9seau proches.",
     "eventid": [
       4688
     ],
@@ -835,7 +835,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects LOLBin execution with high-risk CLI patterns (download, obfuscation, bypass). BROAD hunting rule for CVE-2025-54100 post-exploitation activity. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des LOLBins Windows (powershell, cmd, mshta, rundll32, regsvr32, etc.) s'ex\u00e9cutant avec des patterns CLI \u00e0 haut risque : t\u00e9l\u00e9chargement r\u00e9seau, obfuscation, techniques d'exploitation connues. R\u00e8gle BROAD pour le hunting d'activit\u00e9s post-exploitation li\u00e9es \u00e0 CVE-2025-54100. Les comptes machine ($) sont filtr\u00e9s par d\u00e9faut. Tuner filter_whitelist avec les cha\u00eenes sp\u00e9cifiques \u00e0 l'environnement. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects LOLBin execution with high-risk CLI patterns (download, obfuscation, bypass). BROAD hunting rule for CVE-2025-54100 post-exploitation activity. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des LOLBins Windows (powershell, cmd, mshta, rundll32, regsvr32, etc.) s'ex\u00e9cutant avec des patterns CLI \u00e0 haut risque : t\u00e9l\u00e9chargement r\u00e9seau, obfuscation, techniques d'exploitation connues. R\u00e8gle BROAD pour le hunting d'activit\u00e9s post-exploitation li\u00e9es \u00e0 CVE-2025-54100. Les comptes machine ($) sont filtr\u00e9s par d\u00e9faut. Tuner filter_whitelist avec les cha\u00eenes sp\u00e9cifiques \u00e0 l'environnement. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -888,7 +888,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects RRAS svchost spawning a shell or LOLBin as SYSTEM, indicating possible CVE-2025-62549 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte svchost RRAS lan\u00e7ant un shell ou un LOLBin sous SYSTEM, signe possible d'exploitation de CVE-2025-62549. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects RRAS svchost spawning a shell or LOLBin as SYSTEM, indicating possible CVE-2025-62549 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte svchost RRAS lan\u00e7ant un shell ou un LOLBin sous SYSTEM, signe possible d'exploitation de CVE-2025-62549. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -934,7 +934,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects CLI-based termination or disabling of security processes and services used by TheGentlemen-style EDR killers. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects CLI-based termination or disabling of security processes and services used by TheGentlemen-style EDR killers. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -979,7 +979,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Microsoft Office spawning suspicious interpreters or LOLBins for CVE-2026-20952 hunting. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte Microsoft Office lan\u00e7ant des interpr\u00e9teurs, shells ou LOLBins suspects. R\u00e8gle BROAD destin\u00e9e au hunting et \u00e0 l'early warning autour des cha\u00eenes d'exploitation CVE-2026-20952. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Microsoft Office spawning suspicious interpreters or LOLBins for CVE-2026-20952 hunting. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte Microsoft Office lan\u00e7ant des interpr\u00e9teurs, shells ou LOLBins suspects. R\u00e8gle BROAD destin\u00e9e au hunting et \u00e0 l'early warning autour des cha\u00eenes d'exploitation CVE-2026-20952. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1025,7 +1025,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects SPN attribute additions (Event 5136) on AD accounts via CVE-2026-25177. BROAD hunting rule for unauthorized SPN writes. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte les ajouts \u00e0 l'attribut servicePrincipalName (SPN) sur les comptes Active Directory via l'\u00e9v\u00e9nement Windows Security 5136 (Directory Service Changes). CVE-2026-25177 permet l'\u00e9l\u00e9vation de privil\u00e8ges via des homoglyphes Unicode forg\u00e9s dans les SPNs. R\u00e8gle BROAD : exposer tous les ajouts SPN pour le hunting. Le filtre filter_known_spn_admins DOIT \u00eatre adapt\u00e9 \u00e0 l'environnement. Pr\u00e9requis : Audit Directory Service Changes activ\u00e9 avec SACL sur les contr\u00f4leurs de domaine. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects SPN attribute additions (Event 5136) on AD accounts via CVE-2026-25177. BROAD hunting rule for unauthorized SPN writes. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte les ajouts \u00e0 l'attribut servicePrincipalName (SPN) sur les comptes Active Directory via l'\u00e9v\u00e9nement Windows Security 5136 (Directory Service Changes). CVE-2026-25177 permet l'\u00e9l\u00e9vation de privil\u00e8ges via des homoglyphes Unicode forg\u00e9s dans les SPNs. R\u00e8gle BROAD : exposer tous les ajouts SPN pour le hunting. Le filtre filter_known_spn_admins DOIT \u00eatre adapt\u00e9 \u00e0 l'environnement. Pr\u00e9requis : Audit Directory Service Changes activ\u00e9 avec SACL sur les contr\u00f4leurs de domaine. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       5136
     ],
@@ -1072,7 +1072,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects suspicious SYSTEM child process creation from an unexpected parent consistent with Windows kernel LPE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un enfant SYSTEM lanc\u00e9 par un parent inattendu sur Windows, en coh\u00e9rence avec une phase post-exploitation ou une \u00e9l\u00e9vation de privil\u00e8ge noyau. Cette r\u00e8gle BROAD sert de signal de hunting et d'alerte pr\u00e9coce ; elle accepte plus de bruit que la r\u00e8gle STRICT. svchost.exe est filtr\u00e9 sauf quand son enfant est un shell ou LOLBin connu (mitigation du FP massif d'origine). Les CLI g\u00e9n\u00e9riques (powershell, cmd /c) ont \u00e9t\u00e9 remplac\u00e9s par des patterns haute confiance. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious SYSTEM child process creation from an unexpected parent consistent with Windows kernel LPE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un enfant SYSTEM lanc\u00e9 par un parent inattendu sur Windows, en coh\u00e9rence avec une phase post-exploitation ou une \u00e9l\u00e9vation de privil\u00e8ge noyau. Cette r\u00e8gle BROAD sert de signal de hunting et d'alerte pr\u00e9coce ; elle accepte plus de bruit que la r\u00e8gle STRICT. svchost.exe est filtr\u00e9 sauf quand son enfant est un shell ou LOLBin connu (mitigation du FP massif d'origine). Les CLI g\u00e9n\u00e9riques (powershell, cmd /c) ont \u00e9t\u00e9 remplac\u00e9s par des patterns haute confiance. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1124,7 +1124,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Broad detection for Office apps spawning LOLBins or script engines. Use for triage and hunting across Office-based exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tection large des applications Microsoft Office lan\u00e7ant des LOLBins communs ou des moteurs de script. Destin\u00e9e au triage et au hunting. Comportement fr\u00e9quemment observ\u00e9 dans les cha\u00eenes d'exploitation Office (documents malveillants, ex\u00e9cution de contenu externe), incluant plusieurs CVE Office. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Broad detection for Office apps spawning LOLBins or script engines. Use for triage and hunting across Office-based exploitation chains. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tection large des applications Microsoft Office lan\u00e7ant des LOLBins communs ou des moteurs de script. Destin\u00e9e au triage et au hunting. Comportement fr\u00e9quemment observ\u00e9 dans les cha\u00eenes d'exploitation Office (documents malveillants, ex\u00e9cution de contenu externe), incluant plusieurs CVE Office. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1170,7 +1170,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Office apps spawning LOLBins with download-and-execute or obfuscation CLI. STRICT high-confidence rule for CVE-2025-62562 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des applications Office lan\u00e7ant des LOLBins avec des patterns CLI de t\u00e9l\u00e9chargement/ex\u00e9cution ou obfuscation (PowerShell -enc, IEX, FromBase64String). R\u00e8gle STRICT haute confiance pour alertes SOC sur activit\u00e9 post-exploitation CVE-2025-62562. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Office apps spawning LOLBins with download-and-execute or obfuscation CLI. STRICT high-confidence rule for CVE-2025-62562 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des applications Office lan\u00e7ant des LOLBins avec des patterns CLI de t\u00e9l\u00e9chargement/ex\u00e9cution ou obfuscation (PowerShell -enc, IEX, FromBase64String). R\u00e8gle STRICT haute confiance pour alertes SOC sur activit\u00e9 post-exploitation CVE-2025-62562. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1218,7 +1218,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a successfully issued machine certificate whose AD CS chase attributes direct identity resolution to an IP address, matching the public Certighost exploit. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'\u00e9mission r\u00e9ussie d'un certificat machine dont les attributs de chase AD CS contiennent cdc et rmd, avec une adresse IP litt\u00e9rale dans cdc. Cette combinaison correspond au PoC public Certighost, qui dirige la recherche d'identit\u00e9 de la CA vers un serveur LDAP/SMB contr\u00f4l\u00e9 par l'attaquant avant d'usurper un contr\u00f4leur de domaine. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a successfully issued machine certificate whose AD CS chase attributes direct identity resolution to an IP address, matching the public Certighost exploit. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'\u00e9mission r\u00e9ussie d'un certificat machine dont les attributs de chase AD CS contiennent cdc et rmd, avec une adresse IP litt\u00e9rale dans cdc. Cette combinaison correspond au PoC public Certighost, qui dirige la recherche d'identit\u00e9 de la CA vers un serveur LDAP/SMB contr\u00f4l\u00e9 par l'attaquant avant d'usurper un contr\u00f4leur de domaine. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4887
     ],
@@ -1262,7 +1262,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Step 1 of correlated infostealer detection: suspicious LOLBin or loader execution from user-writable paths. Use this rule as the first stage for correlation with credential-store access (step 2) and external egress (step 3). Alert alone has moderate confidence; chain all three for high-confidence infostealer confirmation.\n",
+    "description": "Step 1 of correlated infostealer detection: suspicious LOLBin or loader execution from user-writable paths. Use this rule as the first stage for correlation with credential-store access (step 2) and external egress (step 3). Alert alone has moderate confidence; chain all three for high-confidence infostealer confirmation.",
     "eventid": [
       4688
     ],
@@ -1302,7 +1302,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects PowerShell with web download spawning a suspicious child process. STRICT indicator of CVE-2025-54100 post-EoP stager activity. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte PowerShell t\u00e9l\u00e9chargeant du contenu web puis lan\u00e7ant un processus enfant suspect. Indicateur haute confiance d'activit\u00e9 post-exploitation li\u00e9e \u00e0 CVE-2025-54100. Les stagers post-EoP tournent souvent sous SYSTEM ; les filtres SYSTEM sont intentionnellement absents. R\u00e8gle STRICT : les trois conditions (parent PS + indicateur download + enfant LOLBin) doivent \u00eatre r\u00e9unies simultan\u00e9ment. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects PowerShell with web download spawning a suspicious child process. STRICT indicator of CVE-2025-54100 post-EoP stager activity. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte PowerShell t\u00e9l\u00e9chargeant du contenu web puis lan\u00e7ant un processus enfant suspect. Indicateur haute confiance d'activit\u00e9 post-exploitation li\u00e9e \u00e0 CVE-2025-54100. Les stagers post-EoP tournent souvent sous SYSTEM ; les filtres SYSTEM sont intentionnellement absents. R\u00e8gle STRICT : les trois conditions (parent PS + indicateur download + enfant LOLBin) doivent \u00eatre r\u00e9unies simultan\u00e9ment. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1351,7 +1351,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Notepad spawning shell with remote download/encoded command indicators; high-confidence CVE-2026-20841 exploitation signal. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte Notepad lan\u00e7ant un shell avec des indicateurs de t\u00e9l\u00e9chargement distant ou de commande encod\u00e9e, signal \u00e0 haut niveau de confiance compatible avec la CVE-2026-20841. Cela ne prouve pas seul la r\u00e9ussite de l\u2019exploitation. Le SOC L1 doit v\u00e9rifier les images, la ligne de commande, l\u2019utilisateur, la charge utile et les connexions associ\u00e9es.\n",
+    "description": "Notepad spawning shell with remote download/encoded command indicators; high-confidence CVE-2026-20841 exploitation signal. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte Notepad lan\u00e7ant un shell avec des indicateurs de t\u00e9l\u00e9chargement distant ou de commande encod\u00e9e, signal \u00e0 haut niveau de confiance compatible avec la CVE-2026-20841. Cela ne prouve pas seul la r\u00e9ussite de l\u2019exploitation. Le SOC L1 doit v\u00e9rifier les images, la ligne de commande, l\u2019utilisateur, la charge utile et les connexions associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1396,7 +1396,7 @@
     "channel": [
       "Security"
     ],
-    "description": "User-land parent spawns SYSTEM/High-integrity child process; strong EoP exploitation indicator (CVE-2026-20822). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus SYSTEM ou \u00e0 haute int\u00e9grit\u00e9 lanc\u00e9 par un parent utilisateur, indicateur fort d\u2019\u00e9l\u00e9vation de privil\u00e8ges compatible avec la CVE-2026-20822. L\u2019\u00e9v\u00e9nement ne prouve pas seul la vuln\u00e9rabilit\u00e9 exploit\u00e9e. Le SOC L1 doit v\u00e9rifier les images, les utilisateurs, les niveaux d\u2019int\u00e9grit\u00e9, les lignes de commande et la chronologie.\n",
+    "description": "User-land parent spawns SYSTEM/High-integrity child process; strong EoP exploitation indicator (CVE-2026-20822). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un processus SYSTEM ou \u00e0 haute int\u00e9grit\u00e9 lanc\u00e9 par un parent utilisateur, indicateur fort d\u2019\u00e9l\u00e9vation de privil\u00e8ges compatible avec la CVE-2026-20822. L\u2019\u00e9v\u00e9nement ne prouve pas seul la vuln\u00e9rabilit\u00e9 exploit\u00e9e. Le SOC L1 doit v\u00e9rifier les images, les utilisateurs, les niveaux d\u2019int\u00e9grit\u00e9, les lignes de commande et la chronologie.",
     "eventid": [
       4688
     ],
@@ -1439,10 +1439,52 @@
   },
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects the WSUS IIS worker launching a shell, script interpreter, download utility, or writing a server-side script under WSUS/IIS paths, consistent with post-exploitation after CVE-2025-59287. The endpoint signal does not identify the initial request; SOC L1 should correlate it with IIS logs, the WSUS role, file content, source IP, and outbound traffic. D\u00e9tecte le worker IIS de WSUS lan\u00e7ant un shell, un interpr\u00e9teur, un outil de t\u00e9l\u00e9chargement ou \u00e9crivant un script serveur dans des chemins WSUS/IIS, comportement compatible avec une post-exploitation apr\u00e8s CVE-2025-59287. Le signal endpoint n\u2019identifie pas la requ\u00eate initiale ; le SOC L1 doit le corr\u00e9ler aux journaux IIS, au r\u00f4le WSUS, au contenu du fichier, \u00e0 l\u2019IP source et au trafic sortant.",
+    "eventid": [
+      1,
+      11
+    ],
+    "falsepositives": [
+      "Approved WSUS/IIS deployment or diagnostics; allowlist the exact signed job and maintenance window"
+    ],
+    "filename": "CVE-2025-59287_Windows_WSUS/rules/wsus_cve_2025_59287_w3wp_post_exploitation_strict.yml",
+    "id": "37e949f4-7b92-4a7e-9b98-68c4bff10fe7",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "windows"
+    },
+    "required_fields": [
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (EventID=1 AND (ParentImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' AND (ParentCommandLine LIKE '%WSUS%' ESCAPE '\\' OR ParentCommandLine LIKE '%Update Services%' ESCAPE '\\' OR ParentCommandLine LIKE '%WsusPool%' ESCAPE '\\')) AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\' OR Image LIKE '%\\\\certutil.exe' ESCAPE '\\' OR Image LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' OR Image LIKE '%\\\\curl.exe' ESCAPE '\\')) OR (EventID=11 AND Image LIKE '%\\\\w3wp.exe' ESCAPE '\\' AND (TargetFilename LIKE '%\\\\Update Services\\\\WebServices\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\inetpub\\\\wwwroot\\\\%' ESCAPE '\\') AND (TargetFilename LIKE '%.aspx' ESCAPE '\\' OR TargetFilename LIKE '%.asmx' ESCAPE '\\' OR TargetFilename LIKE '%.ashx' ESCAPE '\\' OR TargetFilename LIKE '%.config' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.persistence",
+      "attack.t1505.003",
+      "cve.2025-59287"
+    ],
+    "title": "Windows WSUS IIS Worker Post-Exploitation - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [
       "Security"
     ],
-    "description": "Detects suspicious command or script execution spawned by Office apps, consistent with CVE-2026-20952 Use After Free exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte une ex\u00e9cution suspecte de commande ou de script lanc\u00e9e par des applications Microsoft Office. Ce comportement est rare en usage l\u00e9gitime et peut indiquer une exploitation de CVE-2026-20952 (Use After Free menant \u00e0 une ex\u00e9cution de code locale). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious command or script execution spawned by Office apps, consistent with CVE-2026-20952 Use After Free exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte une ex\u00e9cution suspecte de commande ou de script lanc\u00e9e par des applications Microsoft Office. Ce comportement est rare en usage l\u00e9gitime et peut indiquer une exploitation de CVE-2026-20952 (Use After Free menant \u00e0 une ex\u00e9cution de code locale). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1492,7 +1534,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects suspicious user-to-SYSTEM process execution consistent with Windows kernel LPE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus s'ex\u00e9cutant comme SYSTEM depuis un parent non standard, coh\u00e9rent avec une exploitation de LPE noyau (CVE-2025-32709, CVE-2025-29824). La r\u00e8gle STRICT ne requiert pas de CLI suspect : la combinaison parent inattendu + contexte SYSTEM est suffisante. bitsadmin.exe, msbuild.exe et installutil.exe ont \u00e9t\u00e9 ajout\u00e9s \u00e0 selection_shell_child pour corriger le cas svchost \u2192 LOLBin. La mascarade via renommage (services.exe, wininit.exe dans un chemin non syst\u00e8me) reste un angle mort r\u00e9siduel non r\u00e9solu par Sigma seul. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious user-to-SYSTEM process execution consistent with Windows kernel LPE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un processus s'ex\u00e9cutant comme SYSTEM depuis un parent non standard, coh\u00e9rent avec une exploitation de LPE noyau (CVE-2025-32709, CVE-2025-29824). La r\u00e8gle STRICT ne requiert pas de CLI suspect : la combinaison parent inattendu + contexte SYSTEM est suffisante. bitsadmin.exe, msbuild.exe et installutil.exe ont \u00e9t\u00e9 ajout\u00e9s \u00e0 selection_shell_child pour corriger le cas svchost \u2192 LOLBin. La mascarade via renommage (services.exe, wininit.exe dans un chemin non syst\u00e8me) reste un angle mort r\u00e9siduel non r\u00e9solu par Sigma seul. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1543,7 +1585,49 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects CVE-2026-41089 post-exploitation: lsass.exe spawning any child process on a DC. Under normal operation lsass.exe never creates children. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'exploitation r\u00e9ussie de CVE-2026-41089 via des processus enfants inattendus cr\u00e9\u00e9s par lsass.exe sur un contr\u00f4leur de domaine. Une exploitation r\u00e9ussie accorde un acc\u00e8s SYSTEM dans le contexte du service Netlogon (h\u00e9berg\u00e9 dans lsass.exe). lsass.exe ne cr\u00e9e jamais de processus enfants en fonctionnement normal. R\u00e8gle STRICT : isoler imm\u00e9diatement l'h\u00f4te en cas d'alerte et supposer une exposition compl\u00e8te des secrets de domaine. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects php-cgi.exe or php.exe spawning a command interpreter or download utility, a high-confidence post-exploitation signal for a web-exposed PHP-CGI service. The event alone does not identify the CVE or prove remote exploitation; SOC L1 should correlate the web request, parent command line, account, file writes, and destination. Application maintenance is the main legitimate explanation. D\u00e9tecte php-cgi.exe ou php.exe lan\u00e7ant un interpr\u00e9teur de commandes ou un outil de t\u00e9l\u00e9chargement, un signal post-exploitation \u00e0 forte confiance pour un service PHP-CGI expos\u00e9 sur le web. L'\u00e9v\u00e9nement seul n'identifie pas la CVE et ne prouve pas une exploitation distante ; le SOC L1 doit corr\u00e9ler la requ\u00eate web, la ligne de commande parente, le compte, les \u00e9critures de fichiers et la destination. La maintenance applicative est la principale explication l\u00e9gitime.",
+    "eventid": [
+      4688
+    ],
+    "falsepositives": [
+      "Approved PHP maintenance or diagnostics"
+    ],
+    "filename": "CVE-2024-4577_PHP_CGI/rules/php_cgi_cve-2024-4577_child_process_strict.yml",
+    "id": "3d4e2d9f-2b0d-4f72-97b3-6d881a7c78c1",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "NewProcessName",
+      "ParentCommandLine",
+      "ParentProcessName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (ParentProcessName LIKE '%\\\\php-cgi.exe' ESCAPE '\\' AND (NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\cscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\certutil.exe' ESCAPE '\\') AND (NOT COALESCE((ParentCommandLine LIKE '%diagnostic%' ESCAPE '\\' OR ParentCommandLine LIKE '%maintenance%' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "cve.2024-4577"
+    ],
+    "title": "PHP-CGI Spawning Command Interpreter - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects CVE-2026-41089 post-exploitation: lsass.exe spawning any child process on a DC. Under normal operation lsass.exe never creates children. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'exploitation r\u00e9ussie de CVE-2026-41089 via des processus enfants inattendus cr\u00e9\u00e9s par lsass.exe sur un contr\u00f4leur de domaine. Une exploitation r\u00e9ussie accorde un acc\u00e8s SYSTEM dans le contexte du service Netlogon (h\u00e9berg\u00e9 dans lsass.exe). lsass.exe ne cr\u00e9e jamais de processus enfants en fonctionnement normal. R\u00e8gle STRICT : isoler imm\u00e9diatement l'h\u00f4te en cas d'alerte et supposer une exposition compl\u00e8te des secrets de domaine. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1593,7 +1677,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects non-ASCII/Unicode characters in SPN attribute values (Event 5136) - exploitation fingerprint of CVE-2026-25177. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'empreinte d'exploitation de CVE-2026-25177 : caract\u00e8res non-ASCII/Unicode dans un SPN (Event 5136). Les SPN l\u00e9gitimes sont exclusivement ASCII. Toute valeur SPN contenant un caract\u00e8re Unicode est tr\u00e8s probablement une tentative d'exploitation active. Corr\u00e9ler avec l'Event 4769 (status 0x7 ou 0x1F) et les authentifications NTLM inattendues. Note regex : '[^\\x00-\\x7f]' - adapter \u00e0 votre backend si n\u00e9cessaire. R\u00e8gle STRICT. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects non-ASCII/Unicode characters in SPN attribute values (Event 5136) - exploitation fingerprint of CVE-2026-25177. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'empreinte d'exploitation de CVE-2026-25177 : caract\u00e8res non-ASCII/Unicode dans un SPN (Event 5136). Les SPN l\u00e9gitimes sont exclusivement ASCII. Toute valeur SPN contenant un caract\u00e8re Unicode est tr\u00e8s probablement une tentative d'exploitation active. Corr\u00e9ler avec l'Event 4769 (status 0x7 ou 0x1F) et les authentifications NTLM inattendues. Note regex : '[^\\x00-\\x7f]' - adapter \u00e0 votre backend si n\u00e9cessaire. R\u00e8gle STRICT. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       5136
     ],
@@ -1639,7 +1723,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects the Adobe Campaign nlserver.exe web module starting a command shell, script interpreter, proxy-execution binary, delayed-execution utility, or an executable from a temporary directory on Windows. This high-confidence behavior may indicate code execution through a Campaign vulnerability or unauthorized server-side activity, but it does not identify a specific CVE by itself. SOC L1 should verify the complete parent and child command lines, the Campaign build, the initiating request, and whether an approved maintenance action explains the process.\nD\u00e9tecte le module web nlserver.exe d'Adobe Campaign lan\u00e7ant un interpr\u00e9teur de commandes, un interpr\u00e9teur de scripts, un binaire d'ex\u00e9cution par proxy, un utilitaire d'ex\u00e9cution diff\u00e9r\u00e9e ou un ex\u00e9cutable depuis un r\u00e9pertoire temporaire sous Windows. Ce comportement \u00e0 haute confiance peut indiquer une ex\u00e9cution de code via une vuln\u00e9rabilit\u00e9 de Campaign ou une activit\u00e9 non autoris\u00e9e c\u00f4t\u00e9 serveur, mais il n'identifie pas \u00e0 lui seul une CVE pr\u00e9cise. Le SOC L1 doit v\u00e9rifier les lignes de commande compl\u00e8tes du parent et de l'enfant, le build de Campaign, la requ\u00eate \u00e0 l'origine de l'activit\u00e9 et si une op\u00e9ration de maintenance approuv\u00e9e explique le processus.\n",
+    "description": "Detects the Adobe Campaign nlserver.exe web module starting a command shell, script interpreter, proxy-execution binary, delayed-execution utility, or an executable from a temporary directory on Windows. This high-confidence behavior may indicate code execution through a Campaign vulnerability or unauthorized server-side activity, but it does not identify a specific CVE by itself. SOC L1 should verify the complete parent and child command lines, the Campaign build, the initiating request, and whether an approved maintenance action explains the process. D\u00e9tecte le module web nlserver.exe d'Adobe Campaign lan\u00e7ant un interpr\u00e9teur de commandes, un interpr\u00e9teur de scripts, un binaire d'ex\u00e9cution par proxy, un utilitaire d'ex\u00e9cution diff\u00e9r\u00e9e ou un ex\u00e9cutable depuis un r\u00e9pertoire temporaire sous Windows. Ce comportement \u00e0 haute confiance peut indiquer une ex\u00e9cution de code via une vuln\u00e9rabilit\u00e9 de Campaign ou une activit\u00e9 non autoris\u00e9e c\u00f4t\u00e9 serveur, mais il n'identifie pas \u00e0 lui seul une CVE pr\u00e9cise. Le SOC L1 doit v\u00e9rifier les lignes de commande compl\u00e8tes du parent et de l'enfant, le build de Campaign, la requ\u00eate \u00e0 l'origine de l'activit\u00e9 et si une op\u00e9ration de maintenance approuv\u00e9e explique le processus.",
     "eventid": [
       4688
     ],
@@ -1684,7 +1768,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects suspicious child process spawned by PowerPoint when opening a presentation file, consistent with CVE-2009-0556 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus enfant suspect lanc\u00e9 par PowerPoint, comportement compatible avec une exploitation par corruption m\u00e9moire de la CVE-2009-0556. L\u2019\u00e9v\u00e9nement ne prouve pas \u00e0 lui seul qu\u2019un document est malveillant ni que l\u2019exploitation a r\u00e9ussi. Le SOC L1 doit v\u00e9rifier les images parent et enfant, les lignes de commande, l\u2019utilisateur, le contexte du document s\u2019il est disponible et les activit\u00e9s proches.\n",
+    "description": "Detects suspicious child process spawned by PowerPoint when opening a presentation file, consistent with CVE-2009-0556 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un processus enfant suspect lanc\u00e9 par PowerPoint, comportement compatible avec une exploitation par corruption m\u00e9moire de la CVE-2009-0556. L\u2019\u00e9v\u00e9nement ne prouve pas \u00e0 lui seul qu\u2019un document est malveillant ni que l\u2019exploitation a r\u00e9ussi. Le SOC L1 doit v\u00e9rifier les images parent et enfant, les lignes de commande, l\u2019utilisateur, le contexte du document s\u2019il est disponible et les activit\u00e9s proches.",
     "eventid": [
       4688
     ],
@@ -1727,10 +1811,58 @@
   },
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects either the SharePoint IIS worker spawning a command interpreter or writing a server-side script into a web-accessible SharePoint directory, two high-confidence post-exploitation signals associated with the 2025 SharePoint chain. Neither event identifies the original request or proves compromise alone; SOC L1 should correlate the Event ID, host, account, command line, target file, triggering HTTP request, patch state, and subsequent network activity. Approved deployment and maintenance are the main legitimate explanations. D\u00e9tecte soit le worker IIS SharePoint lan\u00e7ant un interpr\u00e9teur de commandes, soit \u00e9crivant un script serveur dans un r\u00e9pertoire SharePoint accessible par le web, deux signaux post-exploitation \u00e0 forte confiance associ\u00e9s \u00e0 la cha\u00eene SharePoint 2025. Aucun \u00e9v\u00e9nement n'identifie seul la requ\u00eate d'origine ni ne prouve une compromission ; le SOC L1 doit corr\u00e9ler l'Event ID, l'h\u00f4te, le compte, la ligne de commande, le fichier cible, la requ\u00eate HTTP d\u00e9clencheuse, l'\u00e9tat des correctifs et l'activit\u00e9 r\u00e9seau suivante. Un d\u00e9ploiement ou une maintenance approuv\u00e9s sont les principales explications l\u00e9gitimes.",
+    "eventid": [
+      1,
+      11
+    ],
+    "falsepositives": [
+      "Approved SharePoint solution deployment or emergency maintenance",
+      "Security, monitoring, backup, or administration automation with documented change context"
+    ],
+    "filename": "CVE-2025-53770_SharePoint_ToolShell/rules/windows/sharepoint_toolshell_cve-2025-53770_endpoint_strict.yml",
+    "id": "52a39dc0-8d76-4d7e-93c3-b2e2f6b756ab",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "windows"
+    },
+    "required_fields": [
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (EventID=1 AND ParentImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' AND ((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\') OR ((Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\certutil.exe' ESCAPE '\\') AND (CommandLine LIKE '%http:%' ESCAPE '\\' OR CommandLine LIKE '%https:%' ESCAPE '\\' OR CommandLine LIKE '%-urlcache%' ESCAPE '\\' OR CommandLine LIKE '%-decode%' ESCAPE '\\' OR CommandLine LIKE '%javascript:%' ESCAPE '\\' OR CommandLine LIKE '%shell32.dll%' ESCAPE '\\'))) AND (NOT COALESCE((ParentCommandLine LIKE '%HealthAnalyzer%' ESCAPE '\\' OR ParentCommandLine LIKE '%Monitoring%' ESCAPE '\\'), 0))) OR (EventID=11 AND Image LIKE '%\\\\w3wp.exe' ESCAPE '\\' AND (TargetFilename LIKE '%\\\\TEMPLATE\\\\LAYOUTS\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\TEMPLATE\\\\ADMIN\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wwwroot\\\\\\_vti\\_bin\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wwwroot\\\\\\_layouts\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\ISAPI\\\\%' ESCAPE '\\') AND (TargetFilename LIKE '%.aspx' ESCAPE '\\' OR TargetFilename LIKE '%.ashx' ESCAPE '\\' OR TargetFilename LIKE '%.asmx' ESCAPE '\\' OR TargetFilename LIKE '%.asax' ESCAPE '\\') AND (NOT COALESCE((TargetFilename LIKE '%\\\\SolutionStaging\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1059.001",
+      "attack.persistence",
+      "attack.t1505.003",
+      "cve.2025-53770",
+      "cve.2025-49704",
+      "cve.2025-49706",
+      "cve.2025-53771"
+    ],
+    "title": "SharePoint IIS Worker Post-Exploitation Activity - 2025 Chain STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [
       "System"
     ],
-    "description": "Detects creation of a kernel driver or file system driver service (EID 7045, Windows System log). Covers rootkit persistence and BYOVD; adds file system driver type and user-writable ImagePath to catch evasion variants missed by kernel driver type alone. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects creation of a kernel driver or file system driver service (EID 7045, Windows System log). Covers rootkit persistence and BYOVD; adds file system driver type and user-writable ImagePath to catch evasion variants missed by kernel driver type alone. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       7045
     ],
@@ -1775,7 +1907,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Age of Empires II Definitive Edition spawning a shell, script host, or download-capable utility, indicating high-confidence post-exploitation behavior potentially associated with CVE-2026-50663. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte Age of Empires II Definitive Edition lan\u00e7ant un interpr\u00e9teur, un moteur de script ou un utilitaire de t\u00e9l\u00e9chargement, comportement post-exploitation haute confiance potentiellement associ\u00e9 \u00e0 CVE-2026-50663. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Age of Empires II Definitive Edition spawning a shell, script host, or download-capable utility, indicating high-confidence post-exploitation behavior potentially associated with CVE-2026-50663. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte Age of Empires II Definitive Edition lan\u00e7ant un interpr\u00e9teur, un moteur de script ou un utilitaire de t\u00e9l\u00e9chargement, comportement post-exploitation haute confiance potentiellement associ\u00e9 \u00e0 CVE-2026-50663. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -1818,7 +1950,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects an Apache, IIS-linked PHP, PHP-CGI, PHP-FPM, or nginx worker spawning a Windows shell, interpreter, downloader, or discovery utility with a suspicious command line. This is a high-confidence post-exploitation signal consistent with PHP2Shell on Windows, but it is not specific to one CVE; SOC L1 should verify the parent chain, service account, originating web requests, and created files.\nD\u00e9tecte un worker Apache, PHP li\u00e9 \u00e0 IIS, PHP-CGI, PHP-FPM ou nginx qui lance un shell Windows, un interpr\u00e9teur, un outil de t\u00e9l\u00e9chargement ou un utilitaire de reconnaissance avec une ligne de commande suspecte. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance coh\u00e9rent avec PHP2Shell sous Windows, mais il n\u2019est pas sp\u00e9cifique \u00e0 un seul CVE ; le SOC L1 doit v\u00e9rifier la cha\u00eene parent, le compte de service, les requ\u00eates web d\u2019origine et les fichiers cr\u00e9\u00e9s.\n",
+    "description": "Detects an Apache, IIS-linked PHP, PHP-CGI, PHP-FPM, or nginx worker spawning a Windows shell, interpreter, downloader, or discovery utility with a suspicious command line. This is a high-confidence post-exploitation signal consistent with PHP2Shell on Windows, but it is not specific to one CVE; SOC L1 should verify the parent chain, service account, originating web requests, and created files. D\u00e9tecte un worker Apache, PHP li\u00e9 \u00e0 IIS, PHP-CGI, PHP-FPM ou nginx qui lance un shell Windows, un interpr\u00e9teur, un outil de t\u00e9l\u00e9chargement ou un utilitaire de reconnaissance avec une ligne de commande suspecte. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance coh\u00e9rent avec PHP2Shell sous Windows, mais il n\u2019est pas sp\u00e9cifique \u00e0 un seul CVE ; le SOC L1 doit v\u00e9rifier la cha\u00eene parent, le compte de service, les requ\u00eates web d\u2019origine et les fichiers cr\u00e9\u00e9s.",
     "eventid": [
       4688
     ],
@@ -1870,7 +2002,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects registry access to COM CLSID {EAB22AC3-30C1-11CF-A7EB-0000C05BAE0B} associated with CVE-2026-21509 Office security feature bypass. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'acc\u00e8s au registre pour le CLSID COM {EAB22AC3-30C1-11CF-A7EB-0000C05BAE0B} explicitement associ\u00e9 \u00e0 CVE-2026-21509 (contournement de fonctionnalit\u00e9 de s\u00e9curit\u00e9 Microsoft Office). Ce CLSID est r\u00e9f\u00e9renc\u00e9 dans les avis Microsoft et les PoC publics. Ne devrait pas \u00eatre acc\u00e9d\u00e9 sur des syst\u00e8mes patch\u00e9s ou correctement mitig\u00e9s. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects registry access to COM CLSID {EAB22AC3-30C1-11CF-A7EB-0000C05BAE0B} associated with CVE-2026-21509 Office security feature bypass. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'acc\u00e8s au registre pour le CLSID COM {EAB22AC3-30C1-11CF-A7EB-0000C05BAE0B} explicitement associ\u00e9 \u00e0 CVE-2026-21509 (contournement de fonctionnalit\u00e9 de s\u00e9curit\u00e9 Microsoft Office). Ce CLSID est r\u00e9f\u00e9renc\u00e9 dans les avis Microsoft et les PoC publics. Ne devrait pas \u00eatre acc\u00e9d\u00e9 sur des syst\u00e8mes patch\u00e9s ou correctement mitig\u00e9s. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4657
     ],
@@ -1892,13 +2024,13 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "NewProcessName",
+      "ObjectName",
       "OperationType",
-      "TargetObject"
+      "ProcessName"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%\\\\CLSID\\\\{EAB22AC3-30C1-11CF-A7EB-0000C05BAE0B}%' ESCAPE '\\' AND (NOT COALESCE(((NewProcessName LIKE '%\\\\Program Files\\\\Tenable\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\Qualys\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\Rapid7\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\Tenable\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\Qualys\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\Rapid7\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\CrowdStrike\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\SentinelOne\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\Sophos\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\Carbon Black\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\Cylance\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\ESET\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\Symantec\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files\\\\McAfee\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\CrowdStrike\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\SentinelOne\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\Sophos\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Program Files (x86)\\\\Carbon Black\\\\%' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\winword.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\excel.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\outlook.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msaccess.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\onenote.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\mspub.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\dllhost.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\svchost.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msiexec.exe' ESCAPE '\\')), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%\\\\CLSID\\\\{EAB22AC3-30C1-11CF-A7EB-0000C05BAE0B}%' ESCAPE '\\' AND (NOT COALESCE(((ProcessName LIKE '%\\\\Program Files\\\\Tenable\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\Qualys\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\Rapid7\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\Tenable\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\Qualys\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\Rapid7\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\CrowdStrike\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\SentinelOne\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\Sophos\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\Carbon Black\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\Cylance\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\ESET\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\Symantec\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files\\\\McAfee\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\CrowdStrike\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\SentinelOne\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\Sophos\\\\%' ESCAPE '\\' OR ProcessName LIKE '%\\\\Program Files (x86)\\\\Carbon Black\\\\%' ESCAPE '\\') OR (ProcessName LIKE '%\\\\winword.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\excel.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\outlook.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\msaccess.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\onenote.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\mspub.exe' ESCAPE '\\') OR (ProcessName LIKE '%\\\\dllhost.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\svchost.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\msiexec.exe' ESCAPE '\\')), 0))))"
     ],
     "schema_version": 2,
     "source": "hatchepsoute",
@@ -1917,7 +2049,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects suspicious SYSTEM process from user context consistent with Windows CLFS LPE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cr\u00e9ation d\u2019un processus SYSTEM depuis un contexte utilisateur, compatible avec une \u00e9l\u00e9vation de privil\u00e8ges CLFS de la CVE-2025-29824. L\u2019\u00e9v\u00e9nement ne prouve pas \u00e0 lui seul que la vuln\u00e9rabilit\u00e9 a \u00e9t\u00e9 exploit\u00e9e. Le SOC L1 doit v\u00e9rifier le parent, l\u2019utilisateur, les images, la ligne de commande, le chemin d\u2019ex\u00e9cution et les \u00e9v\u00e9nements BLF proches.\n",
+    "description": "Detects suspicious SYSTEM process from user context consistent with Windows CLFS LPE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte la cr\u00e9ation d\u2019un processus SYSTEM depuis un contexte utilisateur, compatible avec une \u00e9l\u00e9vation de privil\u00e8ges CLFS de la CVE-2025-29824. L\u2019\u00e9v\u00e9nement ne prouve pas \u00e0 lui seul que la vuln\u00e9rabilit\u00e9 a \u00e9t\u00e9 exploit\u00e9e. Le SOC L1 doit v\u00e9rifier le parent, l\u2019utilisateur, les images, la ligne de commande, le chemin d\u2019ex\u00e9cution et les \u00e9v\u00e9nements BLF proches.",
     "eventid": [
       4688
     ],
@@ -1968,7 +2100,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects local commands that weaken BitLocker protection or redirect the next boot into recovery, which may precede a physical security-feature bypass such as CVE-2026-50661. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des commandes locales affaiblissant BitLocker ou redirigeant le prochain d\u00e9marrage vers la r\u00e9cup\u00e9ration, pr\u00e9paration possible d'un contournement physique tel que CVE-2026-50661. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects local commands that weaken BitLocker protection or redirect the next boot into recovery, which may precede a physical security-feature bypass such as CVE-2026-50661. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des commandes locales affaiblissant BitLocker ou redirigeant le prochain d\u00e9marrage vers la r\u00e9cup\u00e9ration, pr\u00e9paration possible d'un contournement physique tel que CVE-2026-50661. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2011,7 +2143,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects directory access to the AD FS Distributed Key Manager container by an unexpected non-machine principal, consistent with credential material access associated with CVE-2026-56155. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un acc\u00e8s au conteneur Distributed Key Manager d'AD FS par un principal inattendu autre qu'un compte machine, compatible avec un acc\u00e8s aux secrets associ\u00e9 \u00e0 CVE-2026-56155. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects directory access to the AD FS Distributed Key Manager container by an unexpected non-machine principal, consistent with credential material access associated with CVE-2026-56155. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un acc\u00e8s au conteneur Distributed Key Manager d'AD FS par un principal inattendu autre qu'un compte machine, compatible avec un acc\u00e8s aux secrets associ\u00e9 \u00e0 CVE-2026-56155. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4662
     ],
@@ -2054,7 +2186,7 @@
     "channel": [
       "Security"
     ],
-    "description": "High-confidence detection of explicit CLI-based disabling of security/EDR/AV tools with named process or service targets. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "High-confidence detection of explicit CLI-based disabling of security/EDR/AV tools with named process or service targets. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2095,7 +2227,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects an Exchange IIS worker process spawning a shell or scripting interpreter. This is consistent with webshell activity or other server-side execution, but this event-level rule does not perform temporal correlation with a ProxyLogon or ProxyShell request; SOC L1 should correlate the host and time window, then confirm any webshell file, source request, and administrator activity.\nD\u00e9tecte le lancement d\u2019un shell ou d\u2019un interpr\u00e9teur par le processus IIS Exchange. Cela est compatible avec une activit\u00e9 de webshell ou une autre ex\u00e9cution c\u00f4t\u00e9 serveur, mais cette r\u00e8gle \u00e9v\u00e9nementielle ne r\u00e9alise pas de corr\u00e9lation temporelle avec une requ\u00eate ProxyLogon ou ProxyShell ; le SOC L1 doit corr\u00e9ler l\u2019h\u00f4te et la fen\u00eatre temporelle, puis confirmer tout webshell, la requ\u00eate source et l\u2019activit\u00e9 d\u2019administration.\n",
+    "description": "Detects an Exchange IIS worker process spawning a shell or scripting interpreter. This is consistent with webshell activity or other server-side execution, but this event-level rule does not perform temporal correlation with a ProxyLogon or ProxyShell request; SOC L1 should correlate the host and time window, then confirm any webshell file, source request, and administrator activity. D\u00e9tecte le lancement d\u2019un shell ou d\u2019un interpr\u00e9teur par le processus IIS Exchange. Cela est compatible avec une activit\u00e9 de webshell ou une autre ex\u00e9cution c\u00f4t\u00e9 serveur, mais cette r\u00e8gle \u00e9v\u00e9nementielle ne r\u00e9alise pas de corr\u00e9lation temporelle avec une requ\u00eate ProxyLogon ou ProxyShell ; le SOC L1 doit corr\u00e9ler l\u2019h\u00f4te et la fen\u00eatre temporelle, puis confirmer tout webshell, la requ\u00eate source et l\u2019activit\u00e9 d\u2019administration.",
     "eventid": [
       4688
     ],
@@ -2140,7 +2272,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Renderer spawns LOLBin with explicit evasion or remote-execution CLI (encoded PS, IEX, mshta URL). High-confidence CVE-2025-50165 exploitation signal. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un contexte de rendu (Office, PDF, Photos) lan\u00e7ant un LOLBin avec des indicateurs CLI de haute confiance : PowerShell encod\u00e9 avec flags d'\u00e9vasion, IEX, t\u00e9l\u00e9chargement distant, squiblydoo regsvr32, mshta URL. Signal fort d'exploitation CVE-2025-50165. Combinaison parent renderer + LOLBin + \u00e9vasion CLI est rare en usage l\u00e9gitime. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Renderer spawns LOLBin with explicit evasion or remote-execution CLI (encoded PS, IEX, mshta URL). High-confidence CVE-2025-50165 exploitation signal. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un contexte de rendu (Office, PDF, Photos) lan\u00e7ant un LOLBin avec des indicateurs CLI de haute confiance : PowerShell encod\u00e9 avec flags d'\u00e9vasion, IEX, t\u00e9l\u00e9chargement distant, squiblydoo regsvr32, mshta URL. Signal fort d'exploitation CVE-2025-50165. Combinaison parent renderer + LOLBin + \u00e9vasion CLI est rare en usage l\u00e9gitime. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2186,7 +2318,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a child process spawned by the svchost.exe instance hosting WalletService, consistent with CVE-2026-49176 exploitation reaching SYSTEM code execution. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus enfant spawn\u00e9 par l'instance svchost.exe qui h\u00e9berge WalletService (groupe de service \"appmodel\"), coh\u00e9rent avec une exploitation de CVE-2026-49176 aboutissant \u00e0 une ex\u00e9cution de code SYSTEM. WalletService ne spawn normalement aucun processus enfant ; la version initiale de cette r\u00e8gle restreignait la d\u00e9tection \u00e0 une liste de shells et de LOLBins connus (cmd.exe, powershell.exe, etc.), ce qui laissait un angle mort si le payload de l'attaquant portait un nom de binaire arbitraire (masquerade). La r\u00e8gle a \u00e9t\u00e9 corrig\u00e9e pour d\u00e9tecter tout enfant, quel que soit son nom, en ne conservant que des filtres pour les rares cas l\u00e9gitimes document\u00e9s (Windows Error Reporting, agents EDR). Le test contre le PoC public 777erp/CVE-2026-49176_BOF (BOF Cobalt Strike) a r\u00e9v\u00e9l\u00e9 un second angle mort (AM6) : sa strat\u00e9gie de repli cr\u00e9e un service Windows temporaire dont le binaire est directement un shell (par exemple \"cmd.exe /c shell_broker.exe\"), d\u00e9marr\u00e9 par le Service Control Manager (services.exe) et non par le svchost -k appmodel. Ce chemin casse selection_parent car le parent observ\u00e9 n'est plus svchost.exe. La r\u00e8gle a \u00e9t\u00e9 compl\u00e9t\u00e9e avec selection_scm_shell_relay pour couvrir ce relais d'ex\u00e9cution par service temporaire, sans d\u00e9pendre du nom du binaire de payload final. Un second challenge offensif a r\u00e9v\u00e9l\u00e9 AM7 : les filtres (WER, agents EDR) ne matchaient que sur le nom de fichier ou une sous-cha\u00eene, sans jamais v\u00e9rifier le chemin complet. Un attaquant qui contr\u00f4le d\u00e9j\u00e0 l'appel CreateProcess depuis le contexte SYSTEM (WalletService ou le relais AM6) pouvait nommer son payload \"WerFault.exe\" ou placer son dossier de staging dans un chemin contenant \"CrowdStrike\" pour d\u00e9clencher ces filtres et rendre la r\u00e8gle silencieuse. Les deux filtres ont \u00e9t\u00e9 ancr\u00e9s \u00e0 un chemin d'installation l\u00e9gitime (System32/SysWOW64 pour WerFault, Program Files/ProgramData pour les agents EDR). AM8 : selection_scm_shell_relay ne couvrait que les shells classiques ; rundll32.exe et regsvr32.exe (LOLBins d'ex\u00e9cution de code, T1218.010/011) ont \u00e9t\u00e9 ajout\u00e9s, un ImagePath de service pointant directement vers ces binaires restant un signal rare et fiable. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a child process spawned by the svchost.exe instance hosting WalletService, consistent with CVE-2026-49176 exploitation reaching SYSTEM code execution. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un processus enfant spawn\u00e9 par l'instance svchost.exe qui h\u00e9berge WalletService (groupe de service \"appmodel\"), coh\u00e9rent avec une exploitation de CVE-2026-49176 aboutissant \u00e0 une ex\u00e9cution de code SYSTEM. WalletService ne spawn normalement aucun processus enfant ; la version initiale de cette r\u00e8gle restreignait la d\u00e9tection \u00e0 une liste de shells et de LOLBins connus (cmd.exe, powershell.exe, etc.), ce qui laissait un angle mort si le payload de l'attaquant portait un nom de binaire arbitraire (masquerade). La r\u00e8gle a \u00e9t\u00e9 corrig\u00e9e pour d\u00e9tecter tout enfant, quel que soit son nom, en ne conservant que des filtres pour les rares cas l\u00e9gitimes document\u00e9s (Windows Error Reporting, agents EDR). Le test contre le PoC public 777erp/CVE-2026-49176_BOF (BOF Cobalt Strike) a r\u00e9v\u00e9l\u00e9 un second angle mort (AM6) : sa strat\u00e9gie de repli cr\u00e9e un service Windows temporaire dont le binaire est directement un shell (par exemple \"cmd.exe /c shell_broker.exe\"), d\u00e9marr\u00e9 par le Service Control Manager (services.exe) et non par le svchost -k appmodel. Ce chemin casse selection_parent car le parent observ\u00e9 n'est plus svchost.exe. La r\u00e8gle a \u00e9t\u00e9 compl\u00e9t\u00e9e avec selection_scm_shell_relay pour couvrir ce relais d'ex\u00e9cution par service temporaire, sans d\u00e9pendre du nom du binaire de payload final. Un second challenge offensif a r\u00e9v\u00e9l\u00e9 AM7 : les filtres (WER, agents EDR) ne matchaient que sur le nom de fichier ou une sous-cha\u00eene, sans jamais v\u00e9rifier le chemin complet. Un attaquant qui contr\u00f4le d\u00e9j\u00e0 l'appel CreateProcess depuis le contexte SYSTEM (WalletService ou le relais AM6) pouvait nommer son payload \"WerFault.exe\" ou placer son dossier de staging dans un chemin contenant \"CrowdStrike\" pour d\u00e9clencher ces filtres et rendre la r\u00e8gle silencieuse. Les deux filtres ont \u00e9t\u00e9 ancr\u00e9s \u00e0 un chemin d'installation l\u00e9gitime (System32/SysWOW64 pour WerFault, Program Files/ProgramData pour les agents EDR). AM8 : selection_scm_shell_relay ne couvrait que les shells classiques ; rundll32.exe et regsvr32.exe (LOLBins d'ex\u00e9cution de code, T1218.010/011) ont \u00e9t\u00e9 ajout\u00e9s, un ImagePath de service pointant directement vers ces binaires restant un signal rare et fiable. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2234,7 +2366,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Office spawned LOLBin with payload indicators consistent with CVE-2025-21298 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un utilitaire d\u2019administration int\u00e9gr\u00e9 lanc\u00e9 par Office avec des indicateurs de charge utile compatibles avec la CVE-2025-21298. Il s\u2019agit d\u2019un signal d\u2019ex\u00e9cution \u00e0 haut niveau de confiance, mais une automatisation autoris\u00e9e peut correspondre. Le SOC L1 doit v\u00e9rifier le parent Office, l\u2019image enfant, la ligne de commande, l\u2019utilisateur, le document et les activit\u00e9s r\u00e9seau associ\u00e9es.\n",
+    "description": "Detects Office spawned LOLBin with payload indicators consistent with CVE-2025-21298 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un utilitaire d\u2019administration int\u00e9gr\u00e9 lanc\u00e9 par Office avec des indicateurs de charge utile compatibles avec la CVE-2025-21298. Il s\u2019agit d\u2019un signal d\u2019ex\u00e9cution \u00e0 haut niveau de confiance, mais une automatisation autoris\u00e9e peut correspondre. Le SOC L1 doit v\u00e9rifier le parent Office, l\u2019image enfant, la ligne de commande, l\u2019utilisateur, le document et les activit\u00e9s r\u00e9seau associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2282,7 +2414,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects mmc.exe spawning a LOLBin child process carrying download or code execution indicators in the command line, matching CVE-2025-26633 exploitation (CVSS 7.0). Malicious .msc bypasses MotW/SmartScreen; post-open, mmc.exe executes an encoded or download payload. High-confidence SOC alert, low false-positive rate. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nRegle STRICT haute confiance : detecte mmc.exe qui spawne un LOLBin (cmd, powershell, mshta, wscript, certutil...) ET dont la ligne de commande porte un indicateur de telechargement ou d'execution encodee (IEX, DownloadString, -enc, FromBase64String, Invoke-WebRequest, curl, bitsadmin /transfer, regsvr32 scrobj...). Correspond au comportement post-exploitation documente de CVE-2025-26633 (EncryptHub/TA2727). Faux positifs extremement rares car la combinaison mmc.exe -> LOLBin + CLI payload n'a pas d'usage legittime connu. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects mmc.exe spawning a LOLBin child process carrying download or code execution indicators in the command line, matching CVE-2025-26633 exploitation (CVSS 7.0). Malicious .msc bypasses MotW/SmartScreen; post-open, mmc.exe executes an encoded or download payload. High-confidence SOC alert, low false-positive rate. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Regle STRICT haute confiance : detecte mmc.exe qui spawne un LOLBin (cmd, powershell, mshta, wscript, certutil...) ET dont la ligne de commande porte un indicateur de telechargement ou d'execution encodee (IEX, DownloadString, -enc, FromBase64String, Invoke-WebRequest, curl, bitsadmin /transfer, regsvr32 scrobj...). Correspond au comportement post-exploitation documente de CVE-2025-26633 (EncryptHub/TA2727). Faux positifs extremement rares car la combinaison mmc.exe -> LOLBin + CLI payload n'a pas d'usage legittime connu. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2331,7 +2463,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects installation of an outbound tunnel service (Cloudflared or an equivalent tool such as ngrok, frp, chisel, or an SSH reverse tunnel), consistent with post-exploitation persistence observed after N-able N-central authentication bypass CVE-2026-18556/CVE-2026-18577. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte l'installation d'un service de tunnel sortant (Cloudflared ou un outil equivalent comme ngrok, frp, chisel, ou un tunnel inverse SSH), coherente avec la persistance observee apres exploitation du contournement d'authentification N-able N-central CVE-2026-18556/CVE-2026-18577. Les intrusions documentees enregistrent un tunnel Cloudflare comme service Windows pour maintenir un canal sortant qui survit au redemarrage, depuis un endpoint atteint via la fonctionnalite Take Control apres prise de controle du serveur N-central. CORRECTION (red team interne) : la version initiale de cette regle ne couvrait que le binaire cloudflared.exe par son nom. Un attaquant conscient de cette detection precise n'a qu'a utiliser un outil de tunnel different (ngrok, frp, chisel, tunnel inverse SSH/plink) pour obtenir le meme objectif de persistance sans jamais toucher aux selections existantes. Des branches couvrant ces outils equivalents ont ete ajoutees. La presence de l'un de ces binaires ou services n'est pas malveillante en soi si l'organisation l'utilise deliberement pour un acces zero trust ou une administration a distance : voir falsepositives. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects installation of an outbound tunnel service (Cloudflared or an equivalent tool such as ngrok, frp, chisel, or an SSH reverse tunnel), consistent with post-exploitation persistence observed after N-able N-central authentication bypass CVE-2026-18556/CVE-2026-18577. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte l'installation d'un service de tunnel sortant (Cloudflared ou un outil equivalent comme ngrok, frp, chisel, ou un tunnel inverse SSH), coherente avec la persistance observee apres exploitation du contournement d'authentification N-able N-central CVE-2026-18556/CVE-2026-18577. Les intrusions documentees enregistrent un tunnel Cloudflare comme service Windows pour maintenir un canal sortant qui survit au redemarrage, depuis un endpoint atteint via la fonctionnalite Take Control apres prise de controle du serveur N-central. CORRECTION (red team interne) : la version initiale de cette regle ne couvrait que le binaire cloudflared.exe par son nom. Un attaquant conscient de cette detection precise n'a qu'a utiliser un outil de tunnel different (ngrok, frp, chisel, tunnel inverse SSH/plink) pour obtenir le meme objectif de persistance sans jamais toucher aux selections existantes. Des branches couvrant ces outils equivalents ont ete ajoutees. La presence de l'un de ces binaires ou services n'est pas malveillante en soi si l'organisation l'utilise deliberement pour un acces zero trust ou une administration a distance : voir falsepositives. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2380,7 +2512,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a process named svchost.exe executing outside the legitimate Windows system directories, consistent with the malicious binary dropped in user Documents folders after N-able N-central authentication bypass CVE-2026-18556/CVE-2026-18577. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte un processus nomme svchost.exe execute en dehors des repertoires systeme Windows legitimes. Les intrusions documentees liees a CVE-2026-18556/CVE-2026-18577 deposent un binaire nomme svchost.exe dans le dossier Documents de l'utilisateur sur les endpoints geres, apres pivot depuis le serveur N-central compromis via Take Control. Le veritable svchost.exe legitime de Windows s'execute uniquement depuis C:\\Windows\\System32 ou C:\\Windows\\SysWOW64 : toute autre localisation est un signal fort de mascarade, independamment de cette campagne specifique. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a process named svchost.exe executing outside the legitimate Windows system directories, consistent with the malicious binary dropped in user Documents folders after N-able N-central authentication bypass CVE-2026-18556/CVE-2026-18577. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte un processus nomme svchost.exe execute en dehors des repertoires systeme Windows legitimes. Les intrusions documentees liees a CVE-2026-18556/CVE-2026-18577 deposent un binaire nomme svchost.exe dans le dossier Documents de l'utilisateur sur les endpoints geres, apres pivot depuis le serveur N-central compromis via Take Control. Le veritable svchost.exe legitime de Windows s'execute uniquement depuis C:\\Windows\\System32 ou C:\\Windows\\SysWOW64 : toute autre localisation est un signal fort de mascarade, independamment de cette campagne specifique. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2423,7 +2555,7 @@
     "channel": [
       "Security"
     ],
-    "description": "High-confidence detection for Office spawning LOLBins with download-and-execute or obfuscation CLI. STRICT rule for SOC alerting. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tection haute confiance des applications Microsoft Office lan\u00e7ant des LOLBins avec des patterns CLI de t\u00e9l\u00e9chargement/ex\u00e9cution ou obfuscation (PowerShell -enc, IEX, FromBase64String). R\u00e8gle STRICT pour les alertes SOC op\u00e9rationnelles sur les cha\u00eenes d'exploitation Office. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "High-confidence detection for Office spawning LOLBins with download-and-execute or obfuscation CLI. STRICT rule for SOC alerting. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tection haute confiance des applications Microsoft Office lan\u00e7ant des LOLBins avec des patterns CLI de t\u00e9l\u00e9chargement/ex\u00e9cution ou obfuscation (PowerShell -enc, IEX, FromBase64String). R\u00e8gle STRICT pour les alertes SOC op\u00e9rationnelles sur les cha\u00eenes d'exploitation Office. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2469,7 +2601,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Landscope MR/DA service processes spawning shells or LOLBins after possible CVE-2025-61932 compromise. Shell interpreters (cmd, powershell) require a suspicious CLI indicator. High-risk LOLBins (mshta, rundll32, certutil, msiexec, etc.) trigger without CLI requirement because being spawned from MR/DA is already high-confidence post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un signal post-compromission haute confiance sur Motex Landscope : les processus MR.exe ou DA.exe lancent des shells ou des LOLBins. Les interpr\u00e9teurs shell (cmd, powershell) n\u00e9cessitent un indicateur CLI suspect. Les LOLBins \u00e0 haut risque (mshta, rundll32, certutil, msiexec, etc.) d\u00e9clenchent sans condition CLI car \u00eatre spawn\u00e9 par MR/DA est d\u00e9j\u00e0 suffisant. Correction : la condition pr\u00e9c\u00e9dente exigeait un indicateur CLI pour TOUS les enfants, ce qui rendait invisible le post-exploitation via commandes simples ou LOLBins locaux. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Landscope MR/DA service processes spawning shells or LOLBins after possible CVE-2025-61932 compromise. Shell interpreters (cmd, powershell) require a suspicious CLI indicator. High-risk LOLBins (mshta, rundll32, certutil, msiexec, etc.) trigger without CLI requirement because being spawned from MR/DA is already high-confidence post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un signal post-compromission haute confiance sur Motex Landscope : les processus MR.exe ou DA.exe lancent des shells ou des LOLBins. Les interpr\u00e9teurs shell (cmd, powershell) n\u00e9cessitent un indicateur CLI suspect. Les LOLBins \u00e0 haut risque (mshta, rundll32, certutil, msiexec, etc.) d\u00e9clenchent sans condition CLI car \u00eatre spawn\u00e9 par MR/DA est d\u00e9j\u00e0 suffisant. Correction : la condition pr\u00e9c\u00e9dente exigeait un indicateur CLI pour TOUS les enfants, ce qui rendait invisible le post-exploitation via commandes simples ou LOLBins locaux. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2519,7 +2651,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects high-confidence RRAS svchost spawning shell with offensive CLI patterns, indicating CVE-2025-62549 post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte svchost RRAS lan\u00e7ant un shell avec une ligne de commande offensive, indicateur haute confiance d'exploitation CVE-2025-62549. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects high-confidence RRAS svchost spawning shell with offensive CLI patterns, indicating CVE-2025-62549 post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte svchost RRAS lan\u00e7ant un shell avec une ligne de commande offensive, indicateur haute confiance d'exploitation CVE-2025-62549. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2567,7 +2699,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects shell file triggers causing external NTLM authentication consistent with CVE-2025-24054. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un fichier d\u00e9clencheur qui am\u00e8ne un h\u00f4te Windows \u00e0 initier une authentification NTLM externe, compatible avec la coercition de la CVE-2025-24054. L\u2019\u00e9v\u00e9nement ne prouve pas qu\u2019un hash a \u00e9t\u00e9 captur\u00e9. Le SOC L1 doit v\u00e9rifier le chemin du fichier, le processus cr\u00e9ateur, l\u2019utilisateur, la destination, les \u00e9v\u00e9nements NTLM et toute sortie ult\u00e9rieure.\n",
+    "description": "Detects shell file triggers causing external NTLM authentication consistent with CVE-2025-24054. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un fichier d\u00e9clencheur qui am\u00e8ne un h\u00f4te Windows \u00e0 initier une authentification NTLM externe, compatible avec la coercition de la CVE-2025-24054. L\u2019\u00e9v\u00e9nement ne prouve pas qu\u2019un hash a \u00e9t\u00e9 captur\u00e9. Le SOC L1 doit v\u00e9rifier le chemin du fichier, le processus cr\u00e9ateur, l\u2019utilisateur, la destination, les \u00e9v\u00e9nements NTLM et toute sortie ult\u00e9rieure.",
     "eventid": [
       4648
     ],
@@ -2613,7 +2745,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects TheGentlemen EDR-killer execution via GentlemenCollection staging path or known killer hashes. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects TheGentlemen EDR-killer execution via GentlemenCollection staging path or known killer hashes. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2655,7 +2787,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Office apps spawning LOLBins with download-and-execute or obfuscation CLI. STRICT high-confidence rule for CVE-2025-62554 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des applications Microsoft Office lan\u00e7ant des LOLBins avec des patterns CLI de t\u00e9l\u00e9chargement/ex\u00e9cution en m\u00e9moire. R\u00e8gle STRICT haute confiance pour CVE-2025-62554 (type confusion Office). Combine parent Office + enfant LOLBin + indicateur CLI de download ou obfuscation. Le filtre exclut les chemins add-ins Office sign\u00e9s (Program Files\\\\Microsoft Office). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Office apps spawning LOLBins with download-and-execute or obfuscation CLI. STRICT high-confidence rule for CVE-2025-62554 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des applications Microsoft Office lan\u00e7ant des LOLBins avec des patterns CLI de t\u00e9l\u00e9chargement/ex\u00e9cution en m\u00e9moire. R\u00e8gle STRICT haute confiance pour CVE-2025-62554 (type confusion Office). Combine parent Office + enfant LOLBin + indicateur CLI de download ou obfuscation. Le filtre exclut les chemins add-ins Office sign\u00e9s (Program Files\\\\Microsoft Office). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2704,7 +2836,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Office apps spawning LOLBins with download-and-execute or obfuscation CLI. STRICT high-confidence rule for CVE-2025-62557 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des applications Office lan\u00e7ant des LOLBins avec des patterns CLI de t\u00e9l\u00e9chargement/ex\u00e9cution ou obfuscation (PowerShell -enc, IEX, FromBase64String). R\u00e8gle STRICT haute confiance pour alertes SOC sur activit\u00e9 post-exploitation CVE-2025-62557. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Office apps spawning LOLBins with download-and-execute or obfuscation CLI. STRICT high-confidence rule for CVE-2025-62557 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des applications Office lan\u00e7ant des LOLBins avec des patterns CLI de t\u00e9l\u00e9chargement/ex\u00e9cution ou obfuscation (PowerShell -enc, IEX, FromBase64String). R\u00e8gle STRICT haute confiance pour alertes SOC sur activit\u00e9 post-exploitation CVE-2025-62557. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2752,7 +2884,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects security product impersonation from suspicious paths consistent with TheGentlemen EDR killer staging. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects security product impersonation from suspicious paths consistent with TheGentlemen EDR killer staging. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2797,7 +2929,7 @@
     "channel": [
       "System"
     ],
-    "description": "Detects a Windows Error Reporting event naming vmswitch.sys on a Hyper-V host, a high-priority fault pattern compatible with attempted CVE-2026-57092 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un \u00e9v\u00e9nement Windows Error Reporting citant vmswitch.sys sur un h\u00f4te Hyper-V, anomalie prioritaire compatible avec une tentative d'exploitation de CVE-2026-57092. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a Windows Error Reporting event naming vmswitch.sys on a Hyper-V host, a high-priority fault pattern compatible with attempted CVE-2026-57092 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un \u00e9v\u00e9nement Windows Error Reporting citant vmswitch.sys sur un h\u00f4te Hyper-V, anomalie prioritaire compatible avec une tentative d'exploitation de CVE-2026-57092. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       1001
     ],
@@ -2841,7 +2973,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects SYSTEM-level process spawned from a user-writable path, consistent with CVE-2025-62221 kernel EoP post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus SYSTEM lanc\u00e9 depuis un chemin accessible en \u00e9criture par l'utilisateur, coh\u00e9rent avec une \u00e9l\u00e9vation de privil\u00e8ges noyau CVE-2025-62221. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects SYSTEM-level process spawned from a user-writable path, consistent with CVE-2025-62221 kernel EoP post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un processus SYSTEM lanc\u00e9 depuis un chemin accessible en \u00e9criture par l'utilisateur, coh\u00e9rent avec une \u00e9l\u00e9vation de privil\u00e8ges noyau CVE-2025-62221. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2886,7 +3018,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects high-confidence post-exploitation from CVE-2025-30397 (CVSS 7.5): Edge renderer or iexplore.exe spawning a LOLBin with download, encoded-command, or execution-chain CLI arguments, indicating active RCE via jscript9.dll / MSHTML memory corruption in IE compatibility mode. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un LOLBin lanc\u00e9 par MSHTML ou Edge IE mode avec des indicateurs de charge utile, compatible avec une exploitation de la CVE-2025-30397. Ce signal est fort mais ne prouve pas \u00e0 lui seul la compromission. Le SOC L1 doit v\u00e9rifier le parent, l\u2019image enfant, la ligne de commande, l\u2019utilisateur, le contenu t\u00e9l\u00e9charg\u00e9 ou d\u00e9cod\u00e9 et les connexions associ\u00e9es.\n",
+    "description": "Detects high-confidence post-exploitation from CVE-2025-30397 (CVSS 7.5): Edge renderer or iexplore.exe spawning a LOLBin with download, encoded-command, or execution-chain CLI arguments, indicating active RCE via jscript9.dll / MSHTML memory corruption in IE compatibility mode. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un LOLBin lanc\u00e9 par MSHTML ou Edge IE mode avec des indicateurs de charge utile, compatible avec une exploitation de la CVE-2025-30397. Ce signal est fort mais ne prouve pas \u00e0 lui seul la compromission. Le SOC L1 doit v\u00e9rifier le parent, l\u2019image enfant, la ligne de commande, l\u2019utilisateur, le contenu t\u00e9l\u00e9charg\u00e9 ou d\u00e9cod\u00e9 et les connexions associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2938,7 +3070,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Azure Monitor Agent spawning LOLBin with malicious command-line patterns. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tection haute confiance d'une exploitation possible de CVE-2025-62550 : parent AMA, LOLBin enfant et ligne de commande malveillante confirm\u00e9e. Les URLs Azure Blob Storage ne sont pas exclues car elles peuvent h\u00e9berger des charges utiles adverses. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Azure Monitor Agent spawning LOLBin with malicious command-line patterns. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tection haute confiance d'une exploitation possible de CVE-2025-62550 : parent AMA, LOLBin enfant et ligne de commande malveillante confirm\u00e9e. Les URLs Azure Blob Storage ne sont pas exclues car elles peuvent h\u00e9berger des charges utiles adverses. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -2985,7 +3117,7 @@
     "channel": [
       "Security"
     ],
-    "description": "LSASS spawning any child process; near-certain code execution in LSASS, exploitation of CVE-2026-20854 or similar. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte LSASS lan\u00e7ant un processus enfant, comportement anormal indiquant une ex\u00e9cution de code probable dans LSASS et compatible avec la CVE-2026-20854. Le SOC L1 doit v\u00e9rifier l\u2019image enfant, le parent, l\u2019utilisateur, la ligne de commande, l\u2019int\u00e9grit\u00e9 et les connexions ou fichiers associ\u00e9s.\n",
+    "description": "LSASS spawning any child process; near-certain code execution in LSASS, exploitation of CVE-2026-20854 or similar. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte LSASS lan\u00e7ant un processus enfant, comportement anormal indiquant une ex\u00e9cution de code probable dans LSASS et compatible avec la CVE-2026-20854. Le SOC L1 doit v\u00e9rifier l\u2019image enfant, le parent, l\u2019utilisateur, la ligne de commande, l\u2019int\u00e9grit\u00e9 et les connexions ou fichiers associ\u00e9s.",
     "eventid": [
       4688
     ],
@@ -3032,7 +3164,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects the Ghostscript binary (gswin32c.exe, gswin64c.exe or their non-console variants) spawned as a child of IIS, PHP-CGI or PHP runtime processes on Windows, consistent with ImageMagick's delegate mechanism processing a file that Imagick identified as PostScript content, the trigger condition for CVE-2026-65640. The attacker does not control which binary gets invoked, that is determined by the server's ImageMagick delegates.xml configuration, so this signal is not evadable by renaming an attacker-controlled implant the way a dropped webshell can be. Confirmation signal on a different surface than the web-layer rule, covering the Windows hosting gap not seen by the Linux process rule. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte le binaire Ghostscript (gswin32c.exe, gswin64c.exe ou leurs variantes non console) lance en tant qu'enfant de processus IIS, php-cgi.exe ou php.exe sur Windows, coh\u00e9rent avec le mecanisme de delegation d'ImageMagick traitant un fichier qu'Imagick a identifie comme du contenu PostScript, la condition declenchante de CVE-2026-65640. L'attaquant ne controle pas quel binaire est invoque, cela depend de la configuration delegates.xml d'ImageMagick sur le serveur : ce signal n'est donc pas evasible en renommant un implant controle par l'attaquant, contrairement a un webshell depose. Signal de confirmation sur une couche differente de la regle web, couvre l'angle mort des hebergements Windows non couvert par la regle Linux. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects the Ghostscript binary (gswin32c.exe, gswin64c.exe or their non-console variants) spawned as a child of IIS, PHP-CGI or PHP runtime processes on Windows, consistent with ImageMagick's delegate mechanism processing a file that Imagick identified as PostScript content, the trigger condition for CVE-2026-65640. The attacker does not control which binary gets invoked, that is determined by the server's ImageMagick delegates.xml configuration, so this signal is not evadable by renaming an attacker-controlled implant the way a dropped webshell can be. Confirmation signal on a different surface than the web-layer rule, covering the Windows hosting gap not seen by the Linux process rule. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte le binaire Ghostscript (gswin32c.exe, gswin64c.exe ou leurs variantes non console) lance en tant qu'enfant de processus IIS, php-cgi.exe ou php.exe sur Windows, coh\u00e9rent avec le mecanisme de delegation d'ImageMagick traitant un fichier qu'Imagick a identifie comme du contenu PostScript, la condition declenchante de CVE-2026-65640. L'attaquant ne controle pas quel binaire est invoque, cela depend de la configuration delegates.xml d'ImageMagick sur le serveur : ce signal n'est donc pas evasible en renommant un implant controle par l'attaquant, contrairement a un webshell depose. Signal de confirmation sur une couche differente de la regle web, couvre l'angle mort des hebergements Windows non couvert par la regle Linux. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -3075,7 +3207,7 @@
     "channel": [
       "Security"
     ],
-    "description": "IIS worker or timer service spawning a shell or LOLBin with strong post-exploitation indicators, consistent with CVE-2026-45659 deserialization RCE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte le worker IIS ou le service timer de SharePoint lan\u00e7ant un shell ou un LOLBin avec des indicateurs forts de post-exploitation, compatible avec une RCE par d\u00e9s\u00e9rialisation de la CVE-2026-45659. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, la ligne de commande, l\u2019utilisateur, le site concern\u00e9 et l\u2019activit\u00e9 r\u00e9seau ou fichier associ\u00e9e.\n",
+    "description": "IIS worker or timer service spawning a shell or LOLBin with strong post-exploitation indicators, consistent with CVE-2026-45659 deserialization RCE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte le worker IIS ou le service timer de SharePoint lan\u00e7ant un shell ou un LOLBin avec des indicateurs forts de post-exploitation, compatible avec une RCE par d\u00e9s\u00e9rialisation de la CVE-2026-45659. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, la ligne de commande, l\u2019utilisateur, le site concern\u00e9 et l\u2019activit\u00e9 r\u00e9seau ou fichier associ\u00e9e.",
     "eventid": [
       4688
     ],
@@ -3124,7 +3256,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects IIS, PHP-CGI or PHP runtime processes spawning command shells or common post-exploitation tools on Windows, covering Joomla/SP LMS CVE-2026-48909 deployments hosted on Windows/IIS. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte IIS, php-cgi ou php.exe lan\u00e7ant cmd, PowerShell ou des outils de post-exploitation sur Windows. Cette r\u00e8gle couvre l'angle mort des h\u00e9bergements Joomla/PHP sous Windows/IIS, non couvert par la r\u00e8gle Linux. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects IIS, PHP-CGI or PHP runtime processes spawning command shells or common post-exploitation tools on Windows, covering Joomla/SP LMS CVE-2026-48909 deployments hosted on Windows/IIS. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte IIS, php-cgi ou php.exe lan\u00e7ant cmd, PowerShell ou des outils de post-exploitation sur Windows. Cette r\u00e8gle couvre l'angle mort des h\u00e9bergements Joomla/PHP sous Windows/IIS, non couvert par la r\u00e8gle Linux. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -3174,7 +3306,7 @@
     "channel": [
       "Security"
     ],
-    "description": "High-confidence detection of infostealer activity combining suspicious LOLBIN execution, browser credential store access, and network exfiltration. Single-rule fallback for environments without correlation capability; use the three-stage correlated rules in Infostealer_STRICT_Correlated for better precision.\n",
+    "description": "High-confidence detection of infostealer activity combining suspicious LOLBIN execution, browser credential store access, and network exfiltration. Single-rule fallback for environments without correlation capability; use the three-stage correlated rules in Infostealer_STRICT_Correlated for better precision.",
     "eventid": [
       4688
     ],
@@ -3218,7 +3350,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects an IIS worker process or php-cgi.exe on Windows spawning cmd.exe, PowerShell or a common LOLBin with download/execution command-line indicators, consistent with successful remote code execution following CVE-2026-58025 MediaWiki deserialization exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects an IIS worker process or php-cgi.exe on Windows spawning cmd.exe, PowerShell or a common LOLBin with download/execution command-line indicators, consistent with successful remote code execution following CVE-2026-58025 MediaWiki deserialization exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -3261,8 +3393,10 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Correlates Sysmon kernel driver load and kernel service creation for high-confidence rootkit detection. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
-    "eventid": [],
+    "description": "Correlates Sysmon kernel driver load and kernel service creation for high-confidence rootkit detection. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
+    "eventid": [
+      6
+    ],
     "falsepositives": [
       "Simultaneous legitimate driver load and service creation during OS patch or driver update",
       "Hardware vendor tooling that installs and registers kernel drivers in sequence"
@@ -3299,7 +3433,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects the Windows DHCP Server service host spawning a shell, script host, or download utility, indicating high-confidence post-exploitation behavior potentially associated with CVE-2026-50518. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte le processus h\u00f4te du service DHCP Server lan\u00e7ant un shell, un moteur de script ou un utilitaire de t\u00e9l\u00e9chargement, signe post-exploitation haute confiance potentiellement associ\u00e9 \u00e0 CVE-2026-50518. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects the Windows DHCP Server service host spawning a shell, script host, or download utility, indicating high-confidence post-exploitation behavior potentially associated with CVE-2026-50518. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte le processus h\u00f4te du service DHCP Server lan\u00e7ant un shell, un moteur de script ou un utilitaire de t\u00e9l\u00e9chargement, signe post-exploitation haute confiance potentiellement associ\u00e9 \u00e0 CVE-2026-50518. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -3341,7 +3475,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a child process spawned by Veeam.Backup.Service.exe, consistent with CVE-2026-44963 BinaryFormatter deserialization RCE via the ObjectDataProvider/Process.Start gadget chain. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte un processus enfant lance par Veeam.Backup.Service.exe, coherent avec l'exploitation de CVE-2026-44963. Un utilisateur de domaine authentifie bas-privilege peut atteindre trois appels WCF sequentiels sur l'endpoint /trigger (port TCP 8000) du service Veeam Backup pour declencher une deserialisation BinaryFormatter d'un objet System.Data.DataSet, qui n'est pas couvert par la liste noire RestrictedSerializationBinder. Le gadget utilise les proprietes ObjectDataProvider (ObjectInstance, MethodName, MethodParameters) pour invoquer Process.Start() depuis le contexte SYSTEM du service. Cette exploitation ne concerne que les serveurs de sauvegarde joints a un domaine Active Directory. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a child process spawned by Veeam.Backup.Service.exe, consistent with CVE-2026-44963 BinaryFormatter deserialization RCE via the ObjectDataProvider/Process.Start gadget chain. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte un processus enfant lance par Veeam.Backup.Service.exe, coherent avec l'exploitation de CVE-2026-44963. Un utilisateur de domaine authentifie bas-privilege peut atteindre trois appels WCF sequentiels sur l'endpoint /trigger (port TCP 8000) du service Veeam Backup pour declencher une deserialisation BinaryFormatter d'un objet System.Data.DataSet, qui n'est pas couvert par la liste noire RestrictedSerializationBinder. Le gadget utilise les proprietes ObjectDataProvider (ObjectInstance, MethodName, MethodParameters) pour invoquer Process.Start() depuis le contexte SYSTEM du service. Cette exploitation ne concerne que les serveurs de sauvegarde joints a un domaine Active Directory. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -3385,7 +3519,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Minecraft Bedrock Dedicated Server spawning a shell, script host, or download utility, indicating high-confidence post-exploitation behavior potentially associated with CVE-2026-55010. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte Minecraft Bedrock Dedicated Server lan\u00e7ant un shell, un moteur de script ou un utilitaire de t\u00e9l\u00e9chargement, signe post-exploitation haute confiance potentiellement associ\u00e9 \u00e0 CVE-2026-55010. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Minecraft Bedrock Dedicated Server spawning a shell, script host, or download utility, indicating high-confidence post-exploitation behavior potentially associated with CVE-2026-55010. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte Minecraft Bedrock Dedicated Server lan\u00e7ant un shell, un moteur de script ou un utilitaire de t\u00e9l\u00e9chargement, signe post-exploitation haute confiance potentiellement associ\u00e9 \u00e0 CVE-2026-55010. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -3426,7 +3560,7 @@
     "channel": [
       "Security"
     ],
-    "description": "IIS worker spawning shell or LOLBin with exploit indicators; high-confidence CVE-2026-20947 post-exploitation signal. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte le processus worker IIS de SharePoint lan\u00e7ant un shell ou un LOLBin avec des indicateurs d\u2019exploitation, signal post-exploitation \u00e0 haut niveau de confiance compatible avec la CVE-2026-20947. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, la ligne de commande, l\u2019utilisateur, le site SharePoint et l\u2019activit\u00e9 r\u00e9seau ou fichier suivante.\n",
+    "description": "IIS worker spawning shell or LOLBin with exploit indicators; high-confidence CVE-2026-20947 post-exploitation signal. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte le processus worker IIS de SharePoint lan\u00e7ant un shell ou un LOLBin avec des indicateurs d\u2019exploitation, signal post-exploitation \u00e0 haut niveau de confiance compatible avec la CVE-2026-20947. Le SOC L1 doit v\u00e9rifier le parent, l\u2019enfant, la ligne de commande, l\u2019utilisateur, le site SharePoint et l\u2019activit\u00e9 r\u00e9seau ou fichier suivante.",
     "eventid": [
       4688
     ],
@@ -3479,7 +3613,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects suspicious child processes from Office apps, targeting post-exploitation behaviors from CVE-2026-20957 Excel integer underflow RCE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution de processus enfants suspects par la suite Microsoft Office. Cible sp\u00e9cifiquement les comportements post-exploitation de CVE-2026-20957 (RCE via integer underflow Excel). Niveau critical justifi\u00e9 par la combinaison parent Office + LOLBin + indicateurs CLI d'obfuscation/download. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious child processes from Office apps, targeting post-exploitation behaviors from CVE-2026-20957 Excel integer underflow RCE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'ex\u00e9cution de processus enfants suspects par la suite Microsoft Office. Cible sp\u00e9cifiquement les comportements post-exploitation de CVE-2026-20957 (RCE via integer underflow Excel). Niveau critical justifi\u00e9 par la combinaison parent Office + LOLBin + indicateurs CLI d'obfuscation/download. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],
@@ -3523,7 +3657,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Alerts when an svchost.exe process identified as hosting IKEEXT launches an interpreter, built-in administration utility, or network utility with encoded-execution, reverse-shell, or payload-retrieval arguments. This is a high-confidence post-exploitation pattern consistent with CVE-2026-33824 and indicates probable code execution, although an explicitly authorized diagnostic may match. SOC L1 should verify the IKEEXT parent-service context, child image and command line, initiating user, related outbound connections, and downloaded files, then isolate and escalate the host if the activity is not authorized.\nD\u00e9clenche une alerte lorsqu\u2019un processus svchost.exe identifi\u00e9 comme h\u00e9bergeant IKEEXT lance un interpr\u00e9teur, un utilitaire d\u2019administration int\u00e9gr\u00e9 ou un outil r\u00e9seau avec des arguments d\u2019ex\u00e9cution encod\u00e9e, de reverse shell ou de r\u00e9cup\u00e9ration de charge utile. Il s\u2019agit d\u2019un sch\u00e9ma de post-exploitation \u00e0 haute confiance compatible avec la CVE-2026-33824 et indiquant une ex\u00e9cution de code probable, bien qu\u2019un diagnostic explicitement autoris\u00e9 puisse correspondre. Le SOC L1 doit v\u00e9rifier le contexte du service parent IKEEXT, l\u2019image et la ligne de commande du processus enfant, l\u2019utilisateur \u00e0 l\u2019origine de l\u2019activit\u00e9, les connexions sortantes associ\u00e9es et les fichiers t\u00e9l\u00e9charg\u00e9s, puis isoler et escalader l\u2019h\u00f4te si l\u2019activit\u00e9 n\u2019est pas autoris\u00e9e.\n",
+    "description": "Alerts when an svchost.exe process identified as hosting IKEEXT launches an interpreter, built-in administration utility, or network utility with encoded-execution, reverse-shell, or payload-retrieval arguments. This is a high-confidence post-exploitation pattern consistent with CVE-2026-33824 and indicates probable code execution, although an explicitly authorized diagnostic may match. SOC L1 should verify the IKEEXT parent-service context, child image and command line, initiating user, related outbound connections, and downloaded files, then isolate and escalate the host if the activity is not authorized. D\u00e9clenche une alerte lorsqu\u2019un processus svchost.exe identifi\u00e9 comme h\u00e9bergeant IKEEXT lance un interpr\u00e9teur, un utilitaire d\u2019administration int\u00e9gr\u00e9 ou un outil r\u00e9seau avec des arguments d\u2019ex\u00e9cution encod\u00e9e, de reverse shell ou de r\u00e9cup\u00e9ration de charge utile. Il s\u2019agit d\u2019un sch\u00e9ma de post-exploitation \u00e0 haute confiance compatible avec la CVE-2026-33824 et indiquant une ex\u00e9cution de code probable, bien qu\u2019un diagnostic explicitement autoris\u00e9 puisse correspondre. Le SOC L1 doit v\u00e9rifier le contexte du service parent IKEEXT, l\u2019image et la ligne de commande du processus enfant, l\u2019utilisateur \u00e0 l\u2019origine de l\u2019activit\u00e9, les connexions sortantes associ\u00e9es et les fichiers t\u00e9l\u00e9charg\u00e9s, puis isoler et escalader l\u2019h\u00f4te si l\u2019activit\u00e9 n\u2019est pas autoris\u00e9e.",
     "eventid": [
       4688
     ],
@@ -3575,7 +3709,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects IIS, PHP-CGI or PHP runtime processes on Windows spawning command shells or common post-exploitation tools, consistent with command execution through the plugin webshell dropped after CVE-2026-63030 / CVE-2026-60137 (wp2shell) exploitation on Windows/IIS-hosted WordPress. Confirmation signal on a different surface than the web-layer rule. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte IIS, php-cgi.exe ou php.exe lan\u00e7ant cmd.exe, PowerShell ou des outils de post-exploitation sur Windows, coh\u00e9rent avec l'ex\u00e9cution de commande via le webshell plugin d\u00e9pos\u00e9 apr\u00e8s exploitation de CVE-2026-63030 / CVE-2026-60137 (wp2shell) sur un WordPress h\u00e9berg\u00e9 sous Windows/IIS. Couvre l'angle mort des h\u00e9bergements Windows non couvert par la r\u00e8gle Linux. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects IIS, PHP-CGI or PHP runtime processes on Windows spawning command shells or common post-exploitation tools, consistent with command execution through the plugin webshell dropped after CVE-2026-63030 / CVE-2026-60137 (wp2shell) exploitation on Windows/IIS-hosted WordPress. Confirmation signal on a different surface than the web-layer rule. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte IIS, php-cgi.exe ou php.exe lan\u00e7ant cmd.exe, PowerShell ou des outils de post-exploitation sur Windows, coh\u00e9rent avec l'ex\u00e9cution de commande via le webshell plugin d\u00e9pos\u00e9 apr\u00e8s exploitation de CVE-2026-63030 / CVE-2026-60137 (wp2shell) sur un WordPress h\u00e9berg\u00e9 sous Windows/IIS. Couvre l'angle mort des h\u00e9bergements Windows non couvert par la r\u00e8gle Linux. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [
       4688
     ],

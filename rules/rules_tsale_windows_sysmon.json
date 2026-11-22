@@ -47,7 +47,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "MOVEit is affected by a critical vulnerability. Exploited hosts show evidence of dynamically compliling a DLL and writing it under  C:\\\\Windows\\\\Microsoft\\.NET\\\\Framework64\\\\v4\\.0\\.30319\\\\Temporary ASP\\.NET Files\\\\root\\\\([a-z0-9]{5,12})\\\\([a-z0-9]{5,12})\\\\App_Web_[a-z0-9]{5,12}\\.dll.\nHunting Opportunity ---\nEvents from IIS dynamically compiling binaries via the csc.exe on behalf of the MOVEit application, especially since May 27th should be investigated.\n",
+    "description": "MOVEit is affected by a critical vulnerability. Exploited hosts show evidence of dynamically compliling a DLL and writing it under  C:\\\\Windows\\\\Microsoft\\.NET\\\\Framework64\\\\v4\\.0\\.30319\\\\Temporary ASP\\.NET Files\\\\root\\\\([a-z0-9]{5,12})\\\\([a-z0-9]{5,12})\\\\App_Web_[a-z0-9]{5,12}\\.dll. Hunting Opportunity --- Events from IIS dynamically compiling binaries via the csc.exe on behalf of the MOVEit application, especially since May 27th should be investigated.",
     "eventid": [
       1
     ],
@@ -89,7 +89,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the use of MeshAgent to execute commands on the target host, particularly when threat actors might abuse it to execute commands directly.\nMeshAgent can execute commands on the target host by leveraging win-console to obscure their activities and win-dispatcher to run malicious code through IPC with child processes.\n",
+    "description": "Detects the use of MeshAgent to execute commands on the target host, particularly when threat actors might abuse it to execute commands directly. MeshAgent can execute commands on the target host by leveraging win-console to obscure their activities and win-dispatcher to run malicious code through IPC with child processes.",
     "eventid": [
       1
     ],
@@ -130,7 +130,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the subvert execution of malicious payloads using vsdiagnostics.exe. VSDiagnostics.exe is an executable part of the Microsoft Visual Studio. Threat actors can use the start to start a new session in combination with the /launch and /launchargs parameters to execute a malicious payload on disk.\n",
+    "description": "Detects the subvert execution of malicious payloads using vsdiagnostics.exe. VSDiagnostics.exe is an executable part of the Microsoft Visual Studio. Threat actors can use the start to start a new session in combination with the /launch and /launchargs parameters to execute a malicious payload on disk.",
     "eventid": [
       1
     ],
@@ -212,7 +212,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Action1 is a powerful Remote Monitoring and Management tool that enables users to execute commands, scripts, and binaries. Through the web interface of action1,   the administrator must create a new policy or an app to establish remote execution and then points that the agent is installed. \nHunting Opportunity 1- Weed Out The Noise --- When threat actors execute a script, a command, or a binary through these new policies and apps, the names of these become visible in the command line during the execution process.  Below is an example of the command line that contains the deployment of a binary through  a policy with name \"test_app_1\":\nParentCommandLine: \"C:\\WINDOWS\\Action1\\action1_agent.exe schedule:Deploy_App__test_app_1_1681327673425 runaction:0\"\n\nAfter establishing a baseline, we can split the command to extract the policy name and group all the policy names and inspect the results with a list of frequency occurrences.  An example query of this in Splunk could be: \nIndex=\"<myindex>\" source=\"<mysource>\" Image=\"*\\action1_agent.exe\" ParentCommandLine=\"*runaction:0\" | rex field=ParentCommandLine \"(?<=Deploy_App__)(?<AppName>.*(?=(\\_1)))\"\n\nHunting Opportunity 2 - Remote Sessions On Out Of Office Hours ---- If you have admins within your environment using remote sessions to administer endpoints, you can create a threat-hunting query and modify the time of the initiated sessions looking for abnormal activity. \n",
+    "description": "Action1 is a powerful Remote Monitoring and Management tool that enables users to execute commands, scripts, and binaries. Through the web interface of action1,   the administrator must create a new policy or an app to establish remote execution and then points that the agent is installed. Hunting Opportunity 1- Weed Out The Noise --- When threat actors execute a script, a command, or a binary through these new policies and apps, the names of these become visible in the command line during the execution process.  Below is an example of the command line that contains the deployment of a binary through  a policy with name \"test_app_1\": ParentCommandLine: \"C:\\WINDOWS\\Action1\\action1_agent.exe schedule:Deploy_App__test_app_1_1681327673425 runaction:0\" After establishing a baseline, we can split the command to extract the policy name and group all the policy names and inspect the results with a list of frequency occurrences.  An example query of this in Splunk could be: Index=\"<myindex>\" source=\"<mysource>\" Image=\"*\\action1_agent.exe\" ParentCommandLine=\"*runaction:0\" | rex field=ParentCommandLine \"(?<=Deploy_App__)(?<AppName>.*(?=(\\_1)))\" Hunting Opportunity 2 - Remote Sessions On Out Of Office Hours ---- If you have admins within your environment using remote sessions to administer endpoints, you can create a threat-hunting query and modify the time of the initiated sessions looking for abnormal activity.",
     "eventid": [
       1
     ],
@@ -1215,8 +1215,10 @@
     "channel": [
       "Security"
     ],
-    "description": "'This technique is to detect exploitation chain of CVE-2021-42287 (samAccountName Spoofing) and CVE-2021-42278 (Domain Controller Impersonation).  It is looking into event 4781 for evidence of a new computer account creation and account rename that matches the name of a domain controller account without ending in \"$\". Computer account names always end with `$` and a change like this is highly unusual. \nImmediately after the 4781 event, a Kerberos Ticket Granting Ticket (TGT) must be requested on behalf of the newly created and renamed computer account. A computer account name event will occur before this TGT request.\nPutting everything together, we may use events 4781 and 4768 to look for a series of events in which the new computer account on event 4781 matches the requested account on event 4768.\nNOTE-- On selection2, the `TargetUserName` should equal to `NewTargetUserName`. I have left it as a placeholder but this should change dependingon the backend you are translating the query to.\nSplunk Example-- `| eval RenamedComputerAccount = coalesce(New_Account_Name, mvindex(Account_Name,0))  | transaction RenamedComputerAccount endswith=(EventCode=4781)`'\n",
-    "eventid": [],
+    "description": "'This technique is to detect exploitation chain of CVE-2021-42287 (samAccountName Spoofing) and CVE-2021-42278 (Domain Controller Impersonation).  It is looking into event 4781 for evidence of a new computer account creation and account rename that matches the name of a domain controller account without ending in \"$\". Computer account names always end with `$` and a change like this is highly unusual. Immediately after the 4781 event, a Kerberos Ticket Granting Ticket (TGT) must be requested on behalf of the newly created and renamed computer account. A computer account name event will occur before this TGT request. Putting everything together, we may use events 4781 and 4768 to look for a series of events in which the new computer account on event 4781 matches the requested account on event 4768. NOTE-- On selection2, the `TargetUserName` should equal to `NewTargetUserName`. I have left it as a placeholder but this should change dependingon the backend you are translating the query to. Splunk Example-- `| eval RenamedComputerAccount = coalesce(New_Account_Name, mvindex(Account_Name,0))  | transaction RenamedComputerAccount endswith=(EventCode=4781)`'",
+    "eventid": [
+      4781
+    ],
     "falsepositives": [
       "Uknown"
     ],
@@ -1591,8 +1593,10 @@
     "channel": [
       "Security"
     ],
-    "description": "Identify LAPS credential dumping by looking for users accessing objects via Event ID 4662, and login authentication events via Event ID 4624. The two events must contain the same LogonID to track the same logon session.\nNOTE - The TargetLogonId has to match the SubjectLogonId. Not sure how to implement the logic using sigma, so I have left it as a placeholder. Make sure to change it depending on the SIEM you are using.",
-    "eventid": [],
+    "description": "Identify LAPS credential dumping by looking for users accessing objects via Event ID 4662, and login authentication events via Event ID 4624. The two events must contain the same LogonID to track the same logon session. NOTE - The TargetLogonId has to match the SubjectLogonId. Not sure how to implement the logic using sigma, so I have left it as a placeholder. Make sure to change it depending on the SIEM you are using.",
+    "eventid": [
+      4662
+    ],
     "falsepositives": [
       "Uknown"
     ],

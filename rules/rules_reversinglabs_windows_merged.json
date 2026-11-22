@@ -279,49 +279,7 @@
       "attack.impact",
       "attack.t1491"
     ],
-    "title": "Set Black Basta Wallpaper Registry Key - Sysmon"
-  },
-  {
-    "author": "Aaron Hoffmann",
-    "channel": [
-      "Security"
-    ],
-    "description": "Detects setting the desktop wallpaper registry key to the Black Basta ransom note",
-    "eventid": [
-      4657
-    ],
-    "falsepositives": [
-      "Unknown"
-    ],
-    "filename": "Ransomware/BlackBasta/Sigma/registry_set_blackbasta_wallpaper.yml",
-    "id": "12ec3551-4aab-4293-bab0-2e3076480591",
-    "level": "high",
-    "license": "MIT",
-    "logsource": {
-      "product": "windows",
-      "service": "security"
-    },
-    "required_fields": [
-      "Channel",
-      "EventID",
-      "EventType",
-      "NewValue",
-      "OperationType",
-      "TargetObject"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (EventType='SetValue' AND TargetObject LIKE '%\\\\Control Panel\\\\Desktop%' ESCAPE '\\' AND NewValue LIKE '%dlaksjdoiwq.jpg%' ESCAPE '\\'))"
-    ],
-    "schema_version": 2,
-    "source": "reversinglabs",
-    "source_table": "logs",
-    "status": "experimental",
-    "tags": [
-      "attack.impact",
-      "attack.t1491"
-    ],
-    "title": "Set Black Basta Wallpaper Registry Key - Generic"
+    "title": "Set Black Basta Wallpaper Registry Key"
   },
   {
     "author": "Aaron Hoffmann",
@@ -363,49 +321,7 @@
       "attack.execution",
       "attack.t1112"
     ],
-    "title": "Set Black Basta Default Icon Registry Key - Sysmon"
-  },
-  {
-    "author": "Aaron Hoffmann",
-    "channel": [
-      "Security"
-    ],
-    "description": "Detects setting the value for the registry key made by Black Basta ransomware that associates an icon with the .basta extension (V1) or the generated 9-character alphanumeric extension (V2) for encrypted files",
-    "eventid": [
-      4657
-    ],
-    "falsepositives": [
-      "Unknown"
-    ],
-    "filename": "Ransomware/BlackBasta/Sigma/registry_set_blackbasta_default_icon.yml",
-    "id": "bed401d0-0cf6-4628-9f13-80a4c6d7b6e6",
-    "level": "high",
-    "license": "MIT",
-    "logsource": {
-      "product": "windows",
-      "service": "security"
-    },
-    "required_fields": [
-      "Channel",
-      "EventID",
-      "EventType",
-      "NewValue",
-      "OperationType",
-      "TargetObject"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (EventType='SetValue' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\%' ESCAPE '\\' AND TargetObject LIKE '%DefaultIcon' ESCAPE '\\' AND NewValue LIKE '\\%\\\\AppData\\\\Local\\\\Temp\\\\fkdjsadasd.ico' ESCAPE '\\'))"
-    ],
-    "schema_version": 2,
-    "source": "reversinglabs",
-    "source_table": "logs",
-    "status": "experimental",
-    "tags": [
-      "attack.execution",
-      "attack.t1112"
-    ],
-    "title": "Set Black Basta Default Icon Registry Key - Generic"
+    "title": "Set Black Basta Default Icon Registry Key"
   },
   {
     "author": "Aaron Hoffmann",
@@ -436,7 +352,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (EventType='CreateKey' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\.quantum%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 AND EventType='CreateKey') AND (EventType='CreateKey' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\.quantum%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "reversinglabs",
@@ -446,47 +362,6 @@
       "attack.execution",
       "attack.t1112"
     ],
-    "title": "Set QuantumLocker file extension registry key - Sysmon"
-  },
-  {
-    "author": "Aaron Hoffmann",
-    "channel": [
-      "Security"
-    ],
-    "description": "Detects adding the registry key made by QuantumLocker that associates the .quantum file extension",
-    "eventid": [
-      4657
-    ],
-    "falsepositives": [
-      "Unknown"
-    ],
-    "filename": "Ransomware/QuantumLocker/Sigma/registry_set_quantumlocker_extension.yml",
-    "id": "eb00c536-6416-4237-9dbe-f25c21c8ba36",
-    "level": "high",
-    "license": "MIT",
-    "logsource": {
-      "product": "windows",
-      "service": "security"
-    },
-    "required_fields": [
-      "Channel",
-      "EventID",
-      "EventType",
-      "OperationType",
-      "TargetObject"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='New registry value created') AND (EventType='CreateKey' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\.quantum%' ESCAPE '\\'))"
-    ],
-    "schema_version": 2,
-    "source": "reversinglabs",
-    "source_table": "logs",
-    "status": "experimental",
-    "tags": [
-      "attack.execution",
-      "attack.t1112"
-    ],
-    "title": "Set QuantumLocker file extension registry key - Generic"
+    "title": "Set QuantumLocker file extension registry key"
   }
 ]

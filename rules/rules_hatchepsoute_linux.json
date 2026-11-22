@@ -2,7 +2,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects Linux process termination and core-dump indicators used only as a supporting event for CVE-2026-39113 correlation. This event alone is low confidence and must not be interpreted as evidence of SQLite exploitation. It should be correlated with a suspicious SQLAR decompression request from the same host and process.\nD\u00e9tecte des indicateurs Linux de terminaison de processus et de core dump utilis\u00e9s uniquement comme \u00e9v\u00e9nement de support pour la corr\u00e9lation CVE-2026-39113. Cet \u00e9v\u00e9nement seul est de faible confiance et ne doit pas \u00eatre interpr\u00e9t\u00e9 comme une preuve d'exploitation de SQLite. Il doit \u00eatre corr\u00e9l\u00e9 avec une requ\u00eate suspecte de d\u00e9compression SQLAR provenant du m\u00eame h\u00f4te et du m\u00eame processus.\n",
+    "description": "Detects Linux process termination and core-dump indicators used only as a supporting event for CVE-2026-39113 correlation. This event alone is low confidence and must not be interpreted as evidence of SQLite exploitation. It should be correlated with a suspicious SQLAR decompression request from the same host and process. D\u00e9tecte des indicateurs Linux de terminaison de processus et de core dump utilis\u00e9s uniquement comme \u00e9v\u00e9nement de support pour la corr\u00e9lation CVE-2026-39113. Cet \u00e9v\u00e9nement seul est de faible confiance et ne doit pas \u00eatre interpr\u00e9t\u00e9 comme une preuve d'exploitation de SQLite. Il doit \u00eatre corr\u00e9l\u00e9 avec une requ\u00eate suspecte de d\u00e9compression SQLAR provenant du m\u00eame h\u00f4te et du m\u00eame processus.",
     "eventid": [],
     "falsepositives": [
       "Ordinary application crashes unrelated to SQLite",
@@ -37,7 +37,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects execution or compilation artifacts containing multiple public GhostLock CVE-2026-43499 exploit-chain indicators. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution ou la compilation d'artefacts contenant le nom GhostLock ou plusieurs indicateurs techniques de la cha\u00eene d'exploitation publique de CVE-2026-43499. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects execution or compilation artifacts containing multiple public GhostLock CVE-2026-43499 exploit-chain indicators. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'ex\u00e9cution ou la compilation d'artefacts contenant le nom GhostLock ou plusieurs indicateurs techniques de la cha\u00eene d'exploitation publique de CVE-2026-43499. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized kernel vulnerability research using public GhostLock artifacts outside approved lab paths",
@@ -74,7 +74,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects smb.conf enabling wins support and a wins hook, exposing the host to CVE-2025-10230 unauthenticated RCE. SUPPORT rule. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte smb.conf activant wins support et wins hook, exposant l'h\u00f4te \u00e0 CVE-2025-10230 (RCE non authentifi\u00e9e). R\u00e8gle SUPPORT : d\u00e9tecte l'\u00e9tat de configuration vuln\u00e9rable, pas l'exploitation active. NOTE D\u00c9PLOIEMENT : n\u00e9cessite un agent de surveillance de contenu de fichier (Wazuh FIM avec diff de contenu, OSSEC ou pipeline d'audit de configuration). V\u00e9rifier la disponibilit\u00e9 du champ FileContent avant d\u00e9ploiement. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects smb.conf enabling wins support and a wins hook, exposing the host to CVE-2025-10230 unauthenticated RCE. SUPPORT rule. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte smb.conf activant wins support et wins hook, exposant l'h\u00f4te \u00e0 CVE-2025-10230 (RCE non authentifi\u00e9e). R\u00e8gle SUPPORT : d\u00e9tecte l'\u00e9tat de configuration vuln\u00e9rable, pas l'exploitation active. NOTE D\u00c9PLOIEMENT : n\u00e9cessite un agent de surveillance de contenu de fichier (Wazuh FIM avec diff de contenu, OSSEC ou pipeline d'audit de configuration). V\u00e9rifier la disponibilit\u00e9 du champ FileContent avant d\u00e9ploiement. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Configuration changes during authorized maintenance or testing (verify with change ticket)",
@@ -111,7 +111,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects suspicious shell or interpreter spawning download/exec tools on BeyondTrust appliances, indicating CVE-2026-1731 post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un shell ou interpr\u00e9teur lan\u00e7ant des outils de t\u00e9l\u00e9chargement/ex\u00e9cution sur les appliances BeyondTrust. Indicateur d'exploitation r\u00e9ussie de CVE-2026-1731. R\u00e8gle BROAD. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious shell or interpreter spawning download/exec tools on BeyondTrust appliances, indicating CVE-2026-1731 post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un shell ou interpr\u00e9teur lan\u00e7ant des outils de t\u00e9l\u00e9chargement/ex\u00e9cution sur les appliances BeyondTrust. Indicateur d'exploitation r\u00e9ussie de CVE-2026-1731. R\u00e8gle BROAD. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Vendor maintenance sessions",
@@ -149,7 +149,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a browser or desktop launcher starting Konsole with a telnet, rlogin, or ssh URL, a suspicious precursor to CVE-2025-49091 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte le lancement de Konsole par un navigateur ou un lanceur de bureau avec une URL telnet, rlogin ou ssh, pr\u00e9curseur suspect de l\u2019exploitation de CVE-2025-49091. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a browser or desktop launcher starting Konsole with a telnet, rlogin, or ssh URL, a suspicious precursor to CVE-2025-49091 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte le lancement de Konsole par un navigateur ou un lanceur de bureau avec une URL telnet, rlogin ou ssh, pr\u00e9curseur suspect de l\u2019exploitation de CVE-2025-49091. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized users opening SSH links from a trusted internal documentation portal",
@@ -188,7 +188,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects frpc or frps execution on Linux, post-exploitation C2 tunneling tool abused in Sliver campaign. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution du binaire FRP (Fast Reverse Proxy) client (frpc) ou serveur (frps) sur Linux. FRP est un outil l\u00e9gitime open-source fr\u00e9quemment abus\u00e9 en post-exploitation pour le tunneling C2 et le contournement de firewall. La d\u00e9tection bas\u00e9e sur l'image \u00e9vite les faux positifs de sous-cha\u00eene (xfrpc, ifrpc). frps est aussi suspect sur un h\u00f4te compromis. Le filtre filter_authorized_vpn exclut les chemins d'installation l\u00e9gitimes connus. ANGLE MORT : si frpc est renomm\u00e9 ou ex\u00e9cut\u00e9 depuis un chemin personnalis\u00e9 non couvert par filter_authorized_vpn, la r\u00e8gle d\u00e9clenche (FP l\u00e9gitime possible). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects frpc or frps execution on Linux, post-exploitation C2 tunneling tool abused in Sliver campaign. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'ex\u00e9cution du binaire FRP (Fast Reverse Proxy) client (frpc) ou serveur (frps) sur Linux. FRP est un outil l\u00e9gitime open-source fr\u00e9quemment abus\u00e9 en post-exploitation pour le tunneling C2 et le contournement de firewall. La d\u00e9tection bas\u00e9e sur l'image \u00e9vite les faux positifs de sous-cha\u00eene (xfrpc, ifrpc). frps est aussi suspect sur un h\u00f4te compromis. Le filtre filter_authorized_vpn exclut les chemins d'installation l\u00e9gitimes connus. ANGLE MORT : si frpc est renomm\u00e9 ou ex\u00e9cut\u00e9 depuis un chemin personnalis\u00e9 non couvert par filter_authorized_vpn, la r\u00e8gle d\u00e9clenche (FP l\u00e9gitime possible). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized remote maintenance using FRP in enterprise VPN infrastructure (filter by Image path via filter_authorized_vpn)",
@@ -227,7 +227,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a PHP runtime or PHP-FPM worker crash, abort, or restart message that may follow a suspicious multipart request. This is an early-warning signal for PHP2Shell-like memory corruption, but it does not prove exploitation because malformed uploads, resource exhaustion, and ordinary service failures can produce the same messages. SOC L1 should correlate the event with web requests, PHP version, worker reuse, process creation, and outbound connections.\nD\u00e9tecte un crash, un abandon ou un red\u00e9marrage d\u2019un runtime PHP ou d\u2019un worker PHP-FPM pouvant suivre une requ\u00eate multipart suspecte. Il s\u2019agit d\u2019un signal d\u2019alerte pr\u00e9coce compatible avec une corruption m\u00e9moire de type PHP2Shell, mais il ne prouve pas une exploitation, car des uploads malform\u00e9s, une saturation de ressources ou une panne ordinaire peuvent produire les m\u00eames messages. Le SOC L1 doit corr\u00e9ler l\u2019\u00e9v\u00e9nement avec les requ\u00eates web, la version de PHP, la r\u00e9utilisation du worker, la cr\u00e9ation de processus et les connexions sortantes.\n",
+    "description": "Detects a PHP runtime or PHP-FPM worker crash, abort, or restart message that may follow a suspicious multipart request. This is an early-warning signal for PHP2Shell-like memory corruption, but it does not prove exploitation because malformed uploads, resource exhaustion, and ordinary service failures can produce the same messages. SOC L1 should correlate the event with web requests, PHP version, worker reuse, process creation, and outbound connections. D\u00e9tecte un crash, un abandon ou un red\u00e9marrage d\u2019un runtime PHP ou d\u2019un worker PHP-FPM pouvant suivre une requ\u00eate multipart suspecte. Il s\u2019agit d\u2019un signal d\u2019alerte pr\u00e9coce compatible avec une corruption m\u00e9moire de type PHP2Shell, mais il ne prouve pas une exploitation, car des uploads malform\u00e9s, une saturation de ressources ou une panne ordinaire peuvent produire les m\u00eames messages. Le SOC L1 doit corr\u00e9ler l\u2019\u00e9v\u00e9nement avec les requ\u00eates web, la version de PHP, la r\u00e9utilisation du worker, la cr\u00e9ation de processus et les connexions sortantes.",
     "eventid": [],
     "falsepositives": [
       "Planned PHP service maintenance or package upgrades",
@@ -272,7 +272,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects local compilation or execution of libssh2 CVE-2026-55200 exploit probes, including public C PoC staging patterns. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte la compilation ou l execution locale d outillage CVE-2026-55200 contre libssh2. Le challenge du PoC 0xBlackash montre qu une fois compile et renomme, le binaire peut ne garder aucun argument CVE visible. Cette regle BROAD couvre donc les artefacts de staging observables : noms de fichiers CVE, constantes du code C, compilation avec pthread/socket server, longueur 0xffffffff/4294967295 et bannieres SSH malveillantes lorsque ces chaines apparaissent dans les commandes de build, grep, strings, tests ou harness. Les shells generiques sont exclus du scope BROAD afin d eviter de doublonner ou bruiter les alertes post-exploitation. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects local compilation or execution of libssh2 CVE-2026-55200 exploit probes, including public C PoC staging patterns. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte la compilation ou l execution locale d outillage CVE-2026-55200 contre libssh2. Le challenge du PoC 0xBlackash montre qu une fois compile et renomme, le binaire peut ne garder aucun argument CVE visible. Cette regle BROAD couvre donc les artefacts de staging observables : noms de fichiers CVE, constantes du code C, compilation avec pthread/socket server, longueur 0xffffffff/4294967295 et bannieres SSH malveillantes lorsque ces chaines apparaissent dans les commandes de build, grep, strings, tests ou harness. Les shells generiques sont exclus du scope BROAD afin d eviter de doublonner ou bruiter les alertes post-exploitation. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized vulnerability validation in a controlled lab",
@@ -314,7 +314,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a PHP or web-server worker writing a PHP session file in a standard session directory. This may be consistent with session upload-progress or partial-session-file abuse associated with CVE-2026-115560 and CVE-2026-126714, but normal session creation also matches; SOC L1 should correlate the event with an unusual multipart request, session serializer settings, worker errors, and child-process or webshell activity.\nD\u00e9tecte un worker PHP ou un serveur web qui \u00e9crit un fichier de session PHP dans un r\u00e9pertoire de sessions standard. Cela peut \u00eatre compatible avec un abus de session upload-progress ou de fichier de session partiellement \u00e9crit associ\u00e9 \u00e0 CVE-2026-115560 et CVE-2026-126714, mais la cr\u00e9ation normale de sessions correspond aussi ; le SOC L1 doit corr\u00e9ler l\u2019\u00e9v\u00e9nement avec une requ\u00eate multipart inhabituelle, la configuration du s\u00e9rialiseur, les erreurs du worker et une activit\u00e9 de processus enfant ou de webshell.\n",
+    "description": "Detects a PHP or web-server worker writing a PHP session file in a standard session directory. This may be consistent with session upload-progress or partial-session-file abuse associated with CVE-2026-115560 and CVE-2026-126714, but normal session creation also matches; SOC L1 should correlate the event with an unusual multipart request, session serializer settings, worker errors, and child-process or webshell activity. D\u00e9tecte un worker PHP ou un serveur web qui \u00e9crit un fichier de session PHP dans un r\u00e9pertoire de sessions standard. Cela peut \u00eatre compatible avec un abus de session upload-progress ou de fichier de session partiellement \u00e9crit associ\u00e9 \u00e0 CVE-2026-115560 et CVE-2026-126714, mais la cr\u00e9ation normale de sessions correspond aussi ; le SOC L1 doit corr\u00e9ler l\u2019\u00e9v\u00e9nement avec une requ\u00eate multipart inhabituelle, la configuration du s\u00e9rialiseur, les erreurs du worker et une activit\u00e9 de processus enfant ou de webshell.",
     "eventid": [],
     "falsepositives": [
       "Normal PHP session creation and rotation",
@@ -353,7 +353,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects PoC keyword indicators, unprivileged user-namespace priming, splice/page-cache manipulation targeting sensitive files, or interpreter-spawned SUID child processes consistent with CVE-2026-43503 (DirtyClone) exploitation. Wider hunting coverage than the STRICT chain rule, intended for triage rather than direct high-confidence alerting. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects PoC keyword indicators, unprivileged user-namespace priming, splice/page-cache manipulation targeting sensitive files, or interpreter-spawned SUID child processes consistent with CVE-2026-43503 (DirtyClone) exploitation. Wider hunting coverage than the STRICT chain rule, intended for triage rather than direct high-confidence alerting. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Security research or authorized red team testing of CVE-2026-43503",
@@ -396,7 +396,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects suspicious post-exploitation command execution spawned by telnetd, consistent with CVE-2026-24061 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des ex\u00e9cutions suspectes post-exploitation spawned par telnetd, coh\u00e9rent avec l'exploitation de CVE-2026-24061. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious post-exploitation command execution spawned by telnetd, consistent with CVE-2026-24061 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des ex\u00e9cutions suspectes post-exploitation spawned par telnetd, coh\u00e9rent avec l'exploitation de CVE-2026-24061. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Very rare legacy troubleshooting via telnet involving scripted command execution",
@@ -436,7 +436,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects AF_ALG/authencesn kernel crypto API abuse, SUID binary access patterns, or interpreter-spawned SUID child processes consistent with CVE-2026-31431 Copy Fail LPE. BROAD. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des activit\u00e9s suspectes AF_ALG/authencesn ou acc\u00e8s aux binaires SUID potentiellement li\u00e9s \u00e0 CVE-2026-31431 (Copy Fail LPE). Inclut les PoC, sockets AF_ALG, manipulations splice/page-cache, acc\u00e8s \u00e0 /etc/passwd. sendfile() inclus comme alternative \u00e0 splice() dans certaines variantes de l'exploit. R\u00e8gle BROAD. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects AF_ALG/authencesn kernel crypto API abuse, SUID binary access patterns, or interpreter-spawned SUID child processes consistent with CVE-2026-31431 Copy Fail LPE. BROAD. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des activit\u00e9s suspectes AF_ALG/authencesn ou acc\u00e8s aux binaires SUID potentiellement li\u00e9s \u00e0 CVE-2026-31431 (Copy Fail LPE). Inclut les PoC, sockets AF_ALG, manipulations splice/page-cache, acc\u00e8s \u00e0 /etc/passwd. sendfile() inclus comme alternative \u00e0 splice() dans certaines variantes de l'exploit. R\u00e8gle BROAD. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Security research or authorized red team testing",
@@ -479,7 +479,51 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "High-confidence CVE-2026-31431 Copy Fail LPE chain: interpreter process running from a temporary path spawns a SUID binary (su, sudo, pkexec), or a compiled binary from a temporary path invokes a SUID binary after a privilege transition signal. Previous condition required all kernel API names (AF_ALG, splice) simultaneously in a single CommandLine, which is structurally unreachable. Fixed to use observable parent-child process relationships instead. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cha\u00eene d'exploitation haute confiance de CVE-2026-31431 (Copy Fail LPE) via les relations parent-enfant observables : un interpr\u00e9teur lanc\u00e9 depuis un r\u00e9pertoire temporaire spawne un binaire SUID, ou un binaire compil\u00e9 depuis /tmp invoque un binaire SUID avec transition de privil\u00e8ges. La condition pr\u00e9c\u00e9dente exigeait AF_ALG + splice + /etc/passwd dans la m\u00eame CommandLine - structurellement impossible. Corrig\u00e9. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects an EPMM Tomcat or Java context creating a server-side script or spawning a shell or network utility, consistent with post-exploitation after CVE-2023-35078/35081. This endpoint signal is stronger than an isolated web request but does not establish the vulnerability as the cause; SOC L1 should correlate the host, preceding EPMM requests, file content, and outbound connections. D\u00e9tecte un contexte Tomcat ou Java d\u2019EPMM qui cr\u00e9e un script c\u00f4t\u00e9 serveur ou lance un shell ou un outil r\u00e9seau, ce qui est compatible avec une post-exploitation apr\u00e8s CVE-2023-35078/35081. Ce signal endpoint est plus fort qu\u2019une requ\u00eate web isol\u00e9e mais n\u2019\u00e9tablit pas que la vuln\u00e9rabilit\u00e9 en est la cause ; le SOC L1 doit corr\u00e9ler l\u2019h\u00f4te, les requ\u00eates EPMM pr\u00e9c\u00e9dentes, le contenu du fichier et les connexions sortantes.",
+    "eventid": [
+      1,
+      11
+    ],
+    "falsepositives": [
+      "Approved EPMM maintenance or vendor upgrade that launches a shell or writes a deployment artifact; allowlist the signed maintenance job and exact path",
+      "Normal Java compilation or deployment in a documented staging environment"
+    ],
+    "filename": "CVE-2023-35078_35081_Ivanti_EPMM/rules/ivanti_epmm_cve_2023_35078_35081_post_exploitation_strict.yml",
+    "id": "04e91a79-b0ed-43fc-a6af-1ce0e1c4a6cb",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "linux"
+    },
+    "required_fields": [
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (EventID=1 AND ((ParentImage LIKE '%/java' ESCAPE '\\' OR ParentImage LIKE '%/java.real' ESCAPE '\\' OR ParentImage LIKE '%/tomcat' ESCAPE '\\' OR ParentImage LIKE '%/jsvc' ESCAPE '\\') AND (ParentCommandLine LIKE '%tomcat%' ESCAPE '\\' OR ParentCommandLine LIKE '%mifs%' ESCAPE '\\' OR ParentCommandLine LIKE '%mobileiron%' ESCAPE '\\' OR ParentCommandLine LIKE '%epmm%' ESCAPE '\\')) AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\')) OR (EventID=11 AND (Image LIKE '%/java' ESCAPE '\\' OR Image LIKE '%/java.real' ESCAPE '\\' OR Image LIKE '%/tomcat' ESCAPE '\\' OR Image LIKE '%/jsvc' ESCAPE '\\') AND ((TargetFilename LIKE '%/webapps/%' ESCAPE '\\' OR TargetFilename LIKE '%/mifs/%' ESCAPE '\\') AND (TargetFilename LIKE '%.jsp' ESCAPE '\\' OR TargetFilename LIKE '%.jspx' ESCAPE '\\' OR TargetFilename LIKE '%.war' ESCAPE '\\' OR TargetFilename LIKE '%.class' ESCAPE '\\' OR TargetFilename LIKE '%.jspf' ESCAPE '\\')) AND (NOT COALESCE((TargetFilename LIKE '%/work/Catalina/%' ESCAPE '\\' OR TargetFilename LIKE '%/temp/%' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.persistence",
+      "attack.t1505.003",
+      "cve.2023-35078",
+      "cve.2023-35081"
+    ],
+    "title": "Ivanti EPMM Web Application Post-Exploitation Artifact or Child Process - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "High-confidence CVE-2026-31431 Copy Fail LPE chain: interpreter process running from a temporary path spawns a SUID binary (su, sudo, pkexec), or a compiled binary from a temporary path invokes a SUID binary after a privilege transition signal. Previous condition required all kernel API names (AF_ALG, splice) simultaneously in a single CommandLine, which is structurally unreachable. Fixed to use observable parent-child process relationships instead. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte la cha\u00eene d'exploitation haute confiance de CVE-2026-31431 (Copy Fail LPE) via les relations parent-enfant observables : un interpr\u00e9teur lanc\u00e9 depuis un r\u00e9pertoire temporaire spawne un binaire SUID, ou un binaire compil\u00e9 depuis /tmp invoque un binaire SUID avec transition de privil\u00e8ges. La condition pr\u00e9c\u00e9dente exigeait AF_ALG + splice + /etc/passwd dans la m\u00eame CommandLine - structurellement impossible. Corrig\u00e9. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized exploit validation in lab environments - suppress by source user or window in SIEM",
@@ -525,7 +569,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects suspicious child process execution (shell, interpreter, network tool) spawned under the Ivanti Connect Secure web process context, consistent with post-exploitation following CVE-2025-22457 stack overflow RCE (CVSS 9.0, exploited by UNC5221). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution de processus enfants suspects (shell, interpr\u00e9teur, outil r\u00e9seau) lanc\u00e9s depuis le contexte du processus web Ivanti Connect Secure, caract\u00e9ristique d'une post-exploitation suite \u00e0 CVE-2025-22457 (stack overflow RCE pr\u00e9-auth, CVSS 9.0, exploit\u00e9 par UNC5221/APT chinois). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious child process execution (shell, interpreter, network tool) spawned under the Ivanti Connect Secure web process context, consistent with post-exploitation following CVE-2025-22457 stack overflow RCE (CVSS 9.0, exploited by UNC5221). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'ex\u00e9cution de processus enfants suspects (shell, interpr\u00e9teur, outil r\u00e9seau) lanc\u00e9s depuis le contexte du processus web Ivanti Connect Secure, caract\u00e9ristique d'une post-exploitation suite \u00e0 CVE-2025-22457 (stack overflow RCE pr\u00e9-auth, CVSS 9.0, exploit\u00e9 par UNC5221/APT chinois). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Ivanti maintenance scripts that invoke shell interpreters (tune filter_main_legitimate_pulse with exact ParentCommandLine paths)",
@@ -569,7 +613,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects Konsole spawning a shell or interpreter with a user-writable script or command argument, indicating likely exploitation of CVE-2025-49091. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte Konsole lan\u00e7ant un shell ou un interpr\u00e9teur avec un script ou argument situ\u00e9 dans un emplacement contr\u00f4l\u00e9 par l\u2019utilisateur, signalant probablement le repli vuln\u00e9rable de CVE-2025-49091. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Konsole spawning a shell or interpreter with a user-writable script or command argument, indicating likely exploitation of CVE-2025-49091. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte Konsole lan\u00e7ant un shell ou un interpr\u00e9teur avec un script ou argument situ\u00e9 dans un emplacement contr\u00f4l\u00e9 par l\u2019utilisateur, signalant probablement le repli vuln\u00e9rable de CVE-2025-49091. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized security testing using a disposable lab profile",
@@ -609,7 +653,50 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a PHP or web-server runtime launching a shell or interpreter from a WordPress wp-content/upgrade staging path. The combination is highly consistent with post-exploitation of CVE-2026-119977, but process telemetry alone cannot establish the triggering request; SOC L1 should correlate the process tree with web access logs, file integrity events, outbound connections, and the installed WordPress version.\nD\u00e9tecte l\u2019ex\u00e9cution d\u2019un shell ou d\u2019un interpr\u00e9teur par un runtime PHP ou serveur web depuis un chemin de staging WordPress wp-content/upgrade. Cette combinaison est fortement coh\u00e9rente avec une post-exploitation de CVE-2026-119977, mais la t\u00e9l\u00e9m\u00e9trie processus seule ne permet pas d\u2019\u00e9tablir la requ\u00eate d\u00e9clenchante ; le SOC L1 doit corr\u00e9ler l\u2019arbre de processus avec les journaux web, les \u00e9v\u00e9nements d\u2019int\u00e9grit\u00e9 fichiers, les connexions sortantes et la version WordPress install\u00e9e.\n",
+    "description": "Detects a SAP NetWeaver Java process creating a JSP or WAR artifact in a web application path, or spawning a shell or network utility, consistent with post-exploitation after CVE-2025-31324/CVE-2025-42999. This is a high-confidence endpoint signal but requires correlation with SAP HTTP logs and does not identify the vulnerability by itself; SOC L1 should preserve the file and process ancestry. D\u00e9tecte un processus Java SAP NetWeaver qui cr\u00e9e un artefact JSP ou WAR dans un chemin d\u2019application web, ou lance un shell ou un outil r\u00e9seau, ce qui est compatible avec une post-exploitation apr\u00e8s CVE-2025-31324/CVE-2025-42999. Il s\u2019agit d\u2019un signal endpoint de haute confiance mais il doit \u00eatre corr\u00e9l\u00e9 aux journaux HTTP SAP et n\u2019identifie pas \u00e0 lui seul la vuln\u00e9rabilit\u00e9 ; le SOC L1 doit pr\u00e9server le fichier et l\u2019ascendance du processus.",
+    "eventid": [
+      1,
+      11
+    ],
+    "falsepositives": [
+      "Approved SAP deployment or kernel maintenance; allowlist the exact signed deployment job and change window"
+    ],
+    "filename": "CVE-2025-31324_42999_SAP_NetWeaver/rules/sap_netweaver_java_webshell_post_exploitation_strict.yml",
+    "id": "394c3f3e-e45a-4f24-8d1f-7b0a15d0a8d8",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "linux"
+    },
+    "required_fields": [
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (EventID=1 AND ((ParentImage LIKE '%/java' ESCAPE '\\' OR ParentImage LIKE '%/java.real' ESCAPE '\\') AND (ParentCommandLine LIKE '%sap%' ESCAPE '\\' OR ParentCommandLine LIKE '%netweaver%' ESCAPE '\\' OR ParentCommandLine LIKE '%j2ee%' ESCAPE '\\' OR ParentCommandLine LIKE '%jlaunch%' ESCAPE '\\')) AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\')) OR (EventID=11 AND (Image LIKE '%/java' ESCAPE '\\' OR Image LIKE '%/java.real' ESCAPE '\\') AND ((TargetFilename LIKE '%/j2ee/cluster/server%' ESCAPE '\\' OR TargetFilename LIKE '%/webapps/%' ESCAPE '\\' OR TargetFilename LIKE '%/sapmnt/%' ESCAPE '\\') AND (TargetFilename LIKE '%.jsp' ESCAPE '\\' OR TargetFilename LIKE '%.jspx' ESCAPE '\\' OR TargetFilename LIKE '%.war' ESCAPE '\\' OR TargetFilename LIKE '%.class' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.persistence",
+      "attack.t1505.003",
+      "cve.2025-31324",
+      "cve.2025-42999"
+    ],
+    "title": "SAP NetWeaver Java Webshell or Suspicious Child Process - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a PHP or web-server runtime launching a shell or interpreter from a WordPress wp-content/upgrade staging path. The combination is highly consistent with post-exploitation of CVE-2026-119977, but process telemetry alone cannot establish the triggering request; SOC L1 should correlate the process tree with web access logs, file integrity events, outbound connections, and the installed WordPress version. D\u00e9tecte l\u2019ex\u00e9cution d\u2019un shell ou d\u2019un interpr\u00e9teur par un runtime PHP ou serveur web depuis un chemin de staging WordPress wp-content/upgrade. Cette combinaison est fortement coh\u00e9rente avec une post-exploitation de CVE-2026-119977, mais la t\u00e9l\u00e9m\u00e9trie processus seule ne permet pas d\u2019\u00e9tablir la requ\u00eate d\u00e9clenchante ; le SOC L1 doit corr\u00e9ler l\u2019arbre de processus avec les journaux web, les \u00e9v\u00e9nements d\u2019int\u00e9grit\u00e9 fichiers, les connexions sortantes et la version WordPress install\u00e9e.",
     "eventid": [],
     "falsepositives": [
       "Authorized WordPress upgrade validation on a disposable test host",
@@ -649,7 +736,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a PHP or web-server worker spawning a shell, interpreter, downloader, or discovery utility with an execution-oriented command line. This is a high-confidence post-exploitation signal consistent with PHP2Shell but is not specific to one CVE; SOC L1 should verify the full parent chain, the originating web requests, the worker account, and any files or network connections created nearby.\nD\u00e9tecte un worker PHP ou un serveur web qui lance un shell, un interpr\u00e9teur, un outil de t\u00e9l\u00e9chargement ou un utilitaire de reconnaissance avec une ligne de commande orient\u00e9e ex\u00e9cution. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance, coh\u00e9rent avec PHP2Shell mais non sp\u00e9cifique \u00e0 un seul CVE ; le SOC L1 doit v\u00e9rifier la cha\u00eene compl\u00e8te des processus parents, les requ\u00eates web d\u2019origine, le compte du worker et les fichiers ou connexions r\u00e9seau cr\u00e9\u00e9s \u00e0 proximit\u00e9.\n",
+    "description": "Detects a PHP or web-server worker spawning a shell, interpreter, downloader, or discovery utility with an execution-oriented command line. This is a high-confidence post-exploitation signal consistent with PHP2Shell but is not specific to one CVE; SOC L1 should verify the full parent chain, the originating web requests, the worker account, and any files or network connections created nearby. D\u00e9tecte un worker PHP ou un serveur web qui lance un shell, un interpr\u00e9teur, un outil de t\u00e9l\u00e9chargement ou un utilitaire de reconnaissance avec une ligne de commande orient\u00e9e ex\u00e9cution. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance, coh\u00e9rent avec PHP2Shell mais non sp\u00e9cifique \u00e0 un seul CVE ; le SOC L1 doit v\u00e9rifier la cha\u00eene compl\u00e8te des processus parents, les requ\u00eates web d\u2019origine, le compte du worker et les fichiers ou connexions r\u00e9seau cr\u00e9\u00e9s \u00e0 proximit\u00e9.",
     "eventid": [],
     "falsepositives": [
       "Authorized troubleshooting performed by administrators under a PHP service account",
@@ -695,7 +782,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a suspicious non-sshd process listening on SSH test ports from user or temporary paths, consistent with renamed libssh2 CVE-2026-55200 PoC servers. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte un serveur SSH de test suspect en ecoute, typique du PoC C 0xBlackash une fois compile et renomme. Le PoC ecoute par defaut sur TCP/2222, accepte des clients libssh2 vulnerables et envoie un paquet SSH malforme avec packet_length 0xffffffff. Cette regle couvre l angle mort ou la creation de processus ne contient plus aucun mot-cle CVE apres renommage du binaire. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a suspicious non-sshd process listening on SSH test ports from user or temporary paths, consistent with renamed libssh2 CVE-2026-55200 PoC servers. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte un serveur SSH de test suspect en ecoute, typique du PoC C 0xBlackash une fois compile et renomme. Le PoC ecoute par defaut sur TCP/2222, accepte des clients libssh2 vulnerables et envoie un paquet SSH malforme avec packet_length 0xffffffff. Cette regle couvre l angle mort ou la creation de processus ne contient plus aucun mot-cle CVE apres renommage du binaire. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized SSH honeypots or lab servers listening on high SSH test ports",
@@ -737,7 +824,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a Magento or Adobe Commerce web worker spawning a shell or network utility. In the context of a suspicious GraphQL template injection or dangerous upload, this is a high-confidence post-exploitation signal, but the process event alone does not identify the CVE; SOC L1 should correlate the host, HTTP request, file creation, source, and patch state.\nD\u00e9tecte un worker web Magento ou Adobe Commerce qui lance un shell ou un outil r\u00e9seau. Dans le contexte d\u2019une injection de template GraphQL ou d\u2019un upload dangereux, il s\u2019agit d\u2019un signal de post-exploitation \u00e0 haute confiance, mais l\u2019\u00e9v\u00e9nement de processus seul n\u2019identifie pas la CVE ; le SOC L1 doit corr\u00e9ler l\u2019h\u00f4te, la requ\u00eate HTTP, la cr\u00e9ation de fichier, la source et le niveau de correctif.\n",
+    "description": "Detects a Magento or Adobe Commerce web worker spawning a shell or network utility. In the context of a suspicious GraphQL template injection or dangerous upload, this is a high-confidence post-exploitation signal, but the process event alone does not identify the CVE; SOC L1 should correlate the host, HTTP request, file creation, source, and patch state. D\u00e9tecte un worker web Magento ou Adobe Commerce qui lance un shell ou un outil r\u00e9seau. Dans le contexte d\u2019une injection de template GraphQL ou d\u2019un upload dangereux, il s\u2019agit d\u2019un signal de post-exploitation \u00e0 haute confiance, mais l\u2019\u00e9v\u00e9nement de processus seul n\u2019identifie pas la CVE ; le SOC L1 doit corr\u00e9ler l\u2019h\u00f4te, la requ\u00eate HTTP, la cr\u00e9ation de fichier, la source et le niveau de correctif.",
     "eventid": [],
     "falsepositives": [
       "Authorized Magento maintenance or deployment scripts",
@@ -775,7 +862,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects suspicious shell, discovery, download, or secret access commands spawned by a Langflow Python process, consistent with successful CVE-2026-9198 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte l'execution de processus suspects lances par le runtime Python/Langflow, coherente avec une exploitation reussie de CVE-2026-9198. Cette regle couvre le cas ou le corps HTTP n'est pas journalise ou ou le payload Python est obfusque (encodage base64 imbrique, concatenation de chaines, alias d'import) au point d'echapper a la detection par mots-cles sur le corps de la requete web. Comme l'exploitation reussie doit in fine demarrer un processus reel sur l'hote pour avoir un effet, cette couche telemetrie process ferme l'angle mort de l'obfuscation de la couche web. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious shell, discovery, download, or secret access commands spawned by a Langflow Python process, consistent with successful CVE-2026-9198 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte l'execution de processus suspects lances par le runtime Python/Langflow, coherente avec une exploitation reussie de CVE-2026-9198. Cette regle couvre le cas ou le corps HTTP n'est pas journalise ou ou le payload Python est obfusque (encodage base64 imbrique, concatenation de chaines, alias d'import) au point d'echapper a la detection par mots-cles sur le corps de la requete web. Comme l'exploitation reussie doit in fine demarrer un processus reel sur l'hote pour avoir un effet, cette couche telemetrie process ferme l'angle mort de l'obfuscation de la couche web. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized Langflow administrator running troubleshooting commands from the same service account",
@@ -824,7 +911,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a PHP or web server runtime spawning a shell with reconnaissance, download, interpreter, or public-PoC command markers. This is a high-confidence post-exploitation signal that can follow CVE-2025-0366, but it is not sufficient by itself to attribute the activity to that CVE. SOC L1 should correlate the process with web requests, the hosting account, the working directory, and file changes.\nD\u00e9tecte un moteur PHP ou un serveur web qui lance un shell avec des marqueurs de reconnaissance, de t\u00e9l\u00e9chargement, d'interpr\u00e9teur ou du PoC public. Il s'agit d'un signal post-exploitation \u00e0 haute confiance qui peut suivre CVE-2025-0366, mais il ne suffit pas \u00e0 attribuer l'activit\u00e9 \u00e0 cette CVE. Le SOC L1 doit corr\u00e9ler le processus avec les requ\u00eates web, le compte d'h\u00e9bergement, le r\u00e9pertoire courant et les modifications de fichiers.\n",
+    "description": "Detects a PHP or web server runtime spawning a shell with reconnaissance, download, interpreter, or public-PoC command markers. This is a high-confidence post-exploitation signal that can follow CVE-2025-0366, but it is not sufficient by itself to attribute the activity to that CVE. SOC L1 should correlate the process with web requests, the hosting account, the working directory, and file changes. D\u00e9tecte un moteur PHP ou un serveur web qui lance un shell avec des marqueurs de reconnaissance, de t\u00e9l\u00e9chargement, d'interpr\u00e9teur ou du PoC public. Il s'agit d'un signal post-exploitation \u00e0 haute confiance qui peut suivre CVE-2025-0366, mais il ne suffit pas \u00e0 attribuer l'activit\u00e9 \u00e0 cette CVE. Le SOC L1 doit corr\u00e9ler le processus avec les requ\u00eates web, le compte d'h\u00e9bergement, le r\u00e9pertoire courant et les modifications de fichiers.",
     "eventid": [],
     "falsepositives": [
       "An explicitly approved web application maintenance script that invokes a shell and is allowlisted by host and account",
@@ -863,7 +950,46 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a PHP or web-server worker creating a PHP-family executable file in a web root or temporary directory. This is a high-confidence post-exploitation signal consistent with a PHP webshell drop after PHP2Shell, but it does not identify the initial vulnerability; SOC L1 should verify deployment activity, file content and hash, owner, process lineage, and preceding web requests.\nD\u00e9tecte un worker PHP ou un serveur web qui cr\u00e9e un fichier ex\u00e9cutable de la famille PHP dans un web root ou un r\u00e9pertoire temporaire. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance coh\u00e9rent avec le d\u00e9p\u00f4t d\u2019un webshell PHP apr\u00e8s PHP2Shell, mais il n\u2019identifie pas la vuln\u00e9rabilit\u00e9 initiale ; le SOC L1 doit v\u00e9rifier les d\u00e9ploiements, le contenu et le hash du fichier, son propri\u00e9taire, la cha\u00eene de processus et les requ\u00eates web pr\u00e9c\u00e9dentes.\n",
+    "description": "Detects the Jenkins controller JVM or service spawning a shell, interpreter, or network utility, consistent with post-exploitation following CVE-2024-23897. The process event does not prove that the CLI vulnerability caused the activity; SOC L1 should correlate the CLI request, account, command line, file access, and network destination. Approved build steps and administration require documented context. D\u00e9tecte le JVM ou service contr\u00f4leur Jenkins lan\u00e7ant un shell, un interpr\u00e9teur ou un outil r\u00e9seau, comportement compatible avec une post-exploitation apr\u00e8s la CVE-2024-23897. L'\u00e9v\u00e9nement de processus ne prouve pas que la vuln\u00e9rabilit\u00e9 CLI est \u00e0 l'origine de l'activit\u00e9 ; le SOC L1 doit corr\u00e9ler la requ\u00eate CLI, le compte, la ligne de commande, l'acc\u00e8s aux fichiers et la destination r\u00e9seau. Les \u00e9tapes de build et l'administration approuv\u00e9es n\u00e9cessitent un contexte document\u00e9.",
+    "eventid": [],
+    "falsepositives": [
+      "Approved Jenkins pipeline steps running in a controller process",
+      "Documented administration or plugin maintenance"
+    ],
+    "filename": "CVE-2024-23897_Jenkins_CLI/rules/jenkins_cve-2024-23897_controller_child_process_strict.yml",
+    "id": "5c17af53-5524-45b1-9f56-6bc4c6a8f0c8",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/java' ESCAPE '\\' OR ParentImage LIKE '%/jenkins' ESCAPE '\\' OR ParentImage LIKE '%/jenkins.war' ESCAPE '\\') AND (ParentCommandLine LIKE '%jenkins.war%' ESCAPE '\\' OR ParentCommandLine LIKE '%/jenkins/%' ESCAPE '\\' OR ParentCommandLine LIKE '%hudson.%' ESCAPE '\\') AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\') OR ((Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\') AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%bash -c%' ESCAPE '\\' OR CommandLine LIKE '%sh -c%' ESCAPE '\\'))) AND (NOT COALESCE((ParentCommandLine LIKE '%/workspace/%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1105",
+      "cve.2024-23897"
+    ],
+    "title": "Jenkins Controller Spawning Shell or Network Tool After CLI Activity - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a PHP or web-server worker creating a PHP-family executable file in a web root or temporary directory. This is a high-confidence post-exploitation signal consistent with a PHP webshell drop after PHP2Shell, but it does not identify the initial vulnerability; SOC L1 should verify deployment activity, file content and hash, owner, process lineage, and preceding web requests. D\u00e9tecte un worker PHP ou un serveur web qui cr\u00e9e un fichier ex\u00e9cutable de la famille PHP dans un web root ou un r\u00e9pertoire temporaire. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance coh\u00e9rent avec le d\u00e9p\u00f4t d\u2019un webshell PHP apr\u00e8s PHP2Shell, mais il n\u2019identifie pas la vuln\u00e9rabilit\u00e9 initiale ; le SOC L1 doit v\u00e9rifier les d\u00e9ploiements, le contenu et le hash du fichier, son propri\u00e9taire, la cha\u00eene de processus et les requ\u00eates web pr\u00e9c\u00e9dentes.",
     "eventid": [],
     "falsepositives": [
       "Authorized deployments performed by a documented service account",
@@ -903,7 +1029,46 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a shell or discovery process spawned by a Ruby/Puma/Passenger Rails worker, consistent with the CVE-2026-66066 KindaRails2Shell RCE stage where a forged Active Storage variation dispatches Kernel#spawn. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte un processus shell ou de reconnaissance lance par un worker Ruby/Puma/Passenger, coherent avec le stade RCE de CVE-2026-66066 (KindaRails2Shell). Une fois secret_key_base recupere par lecture de fichier arbitraire, l'attaquant forge une variation Active Storage JSON signee de la forme {\"send\":[\"spawn\",\"/bin/sh\",\"-c\",\"id\"]}. Cette variation atteint Chainable#apply qui invoque builder.public_send(name, *argument) : le nom de methode \"send\" declenche Kernel#spawn, qui cree un veritable processus enfant au niveau du systeme d'exploitation. Ce stade RCE ne fonctionne que si l'application est configuree avec config.active_support.message_serializer = :json ; voir README_ANGLES_MORTS.md pour les limites de cette couverture. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects an Apache ActiveMQ broker JVM spawning a shell, interpreter, or network utility, consistent with post-exploitation following CVE-2023-46604 OpenWire deserialization RCE. The process event does not prove the protocol exploit was the cause; SOC L1 should correlate the source connection, broker port, command line, file writes, and Java process ancestry. Approved broker administration and maintenance require documented context. D\u00e9tecte le JVM broker Apache ActiveMQ lan\u00e7ant un shell, un interpr\u00e9teur ou un outil r\u00e9seau, comportement compatible avec une post-exploitation apr\u00e8s la RCE par d\u00e9s\u00e9rialisation OpenWire CVE-2023-46604. L'\u00e9v\u00e9nement de processus ne prouve pas que l'exploitation du protocole est la cause ; le SOC L1 doit corr\u00e9ler la connexion source, le port du broker, la ligne de commande, les \u00e9critures de fichiers et l'ascendance Java. L'administration et la maintenance approuv\u00e9es n\u00e9cessitent un contexte document\u00e9.",
+    "eventid": [],
+    "falsepositives": [
+      "Approved broker maintenance or diagnostics",
+      "Container health checks with an explicit allowlist"
+    ],
+    "filename": "CVE-2023-46604_Apache_ActiveMQ/rules/activemq_cve-2023-46604_broker_child_process_strict.yml",
+    "id": "6f43a4fd-5d9a-4cb8-a2b5-1a1e96e2a50c",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/java' ESCAPE '\\' OR ParentImage LIKE '%/activemq' ESCAPE '\\') AND (ParentCommandLine LIKE '%activemq%' ESCAPE '\\' OR ParentCommandLine LIKE '%activemq.jar%' ESCAPE '\\') AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\') OR ((Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\') AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%bash -c%' ESCAPE '\\' OR CommandLine LIKE '%sh -c%' ESCAPE '\\'))) AND (NOT COALESCE((ParentCommandLine LIKE '%backup%' ESCAPE '\\' OR ParentCommandLine LIKE '%health-check%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1105",
+      "cve.2023-46604"
+    ],
+    "title": "Apache ActiveMQ Broker Spawning Shell or Network Tool - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a shell or discovery process spawned by a Ruby/Puma/Passenger Rails worker, consistent with the CVE-2026-66066 KindaRails2Shell RCE stage where a forged Active Storage variation dispatches Kernel#spawn. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte un processus shell ou de reconnaissance lance par un worker Ruby/Puma/Passenger, coherent avec le stade RCE de CVE-2026-66066 (KindaRails2Shell). Une fois secret_key_base recupere par lecture de fichier arbitraire, l'attaquant forge une variation Active Storage JSON signee de la forme {\"send\":[\"spawn\",\"/bin/sh\",\"-c\",\"id\"]}. Cette variation atteint Chainable#apply qui invoque builder.public_send(name, *argument) : le nom de methode \"send\" declenche Kernel#spawn, qui cree un veritable processus enfant au niveau du systeme d'exploitation. Ce stade RCE ne fonctionne que si l'application est configuree avec config.active_support.message_serializer = :json ; voir README_ANGLES_MORTS.md pour les limites de cette couverture. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized administrator running troubleshooting commands under the same Rails service account",
@@ -946,7 +1111,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects suspicious shell, discovery, download, or secret access commands spawned by a Langflow Python process, consistent with successful CVE-2026-33017 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte l'execution de processus suspects lances par le runtime Python/Langflow apres construction d'un flow. Cette regle couvre le cas ou le corps HTTP n'est pas journalise mais ou l'exploitation provoque un shell, une reconnaissance systeme, une lecture de secrets, un child Python -c ou un callback reseau depuis le serveur Langflow. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious shell, discovery, download, or secret access commands spawned by a Langflow Python process, consistent with successful CVE-2026-33017 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte l'execution de processus suspects lances par le runtime Python/Langflow apres construction d'un flow. Cette regle couvre le cas ou le corps HTTP n'est pas journalise mais ou l'exploitation provoque un shell, une reconnaissance systeme, une lecture de secrets, un child Python -c ou un callback reseau depuis le serveur Langflow. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized Langflow administrator running troubleshooting commands from the same service account",
@@ -994,7 +1159,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a non-CUPS process binding to TCP 515 (LPD), indicating microsocks masquerade (Sliver campaign). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nR\u00e8gle : d\u00e9tecte un processus non-CUPS qui \u00e9tablit une connexion ou \u00e9coute sur le port TCP 515 (LPD/Line Printer Daemon). Dans la campagne FortiWeb Sliver, les attaquants d\u00e9ploient microsocks renomm\u00e9 en 'cups-lpd' pour se faire passer pour le daemon d'impression CUPS et exposer un tunnel d'acc\u00e8s distant. ANGLE MORT : la logsource network_connection (Sysmon EventID 3) logue les connexions initi\u00e9es (Initiated=true) ET les connexions entrantes accept\u00e9es (Initiated=false). Pour d\u00e9tecter un listener sur port 515, il faut chercher des \u00e9v\u00e9nements o\u00f9 le processus LOCAL re\u00e7oit des connexions (Initiated=false, DestinationPort=515) ou surveiller le port source (SourcePort=515 pour les r\u00e9ponses). La r\u00e8gle couvre les deux sc\u00e9narios via le filtre Image. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a non-CUPS process binding to TCP 515 (LPD), indicating microsocks masquerade (Sliver campaign). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. R\u00e8gle : d\u00e9tecte un processus non-CUPS qui \u00e9tablit une connexion ou \u00e9coute sur le port TCP 515 (LPD/Line Printer Daemon). Dans la campagne FortiWeb Sliver, les attaquants d\u00e9ploient microsocks renomm\u00e9 en 'cups-lpd' pour se faire passer pour le daemon d'impression CUPS et exposer un tunnel d'acc\u00e8s distant. ANGLE MORT : la logsource network_connection (Sysmon EventID 3) logue les connexions initi\u00e9es (Initiated=true) ET les connexions entrantes accept\u00e9es (Initiated=false). Pour d\u00e9tecter un listener sur port 515, il faut chercher des \u00e9v\u00e9nements o\u00f9 le processus LOCAL re\u00e7oit des connexions (Initiated=false, DestinationPort=515) ou surveiller le port source (SourcePort=515 pour les r\u00e9ponses). La r\u00e8gle couvre les deux sc\u00e9narios via le filtre Image. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Legacy printing servers exposing LPD without CUPS (rare)",
@@ -1031,7 +1196,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects appliance-side log tampering, persistence or shell spawning behavior associated with UNC3886-style post-exploitation. High-risk children (python3, nc, socat) spawned from service daemons fire without a CLI requirement. Shell and download tools require a suspicious CLI indicator. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des signaux post-compromission \u00e0 forte confiance sur une appliance ou un h\u00f4te Linux de type r\u00e9seau : d\u00e9sactivation des logs, modification de la persistance, shelling ou d\u00e9marrage d'un interpr\u00e9teur Python depuis un processus de service. Python3, nc et socat d\u00e9clenchent sans condition sur le CommandLine car leur spawn depuis un d\u00e9mon de service est intrins\u00e8quement suspect (VirtualPie, REPTILE). Les shells et outils de download n\u00e9cessitent un indicateur CLI. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects appliance-side log tampering, persistence or shell spawning behavior associated with UNC3886-style post-exploitation. High-risk children (python3, nc, socat) spawned from service daemons fire without a CLI requirement. Shell and download tools require a suspicious CLI indicator. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte des signaux post-compromission \u00e0 forte confiance sur une appliance ou un h\u00f4te Linux de type r\u00e9seau : d\u00e9sactivation des logs, modification de la persistance, shelling ou d\u00e9marrage d'un interpr\u00e9teur Python depuis un processus de service. Python3, nc et socat d\u00e9clenchent sans condition sur le CommandLine car leur spawn depuis un d\u00e9mon de service est intrins\u00e8quement suspect (VirtualPie, REPTILE). Les shells et outils de download n\u00e9cessitent un indicateur CLI. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized upgrade or maintenance jobs on network appliances during change windows",
@@ -1074,7 +1239,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects high-confidence Linux kernel memory faults in the rtmutex proxy-lock rollback path associated with GhostLock CVE-2026-43499 exploitation attempts. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte une faute m\u00e9moire du noyau associ\u00e9e au chemin de rollback proxy-lock rtmutex et au contexte futex PI caract\u00e9ristique des tentatives d'exploitation GhostLock. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects high-confidence Linux kernel memory faults in the rtmutex proxy-lock rollback path associated with GhostLock CVE-2026-43499 exploitation attempts. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte une faute m\u00e9moire du noyau associ\u00e9e au chemin de rollback proxy-lock rtmutex et au contexte futex PI caract\u00e9ristique des tentatives d'exploitation GhostLock. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized kernel fault-injection or regression testing of the rtmutex futex PI rollback path",
@@ -1109,7 +1274,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a web server or PHP runtime writing a PHP-executable file into the Sudan Payment Gateway receipt directory under WordPress uploads. This is a high-confidence post-upload signal consistent with successful CVE-2024-50494 exploitation, but it does not by itself prove that the file was requested or that commands ran. SOC L1 should preserve the file, verify its content and writer process, identify the matching upload request, and check for later HTTP access or child processes.\nD\u00e9tecte l\u2019\u00e9criture par un serveur web ou un environnement d\u2019ex\u00e9cution PHP d\u2019un fichier ex\u00e9cutable par PHP dans le r\u00e9pertoire des re\u00e7us Sudan Payment Gateway sous les uploads WordPress. Il s\u2019agit d\u2019un signal post-upload de haute confiance coh\u00e9rent avec une exploitation r\u00e9ussie de CVE-2024-50494, mais il ne prouve pas \u00e0 lui seul que le fichier a \u00e9t\u00e9 appel\u00e9 ni que des commandes ont \u00e9t\u00e9 ex\u00e9cut\u00e9es. Le SOC L1 doit pr\u00e9server le fichier, v\u00e9rifier son contenu et le processus qui l\u2019a \u00e9crit, identifier la requ\u00eate d\u2019upload correspondante et rechercher un acc\u00e8s HTTP ou des processus enfants ult\u00e9rieurs.\n",
+    "description": "Detects a web server or PHP runtime writing a PHP-executable file into the Sudan Payment Gateway receipt directory under WordPress uploads. This is a high-confidence post-upload signal consistent with successful CVE-2024-50494 exploitation, but it does not by itself prove that the file was requested or that commands ran. SOC L1 should preserve the file, verify its content and writer process, identify the matching upload request, and check for later HTTP access or child processes. D\u00e9tecte l\u2019\u00e9criture par un serveur web ou un environnement d\u2019ex\u00e9cution PHP d\u2019un fichier ex\u00e9cutable par PHP dans le r\u00e9pertoire des re\u00e7us Sudan Payment Gateway sous les uploads WordPress. Il s\u2019agit d\u2019un signal post-upload de haute confiance coh\u00e9rent avec une exploitation r\u00e9ussie de CVE-2024-50494, mais il ne prouve pas \u00e0 lui seul que le fichier a \u00e9t\u00e9 appel\u00e9 ni que des commandes ont \u00e9t\u00e9 ex\u00e9cut\u00e9es. Le SOC L1 doit pr\u00e9server le fichier, v\u00e9rifier son contenu et le processus qui l\u2019a \u00e9crit, identifier la requ\u00eate d\u2019upload correspondante et rechercher un acc\u00e8s HTTP ou des processus enfants ult\u00e9rieurs.",
     "eventid": [],
     "falsepositives": [
       "Authorized security testing in a dedicated lab, confirm the test window and preserve the generated fixture",
@@ -1147,7 +1312,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects systemd service file creation matching Sliver persistence pattern from FortiWeb campaign. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cr\u00e9ation d'un fichier de service systemd correspondant au pattern de persistence Sliver observ\u00e9 dans la campagne FortiWeb : description de service \"Updater Service\", ExecStart pointant vers le binaire implant\u00e9, et Restart=on-failure pour la r\u00e9silience. Le champ FileContent n'est pas standard Sigma : il n\u00e9cessite un pipeline d'ingestion avec logging du contenu de fichier. ANGLE MORT : si FileContent n'est pas disponible, seule selection_filename_campaign d\u00e9clenche (noms syst\u00e8me-updater/cups-lpd), pas selection_filename_systemd qui couvre tous les services. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects systemd service file creation matching Sliver persistence pattern from FortiWeb campaign. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte la cr\u00e9ation d'un fichier de service systemd correspondant au pattern de persistence Sliver observ\u00e9 dans la campagne FortiWeb : description de service \"Updater Service\", ExecStart pointant vers le binaire implant\u00e9, et Restart=on-failure pour la r\u00e9silience. Le champ FileContent n'est pas standard Sigma : il n\u00e9cessite un pipeline d'ingestion avec logging du contenu de fichier. ANGLE MORT : si FileContent n'est pas disponible, seule selection_filename_campaign d\u00e9clenche (noms syst\u00e8me-updater/cups-lpd), pas selection_filename_systemd qui couvre tous les services. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Custom administrator services named system-updater or cups-lpd with systemd (no known legitimate case)",
@@ -1183,7 +1348,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a web or PHP runtime writing an executable PHP file into a WordPress uploads directory, a strong post-upload indicator for CVE-2026-15748. Correlate with a later HTTP access or PHP execution event. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l\u2019\u00e9criture par le serveur web ou PHP d\u2019un fichier ex\u00e9cutable dans uploads WordPress. Corr\u00e9ler avec un acc\u00e8s HTTP ou une ex\u00e9cution PHP ult\u00e9rieure. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a web or PHP runtime writing an executable PHP file into a WordPress uploads directory, a strong post-upload indicator for CVE-2026-15748. Correlate with a later HTTP access or PHP execution event. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l\u2019\u00e9criture par le serveur web ou PHP d\u2019un fichier ex\u00e9cutable dans uploads WordPress. Corr\u00e9ler avec un acc\u00e8s HTTP ou une ex\u00e9cution PHP ult\u00e9rieure. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized PHP maintenance scripts stored in uploads",
@@ -1220,7 +1385,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a temporary-path Linux process spawning a SUID binary, consistent with CVE-2026-46331 local privilege escalation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus Linux lanc\u00e9 depuis un r\u00e9pertoire temporaire qui spawne un binaire SUID. Ce signal correspond \u00e0 la phase d'\u00e9l\u00e9vation de privil\u00e8ges locale observ\u00e9e dans le PoC public de CVE-2026-46331. La r\u00e8gle vise la sortie d'exploitation observable, pas le primitive noyau elle-m\u00eame. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a temporary-path Linux process spawning a SUID binary, consistent with CVE-2026-46331 local privilege escalation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un processus Linux lanc\u00e9 depuis un r\u00e9pertoire temporaire qui spawne un binaire SUID. Ce signal correspond \u00e0 la phase d'\u00e9l\u00e9vation de privil\u00e8ges locale observ\u00e9e dans le PoC public de CVE-2026-46331. La r\u00e8gle vise la sortie d'exploitation observable, pas le primitive noyau elle-m\u00eame. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized exploit validation in a lab or staging environment",
@@ -1259,7 +1424,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects suspicious shell, interpreter, or network tooling spawned by SSH/SFTP clients consistent with libssh2 CVE-2026-55200 post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un comportement post-exploitation haute confiance lorsqu'un client ou outil utilisant SSH/SFTP lance un shell, interpr\u00e9teur ou outil r\u00e9seau suspect. Cette logique cible l'impact observable de CVE-2026-55200, car le champ packet_length malform\u00e9 est chiffr\u00e9 dans le flux SSH. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects suspicious shell, interpreter, or network tooling spawned by SSH/SFTP clients consistent with libssh2 CVE-2026-55200 post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un comportement post-exploitation haute confiance lorsqu'un client ou outil utilisant SSH/SFTP lance un shell, interpr\u00e9teur ou outil r\u00e9seau suspect. Cette logique cible l'impact observable de CVE-2026-55200, car le champ packet_length malform\u00e9 est chiffr\u00e9 dans le flux SSH. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Custom SSH/SFTP automation that intentionally launches local helper scripts",
@@ -1304,7 +1469,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects cups-lpd binary executed with microsocks SOCKS5 arguments (FortiWeb Sliver campaign masquerade). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution d'un binaire nomm\u00e9 cups-lpd avec des arguments de proxy SOCKS5 caract\u00e9ristiques de microsocks. Dans la campagne FortiWeb Sliver, les attaquants renomment microsocks en cups-lpd pour se faire passer pour le daemon d'impression CUPS, puis l'invoquent sur TCP 515 avec les flags microsocks-sp\u00e9cifiques (-p pour port, -1 pour connexions uniques, -w pour les threads workers). ANGLE MORT : si le port est chang\u00e9 (-p 8080) ou si les flags sont omis, certaines s\u00e9lections ne d\u00e9clenchent pas. Mais selection_image (Image|endswith: '/cups-lpd') reste actif. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects cups-lpd binary executed with microsocks SOCKS5 arguments (FortiWeb Sliver campaign masquerade). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'ex\u00e9cution d'un binaire nomm\u00e9 cups-lpd avec des arguments de proxy SOCKS5 caract\u00e9ristiques de microsocks. Dans la campagne FortiWeb Sliver, les attaquants renomment microsocks en cups-lpd pour se faire passer pour le daemon d'impression CUPS, puis l'invoquent sur TCP 515 avec les flags microsocks-sp\u00e9cifiques (-p pour port, -1 pour connexions uniques, -w pour les threads workers). ANGLE MORT : si le port est chang\u00e9 (-p 8080) ou si les flags sont omis, certaines s\u00e9lections ne d\u00e9clenchent pas. Mais selection_image (Image|endswith: '/cups-lpd') reste actif. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Rare legacy printing systems invoking cups-lpd with similar arguments (no known case)",
@@ -1340,7 +1505,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects CVE-2026-20253 post-exploitation: Splunk process (splunkd/python) spawning a shell or network tool outside the Splunk directory tree. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'exploitation r\u00e9ussie de CVE-2026-20253 via des processus enfants inattendus cr\u00e9\u00e9s par les processus Splunk (splunkd, python, python3) sur Linux. Un exploit r\u00e9ussi \u00e9crase un script interne Splunk puis d\u00e9clenche son ex\u00e9cution. Le processus r\u00e9sultant tourne sous l'utilisateur splunk et spawne typiquement un shell inverse ou un chargeur. R\u00e8gle STRICT : si elle se d\u00e9clenche, consid\u00e9rer le serveur Splunk comme enti\u00e8rement compromis et l'isoler imm\u00e9diatement. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects CVE-2026-20253 post-exploitation: Splunk process (splunkd/python) spawning a shell or network tool outside the Splunk directory tree. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte l'exploitation r\u00e9ussie de CVE-2026-20253 via des processus enfants inattendus cr\u00e9\u00e9s par les processus Splunk (splunkd, python, python3) sur Linux. Un exploit r\u00e9ussi \u00e9crase un script interne Splunk puis d\u00e9clenche son ex\u00e9cution. Le processus r\u00e9sultant tourne sous l'utilisateur splunk et spawne typiquement un shell inverse ou un chargeur. R\u00e8gle STRICT : si elle se d\u00e9clenche, consid\u00e9rer le serveur Splunk comme enti\u00e8rement compromis et l'isoler imm\u00e9diatement. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Splunk scripted inputs or modular inputs invoking a system shell with a Splunk script path in CommandLine - filtered by filter_main_splunk_scripted_input; if a custom scripted input fires, add its CommandLine path pattern to that filter",
@@ -1383,7 +1548,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects the high-confidence CVE-2026-43503 (DirtyClone) exploitation chain: an iptables/ip6tables TEE target combined with an XFRM ESP-in-UDP state configuration, or an interpreter/compiled binary running from a user-writable temp path that spawns a SUID privilege-transition binary (su, sudo, pkexec) after page cache corruption. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects the high-confidence CVE-2026-43503 (DirtyClone) exploitation chain: an iptables/ip6tables TEE target combined with an XFRM ESP-in-UDP state configuration, or an interpreter/compiled binary running from a user-writable temp path that spawns a SUID privilege-transition binary (su, sudo, pkexec) after page cache corruption. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized exploit validation or red team activity testing CVE-2026-43503 in a lab environment",
@@ -1426,7 +1591,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects the Adobe Campaign nlserver web module starting a command shell, script interpreter, delayed-execution utility, or an executable from a temporary directory on Linux. This high-confidence behavior may indicate code execution through a Campaign vulnerability or unauthorized server-side activity, but it does not identify a specific CVE by itself. SOC L1 should verify the complete parent and child command lines, the Campaign build, the initiating request, and whether an approved maintenance action explains the process.\nD\u00e9tecte le module web nlserver d'Adobe Campaign lan\u00e7ant un interpr\u00e9teur de commandes, un interpr\u00e9teur de scripts, un utilitaire d'ex\u00e9cution diff\u00e9r\u00e9e ou un ex\u00e9cutable depuis un r\u00e9pertoire temporaire sous Linux. Ce comportement \u00e0 haute confiance peut indiquer une ex\u00e9cution de code via une vuln\u00e9rabilit\u00e9 de Campaign ou une activit\u00e9 non autoris\u00e9e c\u00f4t\u00e9 serveur, mais il n'identifie pas \u00e0 lui seul une CVE pr\u00e9cise. Le SOC L1 doit v\u00e9rifier les lignes de commande compl\u00e8tes du parent et de l'enfant, le build de Campaign, la requ\u00eate \u00e0 l'origine de l'activit\u00e9 et si une op\u00e9ration de maintenance approuv\u00e9e explique le processus.\n",
+    "description": "Detects the Adobe Campaign nlserver web module starting a command shell, script interpreter, delayed-execution utility, or an executable from a temporary directory on Linux. This high-confidence behavior may indicate code execution through a Campaign vulnerability or unauthorized server-side activity, but it does not identify a specific CVE by itself. SOC L1 should verify the complete parent and child command lines, the Campaign build, the initiating request, and whether an approved maintenance action explains the process. D\u00e9tecte le module web nlserver d'Adobe Campaign lan\u00e7ant un interpr\u00e9teur de commandes, un interpr\u00e9teur de scripts, un utilitaire d'ex\u00e9cution diff\u00e9r\u00e9e ou un ex\u00e9cutable depuis un r\u00e9pertoire temporaire sous Linux. Ce comportement \u00e0 haute confiance peut indiquer une ex\u00e9cution de code via une vuln\u00e9rabilit\u00e9 de Campaign ou une activit\u00e9 non autoris\u00e9e c\u00f4t\u00e9 serveur, mais il n'identifie pas \u00e0 lui seul une CVE pr\u00e9cise. Le SOC L1 doit v\u00e9rifier les lignes de commande compl\u00e8tes du parent et de l'enfant, le build de Campaign, la requ\u00eate \u00e0 l'origine de l'activit\u00e9 et si une op\u00e9ration de maintenance approuv\u00e9e explique le processus.",
     "eventid": [],
     "falsepositives": [
       "Approved custom Adobe Campaign web extensions that intentionally launch a listed interpreter, delayed-execution utility, or an executable from a temporary directory",
@@ -1466,7 +1631,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a suspicious shell, discovery, download, or scripting process spawned by the Tomcat Java process, consistent with CVE-2026-34486 Tribes EncryptInterceptor fail-open deserialization RCE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte un processus shell, de reconnaissance, de telechargement ou de script suspect lance par le processus Java de Tomcat, coherent avec l'exploitation de CVE-2026-34486. La regression sur EncryptInterceptor fait qu'un message Tribes dont le dechiffrement echoue est quand meme transmis a la deserialisation Java au lieu d'etre rejete, ce qui permet a un attaquant non authentifie d'atteindre ObjectInputStream.readObject() sur le port 4000 par defaut avec une chaine de gadgets comme CommonsCollections6. La chaine de gadgets classique invoque Runtime.exec(), ce qui cree un processus enfant reel observable au niveau OS, meme si le trafic reseau Tribes est chiffre et donc peu inspecte par la plupart des WAF/IDS. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a suspicious shell, discovery, download, or scripting process spawned by the Tomcat Java process, consistent with CVE-2026-34486 Tribes EncryptInterceptor fail-open deserialization RCE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte un processus shell, de reconnaissance, de telechargement ou de script suspect lance par le processus Java de Tomcat, coherent avec l'exploitation de CVE-2026-34486. La regression sur EncryptInterceptor fait qu'un message Tribes dont le dechiffrement echoue est quand meme transmis a la deserialisation Java au lieu d'etre rejete, ce qui permet a un attaquant non authentifie d'atteindre ObjectInputStream.readObject() sur le port 4000 par defaut avec une chaine de gadgets comme CommonsCollections6. La chaine de gadgets classique invoque Runtime.exec(), ce qui cree un processus enfant reel observable au niveau OS, meme si le trafic reseau Tribes est chiffre et donc peu inspecte par la plupart des WAF/IDS. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized Tomcat administrator running troubleshooting commands under the same service account",
@@ -1511,7 +1676,49 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects PHP-family file creation in common Joomla web-exposed or writable directories by web server or PHP runtime processes, covering CVE-2026-48909 cases where the exploit writes a webshell but no command has been executed yet. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cr\u00e9ation de fichiers PHP dans des r\u00e9pertoires Joomla expos\u00e9s ou inscriptibles par un processus web/PHP. Cette r\u00e8gle couvre l'angle mort o\u00f9 CVE-2026-48909 \u00e9crit un webshell mais ne d\u00e9clenche pas encore d'ex\u00e9cution de commande observable. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a Roundcube PHP or web-server worker spawning a shell or network utility, or writing a PHP file under the webroot, consistent with post-exploitation after CVE-2025-49113. The endpoint signal does not prove Roundcube was the initial vector; SOC L1 should correlate it with upload.php requests, the authenticated account, file content, and outbound traffic. D\u00e9tecte un worker PHP ou serveur web Roundcube qui lance un shell ou un outil r\u00e9seau, ou \u00e9crit un fichier PHP sous le webroot, ce qui est compatible avec une post-exploitation apr\u00e8s CVE-2025-49113. Le signal endpoint ne prouve pas que Roundcube est le vecteur initial ; le SOC L1 doit le corr\u00e9ler aux requ\u00eates upload.php, au compte authentifi\u00e9, au contenu du fichier et au trafic sortant.",
+    "eventid": [
+      1,
+      11
+    ],
+    "falsepositives": [
+      "Approved web deployment or package update; allowlist the exact deployment process and path"
+    ],
+    "filename": "CVE-2025-49113_Roundcube/rules/roundcube_php_post_exploitation_strict.yml",
+    "id": "f39a55cd-7722-4a12-97ea-2e7b7f1b1d28",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "linux"
+    },
+    "required_fields": [
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (EventID=1 AND ((ParentImage LIKE '%/php-fpm' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\') AND (ParentCommandLine LIKE '%roundcube%' ESCAPE '\\' OR ParentCommandLine LIKE '%www/roundcube%' ESCAPE '\\' OR ParentCommandLine LIKE '%roundcubemail%' ESCAPE '\\')) AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\')) OR (EventID=11 AND (Image LIKE '%/php-fpm' ESCAPE '\\' OR Image LIKE '%/php-cgi' ESCAPE '\\' OR Image LIKE '%/apache2' ESCAPE '\\' OR Image LIKE '%/httpd' ESCAPE '\\') AND ((TargetFilename LIKE '%/roundcube/%' ESCAPE '\\' OR TargetFilename LIKE '%/webmail/%' ESCAPE '\\' OR TargetFilename LIKE '%/htdocs/%' ESCAPE '\\') AND (TargetFilename LIKE '%.php' ESCAPE '\\' OR TargetFilename LIKE '%.phtml' ESCAPE '\\' OR TargetFilename LIKE '%.php5' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.persistence",
+      "attack.t1505.003",
+      "cve.2025-49113"
+    ],
+    "title": "Roundcube PHP Worker Suspicious Child Process or Webshell - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects PHP-family file creation in common Joomla web-exposed or writable directories by web server or PHP runtime processes, covering CVE-2026-48909 cases where the exploit writes a webshell but no command has been executed yet. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte la cr\u00e9ation de fichiers PHP dans des r\u00e9pertoires Joomla expos\u00e9s ou inscriptibles par un processus web/PHP. Cette r\u00e8gle couvre l'angle mort o\u00f9 CVE-2026-48909 \u00e9crit un webshell mais ne d\u00e9clenche pas encore d'ex\u00e9cution de commande observable. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Legitimate Joomla extension updates writing PHP files into templates, modules, plugins or cache paths",
@@ -1551,7 +1758,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects web server or PHP runtime processes on Linux spawning shells or common post-exploitation tools, consistent with command execution through the plugin webshell dropped after CVE-2026-63030 / CVE-2026-60137 (wp2shell) exploitation. Confirmation signal on a different surface than the web-layer rule, independent of WAF body-inspection depth. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus web ou PHP sous Linux qui lance un shell ou un outil de post-exploitation, coh\u00e9rent avec l'ex\u00e9cution de commande via le webshell plugin d\u00e9pos\u00e9 apr\u00e8s exploitation de CVE-2026-63030 / CVE-2026-60137 (wp2shell). Signal de confirmation sur une couche diff\u00e9rente de la r\u00e8gle web, utile quand le WAF n'inspecte pas le corps des requ\u00eates POST. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects web server or PHP runtime processes on Linux spawning shells or common post-exploitation tools, consistent with command execution through the plugin webshell dropped after CVE-2026-63030 / CVE-2026-60137 (wp2shell) exploitation. Confirmation signal on a different surface than the web-layer rule, independent of WAF body-inspection depth. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un processus web ou PHP sous Linux qui lance un shell ou un outil de post-exploitation, coh\u00e9rent avec l'ex\u00e9cution de commande via le webshell plugin d\u00e9pos\u00e9 apr\u00e8s exploitation de CVE-2026-63030 / CVE-2026-60137 (wp2shell). Signal de confirmation sur une couche diff\u00e9rente de la r\u00e8gle web, utile quand le WAF n'inspecte pas le corps des requ\u00eates POST. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Hosting control panels or maintenance jobs invoked through web administration interfaces",
@@ -1597,7 +1804,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Alerts when a file with a .babyk or .babuk extension is created under an ESXi datastore path beginning with /vmfs/volumes/. This is a critical file-encryption impact signal associated with Babuk-derived ransomware activity reported after vCenter compromise, but the extension alone does not prove that file contents were encrypted. SOC L1 should identify the creating process and user, inspect simultaneous datastore changes and virtual-machine availability, exclude an approved canary test, and immediately escalate unexplained activity for ransomware response.\nD\u00e9clenche une alerte lorsqu\u2019un fichier portant l\u2019extension .babyk ou .babuk est cr\u00e9\u00e9 dans un chemin de datastore ESXi commen\u00e7ant par /vmfs/volumes/. Il s\u2019agit d\u2019un signal critique d\u2019impact li\u00e9 au chiffrement de fichiers et associ\u00e9 \u00e0 une activit\u00e9 de ran\u00e7ongiciel d\u00e9riv\u00e9e de Babuk signal\u00e9e apr\u00e8s une compromission de vCenter, mais l\u2019extension seule ne prouve pas que le contenu du fichier a \u00e9t\u00e9 chiffr\u00e9. Le SOC L1 doit identifier le processus et l\u2019utilisateur \u00e0 l\u2019origine de la cr\u00e9ation, examiner les modifications simultan\u00e9es du datastore et la disponibilit\u00e9 des machines virtuelles, exclure un test canari approuv\u00e9 et escalader imm\u00e9diatement toute activit\u00e9 inexpliqu\u00e9e pour d\u00e9clencher la r\u00e9ponse au ran\u00e7ongiciel.\n",
+    "description": "Alerts when a file with a .babyk or .babuk extension is created under an ESXi datastore path beginning with /vmfs/volumes/. This is a critical file-encryption impact signal associated with Babuk-derived ransomware activity reported after vCenter compromise, but the extension alone does not prove that file contents were encrypted. SOC L1 should identify the creating process and user, inspect simultaneous datastore changes and virtual-machine availability, exclude an approved canary test, and immediately escalate unexplained activity for ransomware response. D\u00e9clenche une alerte lorsqu\u2019un fichier portant l\u2019extension .babyk ou .babuk est cr\u00e9\u00e9 dans un chemin de datastore ESXi commen\u00e7ant par /vmfs/volumes/. Il s\u2019agit d\u2019un signal critique d\u2019impact li\u00e9 au chiffrement de fichiers et associ\u00e9 \u00e0 une activit\u00e9 de ran\u00e7ongiciel d\u00e9riv\u00e9e de Babuk signal\u00e9e apr\u00e8s une compromission de vCenter, mais l\u2019extension seule ne prouve pas que le contenu du fichier a \u00e9t\u00e9 chiffr\u00e9. Le SOC L1 doit identifier le processus et l\u2019utilisateur \u00e0 l\u2019origine de la cr\u00e9ation, examiner les modifications simultan\u00e9es du datastore et la disponibilit\u00e9 des machines virtuelles, exclure un test canari approuv\u00e9 et escalader imm\u00e9diatement toute activit\u00e9 inexpliqu\u00e9e pour d\u00e9clencher la r\u00e9ponse au ran\u00e7ongiciel.",
     "eventid": [],
     "falsepositives": [
       "Authorized malware-response validation creating a harmless canary file with a Babuk-associated extension in an isolated datastore"
@@ -1633,7 +1840,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects web server or PHP runtime processes spawning shells or command-line tools, consistent with command execution through a PHP webshell dropped after CVE-2026-48909 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus web/PHP qui lance un shell ou un outil syst\u00e8me apr\u00e8s exploitation potentielle de CVE-2026-48909. Cette r\u00e8gle sert de confirmation post-exploitation et compl\u00e8te la r\u00e8gle web sans multiplier les alertes sur la m\u00eame vuln\u00e9rabilit\u00e9. Les variantes php-fpm versionn\u00e9es et les commandes de staging courantes sont couvertes. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects web server or PHP runtime processes spawning shells or command-line tools, consistent with command execution through a PHP webshell dropped after CVE-2026-48909 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un processus web/PHP qui lance un shell ou un outil syst\u00e8me apr\u00e8s exploitation potentielle de CVE-2026-48909. Cette r\u00e8gle sert de confirmation post-exploitation et compl\u00e8te la r\u00e8gle web sans multiplier les alertes sur la m\u00eame vuln\u00e9rabilit\u00e9. Les variantes php-fpm versionn\u00e9es et les commandes de staging courantes sont couvertes. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Hosting control panels or maintenance jobs invoked through web administration interfaces",
@@ -1678,7 +1885,46 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects the Ghostscript binary (gs) spawned as a child of a web server or PHP runtime process on Linux, consistent with ImageMagick's delegate mechanism processing a file that Imagick identified as PostScript content, the trigger condition for CVE-2026-65640. The attacker does not control which binary gets invoked, that is determined by the server's ImageMagick delegates.xml configuration, typically hardcoded to \"gs\", so this signal is not evadable by renaming an attacker-controlled implant the way a dropped webshell can be. Confirmation signal on a different surface than the web-layer rule, independent of whether the log pipeline captures the upload request body. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte le binaire Ghostscript (gs) lance en tant qu'enfant d'un processus serveur web ou runtime PHP sous Linux, coh\u00e9rent avec le mecanisme de delegation d'ImageMagick traitant un fichier qu'Imagick a identifie comme du contenu PostScript, la condition declenchante de CVE-2026-65640. L'attaquant ne controle pas quel binaire est invoque, cela depend de la configuration delegates.xml d'ImageMagick sur le serveur, generalement fixee sur \"gs\" : ce signal n'est donc pas evasible en renommant un implant controle par l'attaquant, contrairement a un webshell depose. Signal de confirmation sur une couche differente de la regle web, utile que le pipeline de logs capture ou non le corps de la requete d'upload. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects an Ivanti Connect Secure web process spawning a shell, interpreter, or network utility, consistent with post-exploitation after CVE-2024-21887. This signal does not identify the initial request or prove the CVE was the cause; SOC L1 should inspect the command line, volatile paths, account, outbound connection, and appliance support files. Approved maintenance automation must be explicitly documented. D\u00e9tecte un processus web Ivanti Connect Secure lan\u00e7ant un shell, un interpr\u00e9teur ou un outil r\u00e9seau, comportement compatible avec une post-exploitation apr\u00e8s la CVE-2024-21887. Ce signal n'identifie pas la requ\u00eate initiale et ne prouve pas que la CVE est la cause ; le SOC L1 doit examiner la ligne de commande, les chemins volatils, le compte, la connexion sortante et les fichiers de support de l'appliance. Une automatisation de maintenance approuv\u00e9e doit \u00eatre explicitement document\u00e9e.",
+    "eventid": [],
+    "falsepositives": [
+      "Vendor maintenance or support session with change approval",
+      "Backup or monitoring agent running under the appliance service context"
+    ],
+    "filename": "CVE-2024-21887_Ivanti_Connect_Secure/rules/ivanti_connect_secure_cve-2024-21887_post_exploitation_strict.yml",
+    "id": "2aef9ef6-3c69-4e5f-b7b3-2dd36d9f8c19",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/home/bin/web' ESCAPE '\\' OR ParentImage LIKE '%/home/bin/dsagent' ESCAPE '\\' OR ParentImage LIKE '%/home/bin/dsmc' ESCAPE '\\') AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\') OR ((Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\') AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%bash -c%' ESCAPE '\\' OR CommandLine LIKE '%sh -c%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\'))) AND (NOT COALESCE((ParentCommandLine LIKE '%health-check%' ESCAPE '\\' OR ParentCommandLine LIKE '%maintenance%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1105",
+      "cve.2024-21887"
+    ],
+    "title": "Ivanti Connect Secure Web Process Spawning Shell or Network Tool - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects the Ghostscript binary (gs) spawned as a child of a web server or PHP runtime process on Linux, consistent with ImageMagick's delegate mechanism processing a file that Imagick identified as PostScript content, the trigger condition for CVE-2026-65640. The attacker does not control which binary gets invoked, that is determined by the server's ImageMagick delegates.xml configuration, typically hardcoded to \"gs\", so this signal is not evadable by renaming an attacker-controlled implant the way a dropped webshell can be. Confirmation signal on a different surface than the web-layer rule, independent of whether the log pipeline captures the upload request body. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. Detecte le binaire Ghostscript (gs) lance en tant qu'enfant d'un processus serveur web ou runtime PHP sous Linux, coh\u00e9rent avec le mecanisme de delegation d'ImageMagick traitant un fichier qu'Imagick a identifie comme du contenu PostScript, la condition declenchante de CVE-2026-65640. L'attaquant ne controle pas quel binaire est invoque, cela depend de la configuration delegates.xml d'ImageMagick sur le serveur, generalement fixee sur \"gs\" : ce signal n'est donc pas evasible en renommant un implant controle par l'attaquant, contrairement a un webshell depose. Signal de confirmation sur une couche differente de la regle web, utile que le pipeline de logs capture ou non le corps de la requete d'upload. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Sites that intentionally use Imagick with the Ghostscript delegate to process legitimate EPS, PDF or PostScript uploads (print-ready design workflows, PDF thumbnail generation plugins). This cannot be distinguished from exploitation by command line alone, since the delegate invocation uses the same configured command template regardless of whether the input content is malicious or benign; if this workflow is expected in the environment, scope or suppress this rule at the SIEM level for the specific hosts running it rather than adding an ineffective content-based filter, or consider disabling the Ghostscript delegate if the feature is not actually needed",
@@ -1715,7 +1961,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects /login spawned by telnetd with -f flag (forced login without authentication), indicating CVE-2026-24061 auth bypass. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte le processus /login spawned par telnetd avec le flag -f (connexion forc\u00e9e sans authentification), indiquant un bypass d'authentification via CVE-2026-24061. Le flag -f n'est jamais l\u00e9gitime dans une session telnet standard ; toute occurrence doit \u00eatre investigu\u00e9e. R\u00e8gle STRICT. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects /login spawned by telnetd with -f flag (forced login without authentication), indicating CVE-2026-24061 auth bypass. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte le processus /login spawned par telnetd avec le flag -f (connexion forc\u00e9e sans authentification), indiquant un bypass d'authentification via CVE-2026-24061. Le flag -f n'est jamais l\u00e9gitime dans une session telnet standard ; toute occurrence doit \u00eatre investigu\u00e9e. R\u00e8gle STRICT. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Legitimate telnet usage with forced login flag (highly uncommon / legacy systems only)",
@@ -1753,7 +1999,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects Sliver implant deployment: system-updater or cups-lpd binary creation in hidden directories (FortiWeb campaign). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cr\u00e9ation du binaire system-updater ou cups-lpd dans des r\u00e9pertoires cach\u00e9s sp\u00e9cifiques \u00e0 la campagne FortiWeb Sliver, ou la cr\u00e9ation de fichiers dans des r\u00e9pertoires temporaires cach\u00e9s g\u00e9n\u00e9riques. Correspond au pattern de d\u00e9ploiement d'artefact post-exploitation de la campagne. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects Sliver implant deployment: system-updater or cups-lpd binary creation in hidden directories (FortiWeb campaign). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte la cr\u00e9ation du binaire system-updater ou cups-lpd dans des r\u00e9pertoires cach\u00e9s sp\u00e9cifiques \u00e0 la campagne FortiWeb Sliver, ou la cr\u00e9ation de fichiers dans des r\u00e9pertoires temporaires cach\u00e9s g\u00e9n\u00e9riques. Correspond au pattern de d\u00e9ploiement d'artefact post-exploitation de la campagne. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Legitimate system update processes writing to campaign-specific paths (no known case)",
@@ -1791,7 +2037,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects PHP file creation in web-accessible directories by shells or interpreters on BeyondTrust appliances (CVE-2026-1731 webshell). STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cr\u00e9ation de fichiers PHP dans les r\u00e9pertoires accessibles via le web par des shells ou interpr\u00e9teurs sur les appliances BeyondTrust. Indicateur de d\u00e9ploiement de webshell post-exploitation (CVE-2026-1731). R\u00e8gle STRICT. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects PHP file creation in web-accessible directories by shells or interpreters on BeyondTrust appliances (CVE-2026-1731 webshell). STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte la cr\u00e9ation de fichiers PHP dans les r\u00e9pertoires accessibles via le web par des shells ou interpr\u00e9teurs sur les appliances BeyondTrust. Indicateur de d\u00e9ploiement de webshell post-exploitation (CVE-2026-1731). R\u00e8gle STRICT. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Custom deployment scripts invoking bash/python to write PHP files during legitimate updates",
@@ -1831,7 +2077,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Alerts on either a syslog service spawning a shell, transfer utility, or interpreter with suspicious download, temporary-path, execution, or tunnel arguments, or a root process establishing reverse SSH tooling or persistence from a suspicious context. These patterns are consistent with CVE-2026-59310 post-exploitation and indicate probable unauthorized execution or persistent access, but approved syslog hooks or support tunnels can match. SOC L1 should verify the root identity, parent process, full command line, and executable path, then correlate with external SSH connections, new services or scheduled tasks, and recent vCenter exploitation indicators.\nD\u00e9clenche une alerte lorsqu\u2019un service syslog lance un shell, un outil de transfert ou un interpr\u00e9teur avec des arguments suspects de t\u00e9l\u00e9chargement, de chemin temporaire, d\u2019ex\u00e9cution ou de tunnel, ou lorsqu\u2019un processus root \u00e9tablit un outil de reverse SSH ou une persistance depuis un contexte suspect. Ces sch\u00e9mas sont compatibles avec une post-exploitation de la CVE-2026-59310 et indiquent une ex\u00e9cution non autoris\u00e9e ou un acc\u00e8s persistant probables, mais des traitements syslog ou des tunnels de support approuv\u00e9s peuvent correspondre. Le SOC L1 doit v\u00e9rifier l\u2019identit\u00e9 root, le processus parent, la ligne de commande compl\u00e8te et le chemin de l\u2019ex\u00e9cutable, puis corr\u00e9ler avec les connexions SSH externes, les nouveaux services ou t\u00e2ches planifi\u00e9es et les indicateurs r\u00e9cents d\u2019exploitation de vCenter.\n",
+    "description": "Alerts on either a syslog service spawning a shell, transfer utility, or interpreter with suspicious download, temporary-path, execution, or tunnel arguments, or a root process establishing reverse SSH tooling or persistence from a suspicious context. These patterns are consistent with CVE-2026-59310 post-exploitation and indicate probable unauthorized execution or persistent access, but approved syslog hooks or support tunnels can match. SOC L1 should verify the root identity, parent process, full command line, and executable path, then correlate with external SSH connections, new services or scheduled tasks, and recent vCenter exploitation indicators. D\u00e9clenche une alerte lorsqu\u2019un service syslog lance un shell, un outil de transfert ou un interpr\u00e9teur avec des arguments suspects de t\u00e9l\u00e9chargement, de chemin temporaire, d\u2019ex\u00e9cution ou de tunnel, ou lorsqu\u2019un processus root \u00e9tablit un outil de reverse SSH ou une persistance depuis un contexte suspect. Ces sch\u00e9mas sont compatibles avec une post-exploitation de la CVE-2026-59310 et indiquent une ex\u00e9cution non autoris\u00e9e ou un acc\u00e8s persistant probables, mais des traitements syslog ou des tunnels de support approuv\u00e9s peuvent correspondre. Le SOC L1 doit v\u00e9rifier l\u2019identit\u00e9 root, le processus parent, la ligne de commande compl\u00e8te et le chemin de l\u2019ex\u00e9cutable, puis corr\u00e9ler avec les connexions SSH externes, les nouveaux services ou t\u00e2ches planifi\u00e9es et les indicateurs r\u00e9cents d\u2019exploitation de vCenter.",
     "eventid": [],
     "falsepositives": [
       "An explicitly approved syslog processing hook with a documented transfer operation",
@@ -1880,7 +2126,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects shells or network tools spawned by HPE OneView Java process, indicating CVE-2025-37164 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nR\u00e8gle STRICT : d\u00e9tecte l'ex\u00e9cution de shells ou d'utilitaires r\u00e9seau lanc\u00e9s par le processus Java d'HPE OneView, indiquant une exploitation r\u00e9ussie de CVE-2025-37164 (RCE non authentifi\u00e9 critique sur l'API REST ID Pools). Un processus Java dans le chemin d'installation OneView qui lance un shell ou un outil r\u00e9seau n'a aucune explication l\u00e9gitime en production. Traiter comme une exploitation confirm\u00e9e, isoler l'h\u00f4te et r\u00e9voquer tous les credentials accessibles depuis l'instance OneView. ANGLE MORT : les scripts de maintenance OneView qui invoquent des gestionnaires de paquets (apt-get, yum, dnf) via Java sont filtr\u00e9s. Si un attaquant encha\u00eene un gestionnaire de paquets l\u00e9gitime pour ex\u00e9cuter des commandes (ex: yum --downloadonly + exec), cela pourrait contourner le filtre. Surveiller les args inhabituels pass\u00e9s aux outils filtr\u00e9s. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects shells or network tools spawned by HPE OneView Java process, indicating CVE-2025-37164 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. R\u00e8gle STRICT : d\u00e9tecte l'ex\u00e9cution de shells ou d'utilitaires r\u00e9seau lanc\u00e9s par le processus Java d'HPE OneView, indiquant une exploitation r\u00e9ussie de CVE-2025-37164 (RCE non authentifi\u00e9 critique sur l'API REST ID Pools). Un processus Java dans le chemin d'installation OneView qui lance un shell ou un outil r\u00e9seau n'a aucune explication l\u00e9gitime en production. Traiter comme une exploitation confirm\u00e9e, isoler l'h\u00f4te et r\u00e9voquer tous les credentials accessibles depuis l'instance OneView. ANGLE MORT : les scripts de maintenance OneView qui invoquent des gestionnaires de paquets (apt-get, yum, dnf) via Java sont filtr\u00e9s. Si un attaquant encha\u00eene un gestionnaire de paquets l\u00e9gitime pour ex\u00e9cuter des commandes (ex: yum --downloadonly + exec), cela pourrait contourner le filtre. Surveiller les args inhabituels pass\u00e9s aux outils filtr\u00e9s. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Legitimate system maintenance if package managers are invoked from OneView context (rare, filtered with install/upgrade argument)",
@@ -1925,7 +2171,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Samba daemon (smbd/nmbd) spawning shell or interpreter on Linux, indicating CVE-2025-10230 WINS hook RCE. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un d\u00e9mon Samba (smbd/nmbd) spawning un shell ou interpr\u00e9teur sur Linux. Comportement anormal sur un AD DC - indique une exploitation de CVE-2025-10230 (injection dans le param\u00e8tre wins hook). R\u00e8gle STRICT : isoler imm\u00e9diatement en cas d'alerte. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Samba daemon (smbd/nmbd) spawning shell or interpreter on Linux, indicating CVE-2025-10230 WINS hook RCE. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. D\u00e9tecte un d\u00e9mon Samba (smbd/nmbd) spawning un shell ou interpr\u00e9teur sur Linux. Comportement anormal sur un AD DC - indique une exploitation de CVE-2025-10230 (injection dans le param\u00e8tre wins hook). R\u00e8gle STRICT : isoler imm\u00e9diatement en cas d'alerte. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Extremely rare administrative hooks explicitly documented and approved by the AD team"
@@ -1963,7 +2209,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a write to a sensitive credential file (/etc/passwd, /etc/shadow, /etc/group, /etc/gshadow, /etc/sudoers) by a process other than a known password/user management tool, consistent with the confirmed-impact stage of CVE-2026-43503 (DirtyClone) page cache corruption, where the kernel bug allows writing to a file opened read-only. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a write to a sensitive credential file (/etc/passwd, /etc/shadow, /etc/group, /etc/gshadow, /etc/sudoers) by a process other than a known password/user management tool, consistent with the confirmed-impact stage of CVE-2026-43503 (DirtyClone) page cache corruption, where the kernel bug allows writing to a file opened read-only. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Distribution or vendor tools not on the allowlist that legitimately manage local accounts (authconfig, realm, sssd tools, cloud-init) - tune per distribution",
@@ -2004,7 +2250,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects a Linux web server or PHP-FPM worker process spawning a network shell tool or a shell/interpreter with reverse shell command-line indicators, consistent with successful remote code execution following CVE-2026-58025 MediaWiki deserialization exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects a Linux web server or PHP-FPM worker process spawning a network shell tool or a shell/interpreter with reverse shell command-line indicators, consistent with successful remote code execution following CVE-2026-58025 MediaWiki deserialization exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity. La r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.",
     "eventid": [],
     "falsepositives": [
       "Authorized security testing in an isolated lab",
@@ -2043,7 +2289,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects the exact sudo indicator published by Cisco for active exploitation of CVE-2026-20079 and CVE-2026-20316: the low-privilege www account invoking package_info.pl as root against license.tmp on a Secure Firewall Management Center appliance. Cisco presents this combination as a compromise indicator; SOC L1 should verify the affected host, timestamp, FMC version, surrounding activity, and downstream managed-device exposure.\nD\u00e9tecte l\u2019indicateur sudo exact publi\u00e9 par Cisco pour l\u2019exploitation active de CVE-2026-20079 et CVE-2026-20316 : le compte bas-privil\u00e8ge www qui invoque package_info.pl en tant que root avec license.tmp sur une appliance Secure Firewall Management Center. Cisco pr\u00e9sente cette combinaison comme un indicateur de compromission ; le SOC L1 doit v\u00e9rifier l\u2019h\u00f4te affect\u00e9, l\u2019horodatage, la version FMC, les activit\u00e9s voisines et l\u2019exposition des \u00e9quipements g\u00e9r\u00e9s en aval.\n",
+    "description": "Detects the exact sudo indicator published by Cisco for active exploitation of CVE-2026-20079 and CVE-2026-20316: the low-privilege www account invoking package_info.pl as root against license.tmp on a Secure Firewall Management Center appliance. Cisco presents this combination as a compromise indicator; SOC L1 should verify the affected host, timestamp, FMC version, surrounding activity, and downstream managed-device exposure. D\u00e9tecte l\u2019indicateur sudo exact publi\u00e9 par Cisco pour l\u2019exploitation active de CVE-2026-20079 et CVE-2026-20316 : le compte bas-privil\u00e8ge www qui invoque package_info.pl en tant que root avec license.tmp sur une appliance Secure Firewall Management Center. Cisco pr\u00e9sente cette combinaison comme un indicateur de compromission ; le SOC L1 doit v\u00e9rifier l\u2019h\u00f4te affect\u00e9, l\u2019horodatage, la version FMC, les activit\u00e9s voisines et l\u2019exposition des \u00e9quipements g\u00e9r\u00e9s en aval.",
     "eventid": [],
     "falsepositives": [
       "None documented by Cisco; this exact command and account combination is presented in the vendor advisory as a compromise indicator rather than a normal administrative operation"

@@ -599,7 +599,9 @@
       "Security"
     ],
     "description": "Detects scenarios where attack attempts to elevate privileges via the command runas.",
-    "eventid": [],
+    "eventid": [
+      4624
+    ],
     "falsepositives": [
       "Administrator activity"
     ],
@@ -1228,7 +1230,9 @@
   },
   {
     "author": "mdecrevoisier",
-    "channel": [],
+    "channel": [
+      "Security"
+    ],
     "description": "Detects scenarios where an attacker attempts to enable insecure guest authentication in order to access a remote storage device (NAS) in order to perform some data exfiltration or lateral movement.",
     "eventid": [
       31018
@@ -1899,7 +1903,9 @@
       "Security"
     ],
     "description": "Detects scenarios where an attacker attempts to create a hard link.",
-    "eventid": [],
+    "eventid": [
+      4688
+    ],
     "falsepositives": [
       "admin activity on file server"
     ],
@@ -2972,7 +2978,9 @@
       "Windows PowerShell"
     ],
     "description": "Detects scenarios where an attacker enables the WSL to cary out malicious activities in a virtual instance to avoid detection.",
-    "eventid": [],
+    "eventid": [
+      800
+    ],
     "falsepositives": [
       "developer computer (with Visual Studio Code)",
       "administrator activity"
@@ -6106,7 +6114,9 @@
       "Security"
     ],
     "description": "Detects scenarios where an attacker attempts to disable Defender security features by modifying service configuration in registry.",
-    "eventid": [],
+    "eventid": [
+      4688
+    ],
     "falsepositives": [
       "None"
     ],
@@ -6326,12 +6336,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\mimidrv%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\mimidrv%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "mdecrevoisier",
@@ -7244,7 +7254,9 @@
       "Security"
     ],
     "description": "Detects scenarios where an attacker perform a password reset event. This does not require any knowledge of a user\u2019s current password, but it does require to have the \"Reset Password\" right. Correlate the event ID 4724, 4624 and 5145 using the \"SubjectLogonId\" field to identify the source of the reset.",
-    "eventid": [],
+    "eventid": [
+      4724
+    ],
     "falsepositives": [
       "None"
     ],
@@ -7470,12 +7482,12 @@
       "Channel",
       "EventID",
       "NewProcessName",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (NewProcessName LIKE '%\\\\netsh.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\NetSh' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (NewProcessName LIKE '%\\\\netsh.exe' ESCAPE '\\' AND ObjectName LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\NetSh' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "mdecrevoisier",
@@ -8536,45 +8548,6 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects scenarios where an attacker changed the IFEO settings related to sethc.",
-    "eventid": [],
-    "falsepositives": [
-      "None"
-    ],
-    "filename": "windows-os/win-os-sticky key changed (Reg via Sysmon).yaml",
-    "id": "81623db5-805f-594a-850a-dd90bdb9874f",
-    "level": "high",
-    "license": "CC0-1.0",
-    "logsource": {
-      "product": "windows",
-      "service": "security"
-    },
-    "required_fields": [
-      "Channel",
-      "EventID",
-      "EventType",
-      "OperationType",
-      "TargetObject"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ((EventID=13 AND EventType='SetValue' AND (TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\sethc.exe\\\\Debugger' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\Magnify.exe\\\\Debugger' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\Narrator.exe\\\\Debugger' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\utilman.exe\\\\Debugger' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\DisplaySwitch.exe\\\\Debugger' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\osk.exe\\\\Debugger' ESCAPE '\\')) OR (EventID=12 AND EventType='CreateKey' AND (TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\sethc.exe' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\Magnify.exe' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\Narrator.exe' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\utilman.exe' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\DisplaySwitch.exe' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\osk.exe' ESCAPE '\\'))))"
-    ],
-    "schema_version": 2,
-    "source": "mdecrevoisier",
-    "source_table": "logs",
-    "status": "experimental",
-    "tags": [
-      "attack.privilege_escalation",
-      "attack.t1546.008"
-    ],
-    "title": "Stickey key IFEO registry changed (Reg via Sysmon)"
-  },
-  {
-    "author": "mdecrevoisier",
-    "channel": [
-      "Security"
-    ],
     "description": "Detects scenarios where an attacker changes permissions on the AdminSDHolder container to establish persistence.",
     "eventid": [
       5136
@@ -8618,7 +8591,9 @@
       "PowerShellCore/Operational"
     ],
     "description": "Detects if a member is added to a local group via PowerShell.",
-    "eventid": [],
+    "eventid": [
+      4103
+    ],
     "falsepositives": [
       "Pentest",
       "Administrator activity",
@@ -9239,7 +9214,9 @@
       "Security"
     ],
     "description": "Detects scenarios where an attacker abuse RPC, NTLM relay and others components to escalate privileges.",
-    "eventid": [],
+    "eventid": [
+      4624
+    ],
     "falsepositives": [
       "None"
     ],
@@ -9544,12 +9521,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows NT\\\\Terminal Services' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows NT\\\\Terminal Services' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "mdecrevoisier",
@@ -10191,48 +10168,6 @@
       "attack.t1078.002"
     ],
     "title": "Account renamed to admin (or likely) account to evade defense"
-  },
-  {
-    "author": "mdecrevoisier",
-    "channel": [
-      "Security"
-    ],
-    "description": "Detects scenarios where an attacker abuses the Windows \"system failure and recovery\" capacities (CrashControl) to store information or to establish persistence.",
-    "eventid": [
-      4657
-    ],
-    "falsepositives": [
-      "Forensic, BSOD investigation"
-    ],
-    "filename": "windows-os/win-os-crash system behavior manipulation - WMImplant (registry).yaml",
-    "id": "b06df3e9-c2a3-57c7-b6eb-72780dc9ff78",
-    "level": "high",
-    "license": "CC0-1.0",
-    "logsource": {
-      "product": "windows",
-      "service": "security"
-    },
-    "required_fields": [
-      "Channel",
-      "EventID",
-      "EventType",
-      "NewProcessName",
-      "OperationType",
-      "TargetObject"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (NewProcessName LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' AND EventType='SetValue' AND (TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\CrashControl\\\\AutoReboot' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\CrashControl\\\\CrashDumpEnabled' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\CrashControl\\\\DumpFile' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\CrashControl\\\\KernelDumpOnly' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\CrashControl\\\\LogEvent' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\CrashControl\\\\MiniDumpDir' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\CrashControl\\\\Overwrite' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\CrashControl\\\\SendAlert' ESCAPE '\\')))"
-    ],
-    "schema_version": 2,
-    "source": "mdecrevoisier",
-    "source_table": "logs",
-    "status": "experimental",
-    "tags": [
-      "attack.persistence",
-      "attack.t1546.003"
-    ],
-    "title": "System crash behavior manipulation - WMImplant (registry)"
   },
   {
     "author": "mdecrevoisier",
@@ -11112,7 +11047,9 @@
       "PowerShellCore/Operational"
     ],
     "description": "Detects if a member is added to a domain group via PowerShell.",
-    "eventid": [],
+    "eventid": [
+      4103
+    ],
     "falsepositives": [
       "Pentest",
       "Administrator activity",
@@ -11968,12 +11905,12 @@
       "Channel",
       "EventID",
       "NewValue",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\LmCompatibilityLevel' ESCAPE '\\' AND (NewValue LIKE '%0x00000000%' ESCAPE '\\' OR NewValue LIKE '%0x00000001%' ESCAPE '\\' OR NewValue LIKE '%0x00000002%' ESCAPE '\\')))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (ObjectName LIKE '%\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\LmCompatibilityLevel' ESCAPE '\\' AND (NewValue LIKE '%0x00000000%' ESCAPE '\\' OR NewValue LIKE '%0x00000001%' ESCAPE '\\' OR NewValue LIKE '%0x00000002%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
     "source": "mdecrevoisier",
@@ -12255,12 +12192,12 @@
       "Channel",
       "EventID",
       "NewValue",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Cryptography\\\\Providers\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Cryptography\\\\OID\\\\EncodingType%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Cryptography\\\\Providers\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Cryptography\\\\OID\\\\EncodingType%' ESCAPE '\\') AND (NewValue LIKE '%.dll%' ESCAPE '\\' OR NewValue LIKE '%\\\\dll%' ESCAPE '\\' OR NewValue LIKE '%\\\\$dll%' ESCAPE '\\')))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((ObjectName LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Cryptography\\\\Providers\\\\%' ESCAPE '\\' OR ObjectName LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Cryptography\\\\OID\\\\EncodingType%' ESCAPE '\\' OR ObjectName LIKE '%\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Cryptography\\\\Providers\\\\%' ESCAPE '\\' OR ObjectName LIKE '%\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Cryptography\\\\OID\\\\EncodingType%' ESCAPE '\\') AND (NewValue LIKE '%.dll%' ESCAPE '\\' OR NewValue LIKE '%\\\\dll%' ESCAPE '\\' OR NewValue LIKE '%\\\\$dll%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
     "source": "mdecrevoisier",
@@ -12611,7 +12548,9 @@
       "Security"
     ],
     "description": "Detects scenarios where an attacker calls the stickey key and execute CMD.",
-    "eventid": [],
+    "eventid": [
+      4688
+    ],
     "falsepositives": [
       "None"
     ],
@@ -12752,12 +12691,12 @@
       "Channel",
       "EventID",
       "NewValue",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\System\\\\CurrentControlSet\\\\Control\\\\SecurityProviders\\\\WDigest\\\\UseLogonCredential' ESCAPE '\\' AND NewValue LIKE '%0x00000001%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (ObjectName LIKE '%\\\\System\\\\CurrentControlSet\\\\Control\\\\SecurityProviders\\\\WDigest\\\\UseLogonCredential' ESCAPE '\\' AND NewValue LIKE '%0x00000001%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "mdecrevoisier",
@@ -13122,12 +13061,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%\\\\CurrentControlSet\\\\Services\\\\BTOBTO\\\\%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%\\\\CurrentControlSet\\\\Services\\\\BTOBTO\\\\%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "mdecrevoisier",
@@ -13406,12 +13345,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND TargetObject LIKE '%\\\\services\\\\DNS\\\\Parameters\\\\ServerLevelPluginDll' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ObjectName LIKE '%\\\\services\\\\DNS\\\\Parameters\\\\ServerLevelPluginDll' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "mdecrevoisier",

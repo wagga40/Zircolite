@@ -5,7 +5,7 @@
       "Microsoft-Windows-PowerShell/Operational",
       "PowerShellCore/Operational"
     ],
-    "description": "Detects the loading of suspicious .NET methods, seen in PowerShell script load content. This \nbehavior is not limited to Yellow Cockatoo and can be applied universally for malicious \nPowerShell obfuscation attempts. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Detects the loading of suspicious .NET methods, seen in PowerShell script load content. This behavior is not limited to Yellow Cockatoo and can be applied universally for malicious PowerShell obfuscation attempts. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       4104
     ],
@@ -47,7 +47,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "If you\u2019re looking to detect malicious use of Base64 encoding, consider monitoring for the \nexecution of processes like powershell.exe or cmd.exe along with command lines containing \nparameters like ToBase64String and FromBase64String. The following simple pseudo-analytic \nmight help you find malicious obfuscation. Part of the RedCanary 2024 Threat Detection \nReport.\n",
+    "description": "If you\u2019re looking to detect malicious use of Base64 encoding, consider monitoring for the execution of processes like powershell.exe or cmd.exe along with command lines containing parameters like ToBase64String and FromBase64String. The following simple pseudo-analytic might help you find malicious obfuscation. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -129,7 +129,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "DLLs that are designed to be loaded by Regsvr32 are expected to have a \nDllRegisterServer export function implemented. Adversaries will often \nsupply the same DLL to rundll32.exe as well. Executing the DllRegisterServer \nexport function with rundll32.exe is tradecraft that\u2019s unique to adversary \nbehavior and is rarely seen in legitimate scenarios. We\u2019ve observed this \nbehavior in threats including Qbot, Ursnif, and Zloader, to name a few examples. \nPart of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "DLLs that are designed to be loaded by Regsvr32 are expected to have a DllRegisterServer export function implemented. Adversaries will often supply the same DLL to rundll32.exe as well. Executing the DllRegisterServer export function with rundll32.exe is tradecraft that\u2019s unique to adversary behavior and is rarely seen in legitimate scenarios. We\u2019ve observed this behavior in threats including Qbot, Ursnif, and Zloader, to name a few examples. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -171,7 +171,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Yellow Cockatoo Windows Startup folder for persistence. Not unique to Yellow Cockatoo, \nthis detection opportunity is likely to identify persistence mechanisms in multiple \nthreats. In the context of Yellow Cockatoo, this persistence mechanism eventually \nlaunches the command-line script that leads to the installation of a malicious DLL. Part \nof the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Yellow Cockatoo Windows Startup folder for persistence. Not unique to Yellow Cockatoo, this detection opportunity is likely to identify persistence mechanisms in multiple threats. In the context of Yellow Cockatoo, this persistence mechanism eventually launches the command-line script that leads to the installation of a malicious DLL. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       11
     ],
@@ -256,7 +256,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects attempts to bypass security controls using bitsadmin.exe to download malicious code. \nPart of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects attempts to bypass security controls using bitsadmin.exe to download malicious code. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -297,7 +297,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "It\u2019s almost always malicious when wmic.exe spawns as a child process of Microsoft Office and \nsimilar products. As such, it makes sense to examine the chain of execution and follow-on \nactivity when this occurs. The following is a non-exhaustive example analytic that will catch \nsome of this activity. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "It\u2019s almost always malicious when wmic.exe spawns as a child process of Microsoft Office and similar products. As such, it makes sense to examine the chain of execution and follow-on activity when this occurs. The following is a non-exhaustive example analytic that will catch some of this activity. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -339,7 +339,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects app package installation processes where legitimate software is included \nin an MSIX package, but a malicious PowerShell script may execute beforehand by \nemploying the Package Support Framework (PSF). In these cases, the MSIX package \nincludes the malicious script, which is executed as specified in an included \nconfig.json file. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Detects app package installation processes where legitimate software is included in an MSIX package, but a malicious PowerShell script may execute beforehand by employing the Package Support Framework (PSF). In these cases, the MSIX package includes the malicious script, which is executed as specified in an included config.json file. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -421,7 +421,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Rundll32 does not normally execute without corresponding command-line \narguments and while spawning a child process. Given this, you may want \nto alert on the execution of processes that appear to be rundll32.exe \nwithout any command-line arguments , especially when they spawn child \nprocesses or make network connections. Part of the RedCanary 2024 \nThreat Detection Report.\n",
+    "description": "Rundll32 does not normally execute without corresponding command-line arguments and while spawning a child process. Given this, you may want to alert on the execution of processes that appear to be rundll32.exe without any command-line arguments , especially when they spawn child processes or make network connections. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       3
     ],
@@ -463,7 +463,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This detection analytic identifies Impacket\u2019s secretsdump.py script on a target host, which is the most common script we have observed \nin customer environments. secretsdump.py is remotely run on an adversary\u2019s machine to steal credentials. The command is commonly \nexecuted by svchost.exe, where regsvc.dll is loaded which allows the export of credentials from the registry. The output is redirected \nto an eight-character TMP file within the System32 directory. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "This detection analytic identifies Impacket\u2019s secretsdump.py script on a target host, which is the most common script we have observed in customer environments. secretsdump.py is remotely run on an adversary\u2019s machine to steal credentials. The command is commonly executed by svchost.exe, where regsvc.dll is loaded which allows the export of credentials from the registry. The output is redirected to an eight-character TMP file within the System32 directory. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       11
     ],
@@ -532,7 +532,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (Image LIKE '%\\\\services.exe' ESCAPE '\\' AND EventType='CreateKey' AND TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\BTOBTO' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 AND EventType='CreateKey') AND (Image LIKE '%\\\\services.exe' ESCAPE '\\' AND EventType='CreateKey' AND TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\BTOBTO' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "mbabinski",
@@ -630,7 +630,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects potential LSASS abuse based on unusual parent-child process lineage patterns. \nPart of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects potential LSASS abuse based on unusual parent-child process lineage patterns. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -671,7 +671,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "It is unusual for these processes to attempt network connections with an empty command line, \nwhich can indicate malicious command and control (C2) activity. Part of the RedCanary 2024 \nThreat Detection Report.\n",
+    "description": "It is unusual for these processes to attempt network connections with an empty command line, which can indicate malicious command and control (C2) activity. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       3
     ],
@@ -711,7 +711,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "It\u2019s not uncommon for ransomware operators to leverage WMI to delete volume shadows, \nsignificantly complicating the process for recovering access to encrypted systems and files. \nIf you want to detect ransomware using WMI to delete shadow copies, consider looking for \nwmic.exe execution with command lines including shadowcopy or delete. Part of the RedCanary \n2024 Threat Detection Report.\n",
+    "description": "It\u2019s not uncommon for ransomware operators to leverage WMI to delete volume shadows, significantly complicating the process for recovering access to encrypted systems and files. If you want to detect ransomware using WMI to delete shadow copies, consider looking for wmic.exe execution with command lines including shadowcopy or delete. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -797,7 +797,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects non-powershell.exe processes executing with command lines that are usually \nassociated with powershell. This is an example for demonstration purposes only. \nPart of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects non-powershell.exe processes executing with command lines that are usually associated with powershell. This is an example for demonstration purposes only. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -879,7 +879,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This detection analytic looks for wmiprvse.exe spawn cmd.exe with the following command line, \n`cmd.exe /Q /c ', ' 1 \\\\', ' 2 &1`. These strings are specific to the execution of wmiexe.py, \nwhich allows a semi-interactive shell used via WMI. Part of the RedCanary 2024 Threat Detection \nReport.\n",
+    "description": "This detection analytic looks for wmiprvse.exe spawn cmd.exe with the following command line, `cmd.exe /Q /c ', ' 1 \\\\', ' 2 &1`. These strings are specific to the execution of wmiexe.py, which allows a semi-interactive shell used via WMI. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -966,7 +966,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Adversaries bypass controls using the Windows Command Shell in a plethora of ways, \nbut you can detect the one we see most often with a simple combination of process \nexecution and a corresponding command line. Part of the RedCanary 2024 Threat \nDetection Report.\n",
+    "description": "Adversaries bypass controls using the Windows Command Shell in a plethora of ways, but you can detect the one we see most often with a simple combination of process execution and a corresponding command line. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -1052,7 +1052,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "To detect suspicious use of msiexec.exe by Raspberry Robin or other threats, \nit\u2019s essential to take a look at the command line and the URL. Detecting \nmsiexec.exe making outbound network connections to download and install packages \nin the command-line interface will give you the opportunity to examine the \nactivity and determine if it\u2019s malicious or not. Part of the RedCanary 2024 \nThreat Detection Report.\n",
+    "description": "To detect suspicious use of msiexec.exe by Raspberry Robin or other threats, it\u2019s essential to take a look at the command line and the URL. Detecting msiexec.exe making outbound network connections to download and install packages in the command-line interface will give you the opportunity to examine the activity and determine if it\u2019s malicious or not. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -1173,7 +1173,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This detection analytic looks for the execution of powershell.exe with command \nlines that include variations of the -encodedcommand argument; PowerShell will \nrecognize and accept anything from -e onward, and it will show up outside of \nthe encoded bits. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "This detection analytic looks for the execution of powershell.exe with command lines that include variations of the -encodedcommand argument; PowerShell will recognize and accept anything from -e onward, and it will show up outside of the encoded bits. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -1217,7 +1217,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This detection analytic identifies Impacket\u2019s atexec.py script on a target host. atexec.py is remotely run \non an adversary\u2019s machine to execute commands on the victim via scheduled task. The command is commonly \nexecuted by a non-interactive cmd.exe with the output redirected to an eight-character TMP file. Part of \nthe RedCanary 2024 Threat Detection Report.\n",
+    "description": "This detection analytic identifies Impacket\u2019s atexec.py script on a target host. atexec.py is remotely run on an adversary\u2019s machine to execute commands on the victim via scheduled task. The command is commonly executed by a non-interactive cmd.exe with the output redirected to an eight-character TMP file. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       11
     ],
@@ -1302,7 +1302,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Many of our PowerShell detection analytics look for cmdlets, methods, and \nswitches that may indicate malicious activity. The following analytic is \nby no means exhaustive but offers a few valuable examples of suspicious \ncmdlets and other oft-abused features to look out for. Part of the \nRedCanary 2024 Threat Detection Report.\n",
+    "description": "Many of our PowerShell detection analytics look for cmdlets, methods, and switches that may indicate malicious activity. The following analytic is by no means exhaustive but offers a few valuable examples of suspicious cmdlets and other oft-abused features to look out for. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -1384,7 +1384,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Left unchecked, SocGholish may lead to domain discovery. This type of behavior is \noften a precursor to ransomware activity, and should be quickly quelled to prevent \nfurther progression of the threat. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Left unchecked, SocGholish may lead to domain discovery. This type of behavior is often a precursor to ransomware activity, and should be quickly quelled to prevent further progression of the threat. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -1504,7 +1504,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects powershell command lines used with a process name besides powershell. Part \nof the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Detects powershell command lines used with a process name besides powershell. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -1669,7 +1669,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "As is the case with most techniques in this report, it's critical that \nyou are able to take stock of what is normal in your environment if you \nhope to be able to identify what isn't. In the context of Rundll32, you\u2019ll \nwant to monitor for executions of rundll32.exe from unusual parent processes, \nand the following pseudo-analytic\u2014based on an amalgamation of Red Canary \ndetection logic\u2014should help security teams do just that. Part of the RedCanary \n2024 Threat Detection Report.\n",
+    "description": "As is the case with most techniques in this report, it's critical that you are able to take stock of what is normal in your environment if you hope to be able to identify what isn't. In the context of Rundll32, you\u2019ll want to monitor for executions of rundll32.exe from unusual parent processes, and the following pseudo-analytic\u2014based on an amalgamation of Red Canary detection logic\u2014should help security teams do just that. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -1751,7 +1751,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Looking for suspicious command-line parameters is another solid indicator of malice. Certain \nred team and post-exploitation frameworks will spawn unique and unsigned binaries or commands \nremotely using the well known process call create command, and we\u2019ve got a couple different \ndetection methods that have alerted us to related activity over the years. Potentially \nsuspicious WMI command switches include create, node:, process, and call. Of course, the \nmaliciousness of these commands are context-specific, and therefore, the following may \nrequire tuning or generate high volumes of false positives. Part of the RedCanary 2024 Threat \nDetection Report.\n",
+    "description": "Looking for suspicious command-line parameters is another solid indicator of malice. Certain red team and post-exploitation frameworks will spawn unique and unsigned binaries or commands remotely using the well known process call create command, and we\u2019ve got a couple different detection methods that have alerted us to related activity over the years. Potentially suspicious WMI command switches include create, node:, process, and call. Of course, the maliciousness of these commands are context-specific, and therefore, the following may require tuning or generate high volumes of false positives. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -1792,7 +1792,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects attempts to bypass security controls using certutil.exe to download malicious code. \nPart of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects attempts to bypass security controls using certutil.exe to download malicious code. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2039,7 +2039,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "We have a lot of detection analytics that seek out suspicious or unusual process \nlineage spawning or spawning from cmd.exe. Many of them don\u2019t often generate confirmed \nthreat detections but can occasionally raise the flag on important threats, like \nExchange compromises. One semi-common pattern in our library of analytics is suspicious \nprocess interactions between the Windows IIS worker process (w3wp.exe) and the command \nshell. The following amalgamation of analytics might help you detect a diverse array of \nmalicious activity related to web server compromises. Part of the RedCanary 2024 Threat \nDetection Report.\n",
+    "description": "We have a lot of detection analytics that seek out suspicious or unusual process lineage spawning or spawning from cmd.exe. Many of them don\u2019t often generate confirmed threat detections but can occasionally raise the flag on important threats, like Exchange compromises. One semi-common pattern in our library of analytics is suspicious process interactions between the Windows IIS worker process (w3wp.exe) and the command shell. The following amalgamation of analytics might help you detect a diverse array of malicious activity related to web server compromises. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2082,7 +2082,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "One persistence mechanism used by some variations of SmashJacker was an AppInit DLL. \nIt would use a reg.exe command to create appropriate Windows Registry keys for \npersistence. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "One persistence mechanism used by some variations of SmashJacker was an AppInit DLL. It would use a reg.exe command to create appropriate Windows Registry keys for persistence. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2125,7 +2125,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Fortunately for defenders, Gamarue is detectable with endpoint telemetry. The majority \nof Gamarue activity we see involves rundll32.exe executing with unusual command lines \nthat include long filenames with repeating characters and random function names. Part \nof the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Fortunately for defenders, Gamarue is detectable with endpoint telemetry. The majority of Gamarue activity we see involves rundll32.exe executing with unusual command lines that include long filenames with repeating characters and random function names. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2329,7 +2329,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "While JavaScript is everywhere on the web, it is rather unusual for the browser to download \na JavaScript file and execute it via the Windows Script Host (wscript.exe). When this \ndownloaded script starts communicating with devices outside of your network, things get even \nmore suspicious. That said, this detection analytic may be noisy in some environments, so be \nprepared to identify what scripts are normally run in this way to tune out the noise. Part of \nthe RedCanary 2024 Threat Detection Report.\n",
+    "description": "While JavaScript is everywhere on the web, it is rather unusual for the browser to download a JavaScript file and execute it via the Windows Script Host (wscript.exe). When this downloaded script starts communicating with devices outside of your network, things get even more suspicious. That said, this detection analytic may be noisy in some environments, so be prepared to identify what scripts are normally run in this way to tune out the noise. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       3
     ],
@@ -2354,7 +2354,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND (((ParentImage LIKE '%\\\\brave.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\chrome.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\msedge.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\opera.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\vivaldi.exe' ESCAPE '\\') AND Image LIKE '%\\\\wscript.exe' ESCAPE '\\') AND (NOT COALESCE((DestinationIp LIKE '127.%' ESCAPE '\\' OR DestinationIp LIKE '10.%' ESCAPE '\\' OR DestinationIp LIKE '172.16.%' ESCAPE '\\' OR DestinationIp LIKE '172.17.%' ESCAPE '\\' OR DestinationIp LIKE '172.18.%' ESCAPE '\\' OR DestinationIp LIKE '172.19.%' ESCAPE '\\' OR DestinationIp LIKE '172.20.%' ESCAPE '\\' OR DestinationIp LIKE '172.21.%' ESCAPE '\\' OR DestinationIp LIKE '172.22.%' ESCAPE '\\' OR DestinationIp LIKE '172.23.%' ESCAPE '\\' OR DestinationIp LIKE '172.24.%' ESCAPE '\\' OR DestinationIp LIKE '172.25.%' ESCAPE '\\' OR DestinationIp LIKE '172.26.%' ESCAPE '\\' OR DestinationIp LIKE '172.27.%' ESCAPE '\\' OR DestinationIp LIKE '172.28.%' ESCAPE '\\' OR DestinationIp LIKE '172.29.%' ESCAPE '\\' OR DestinationIp LIKE '172.30.%' ESCAPE '\\' OR DestinationIp LIKE '172.31.%' ESCAPE '\\' OR DestinationIp LIKE '192.168.%' ESCAPE '\\' OR DestinationIp LIKE '169.254.%' ESCAPE '\\' OR DestinationIp='::1' OR DestinationIp LIKE 'fe8_:%' ESCAPE '\\' OR DestinationIp LIKE 'fe9_:%' ESCAPE '\\' OR DestinationIp LIKE 'fea_:%' ESCAPE '\\' OR DestinationIp LIKE 'feb_:%' ESCAPE '\\' OR DestinationIp LIKE 'fc__:%' ESCAPE '\\' OR DestinationIp LIKE 'fd__:%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND (((ParentImage LIKE '%\\\\brave.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\chrome.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\msedge.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\opera.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\vivaldi.exe' ESCAPE '\\') AND Image LIKE '%\\\\wscript.exe' ESCAPE '\\') AND (NOT COALESCE((DestinationIp LIKE '127.%' ESCAPE '\\' OR DestinationIp LIKE '10.%' ESCAPE '\\' OR DestinationIp LIKE '172.16.%' ESCAPE '\\' OR DestinationIp LIKE '172.17.%' ESCAPE '\\' OR DestinationIp LIKE '172.18.%' ESCAPE '\\' OR DestinationIp LIKE '172.19.%' ESCAPE '\\' OR DestinationIp LIKE '172.20.%' ESCAPE '\\' OR DestinationIp LIKE '172.21.%' ESCAPE '\\' OR DestinationIp LIKE '172.22.%' ESCAPE '\\' OR DestinationIp LIKE '172.23.%' ESCAPE '\\' OR DestinationIp LIKE '172.24.%' ESCAPE '\\' OR DestinationIp LIKE '172.25.%' ESCAPE '\\' OR DestinationIp LIKE '172.26.%' ESCAPE '\\' OR DestinationIp LIKE '172.27.%' ESCAPE '\\' OR DestinationIp LIKE '172.28.%' ESCAPE '\\' OR DestinationIp LIKE '172.29.%' ESCAPE '\\' OR DestinationIp LIKE '172.30.%' ESCAPE '\\' OR DestinationIp LIKE '172.31.%' ESCAPE '\\' OR DestinationIp LIKE '192.168.%' ESCAPE '\\' OR DestinationIp LIKE '169.254.%' ESCAPE '\\' OR DestinationIp='::1' OR DestinationIp='0:0:0:0:0:0:0:1' OR DestinationIp LIKE 'fe8_:%' ESCAPE '\\' OR DestinationIp LIKE 'fe9_:%' ESCAPE '\\' OR DestinationIp LIKE 'fea_:%' ESCAPE '\\' OR DestinationIp LIKE 'feb_:%' ESCAPE '\\' OR DestinationIp LIKE 'fc__:%' ESCAPE '\\' OR DestinationIp LIKE 'fd__:%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "mbabinski",
@@ -2371,7 +2371,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Consider monitoring for instances of rundll32.exe running Windows \nnative DLLs that have export functionalities that adversaries commonly \nleverage for executing malicious code and evading defensive controls. \nThe following pseudo-analytic applies specifically to adversaries who \nuse the MiniDump export functionality of comsvcs.dll to dump the \ncontents of LSASS, but this logic could be adapted to detect other \nmalicious activity as well. Part of the RedCanary 2024 Threat Detection \nReport.\n",
+    "description": "Consider monitoring for instances of rundll32.exe running Windows native DLLs that have export functionalities that adversaries commonly leverage for executing malicious code and evading defensive controls. The following pseudo-analytic applies specifically to adversaries who use the MiniDump export functionality of comsvcs.dll to dump the contents of LSASS, but this logic could be adapted to detect other malicious activity as well. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2497,7 +2497,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "In general, trusted binaries and known administrative tools and processes will initiate WMI \nactivity. As such, it makes sense to look for known bad processes launching WMI or deviations \nfrom the expected where a legitimate but unusual Windows binary spawns WMI\u2014or spawns from it. \nThe following is an amalgamation of several analytics that can detect a wide array of threats, \nranging from red team activity to web shells to coinminers. Part of the RedCanary 2024 Threat \nDetection Report.\n",
+    "description": "In general, trusted binaries and known administrative tools and processes will initiate WMI activity. As such, it makes sense to look for known bad processes launching WMI or deviations from the expected where a legitimate but unusual Windows binary spawns WMI\u2014or spawns from it. The following is an amalgamation of several analytics that can detect a wide array of threats, ranging from red team activity to web shells to coinminers. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2619,7 +2619,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects suspect command line strings in CMD processes spawned by services.exe. \nPart of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects suspect command line strings in CMD processes spawned by services.exe. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2661,7 +2661,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Kerberos ticket files (.kirbi) are of interest to adversaries as they can \ncontain sensitive data such as NTLM hashes that can be cracked offline. To \nperform these attacks, a unique file extension variable is defined within \nMimikatz that designates the default extension as .kirbi. Part of the \nRedCanary 2024 Threat Detection Report.\n",
+    "description": "Kerberos ticket files (.kirbi) are of interest to adversaries as they can contain sensitive data such as NTLM hashes that can be cracked offline. To perform these attacks, a unique file extension variable is defined within Mimikatz that designates the default extension as .kirbi. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       11
     ],
@@ -2703,7 +2703,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "During execution, SmashJacker forced Google Chrome or Microsoft Edge to open with \nthe command line argument --load-extension so a browser extension can install without \nuser interaction. This analytic will likely uncover additional adware in an environment \nand may need tuning to take account for acceptable software installation. Part of the \nRedCanary 2024 Threat Detection Report.\n",
+    "description": "During execution, SmashJacker forced Google Chrome or Microsoft Edge to open with the command line argument --load-extension so a browser extension can install without user interaction. This analytic will likely uncover additional adware in an environment and may need tuning to take account for acceptable software installation. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2785,7 +2785,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Identifies processes in which Mimikatz module names are observed as command-line parameters. \nPart of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Identifies processes in which Mimikatz module names are observed as command-line parameters. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2826,7 +2826,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects .lnk files created by Powershell in the startup folder. Associated with (but not unique to)\nYellow Cockatoo, AKA Solarmarker/Jupyter Stealer. Part of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects .lnk files created by Powershell in the startup folder. Associated with (but not unique to) Yellow Cockatoo, AKA Solarmarker/Jupyter Stealer. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       11
     ],
@@ -2868,7 +2868,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Impacket\u2019s SecretsDump utility consistently involves the Windows Service Host \n(svchost.exe) writing randomly named .tmp files to the System32 directory. The \nfollowing pseudo-detector should offer defenders a reliable method of detecting \nImpacket's SecretsDump utility. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Impacket\u2019s SecretsDump utility consistently involves the Windows Service Host (svchost.exe) writing randomly named .tmp files to the System32 directory. The following pseudo-detector should offer defenders a reliable method of detecting Impacket's SecretsDump utility. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       7
     ],
@@ -2909,7 +2909,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Reconnaissance is harder to detect because it looks very similar to normal admin behavior. \nEven so, we detect a relatively high volume of adversaries leveraging WMI to quickly gather \ndomain information such as users, groups, or computers in the domain. The following may help \nyou detect related activity. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Reconnaissance is harder to detect because it looks very similar to normal admin behavior. Even so, we detect a relatively high volume of adversaries leveraging WMI to quickly gather domain information such as users, groups, or computers in the domain. The following may help you detect related activity. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2953,7 +2953,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Adversaries frequently establish persistence by using scheduled tasks to launch \nthe Windows Command Shell. Detecting this behavior is relatively straightforward. \nPart of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Adversaries frequently establish persistence by using scheduled tasks to launch the Windows Command Shell. Detecting this behavior is relatively straightforward. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -2996,7 +2996,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This rule detects script interpreters, command-line tools, and similar suspicious child processes of ArcSOC.exe. \nArcSOC.exe is the process name which hosts ArcGIS Server REST services. If an attacker compromises an ArcGIS \nServer system and uploads a malicious Server Object Extension (SOE), they can send crafted requests to the corresponding \nservice endpoint and remotely execute code from the ArcSOC.exe process.\n",
+    "description": "This rule detects script interpreters, command-line tools, and similar suspicious child processes of ArcSOC.exe. ArcSOC.exe is the process name which hosts ArcGIS Server REST services. If an attacker compromises an ArcGIS Server system and uploads a malicious Server Object Extension (SOE), they can send crafted requests to the corresponding service endpoint and remotely execute code from the ArcSOC.exe process.",
     "eventid": [
       1
     ],
@@ -3080,7 +3080,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Adversaries often bypass security controls by using the Windows Certificate \nUtility (certutil.exe) to download malicious code. In general, they leverage \ncertutil.exe along with the -split command-line option. Part of the RedCanary \n2024 Threat Detection Report.\n",
+    "description": "Adversaries often bypass security controls by using the Windows Certificate Utility (certutil.exe) to download malicious code. In general, they leverage certutil.exe along with the -split command-line option. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3121,7 +3121,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects instances where the powershell process is renamed to notepad for defense evasion. \nPart of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Detects instances where the powershell process is renamed to notepad for defense evasion. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3204,7 +3204,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "SocGholish employs several scripted reconnaissance commands. While much of this activity \noccurs in memory, one that stands out is the execution of whoami with the output redirected \nto a local temp file with the naming convention rad<5-hex-chars>.tmp. Part of the RedCanary \n2024 Threat Detection Report.\n",
+    "description": "SocGholish employs several scripted reconnaissance commands. While much of this activity occurs in memory, one that stands out is the execution of whoami with the output redirected to a local temp file with the naming convention rad<5-hex-chars>.tmp. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3246,7 +3246,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "It is not unusual for adversaries, including ones who peddle ransomware, to use \nBITSAdmin to download arbitrary files from the internet in an effort to evade \napplication blocklisting. The following analytic will look for the execution of \nbitsadmin.exe with command options that suggest a file is being downloaded. Part \nof the RedCanary 2024 Threat Detection Report.\n",
+    "description": "It is not unusual for adversaries, including ones who peddle ransomware, to use BITSAdmin to download arbitrary files from the internet in an effort to evade application blocklisting. The following analytic will look for the execution of bitsadmin.exe with command options that suggest a file is being downloaded. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3328,7 +3328,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This analytic looks for the execution of a process that seems to be \npowershell.exe along with a corresponding command line containing the \nterm base64. Base64 encoding isn\u2019t inherently suspicious, but it\u2019s worth \nlooking out for in a lot of environments, and the following pseudo-detection \nlogic can help detect a wide variety of malicious activity. Part of the \nRedCanary 2024 Threat Detection Report.\n",
+    "description": "This analytic looks for the execution of a process that seems to be powershell.exe along with a corresponding command line containing the term base64. Base64 encoding isn\u2019t inherently suspicious, but it\u2019s worth looking out for in a lot of environments, and the following pseudo-detection logic can help detect a wide variety of malicious activity. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3412,7 +3412,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detecting obfuscation in the command shell is relatively straightforward, but \nthere are a lot of variations to consider when you\u2019re developing detection \ncoverage. Of course, the process you\u2019re looking for will always be cmd.exe, \nbut the corresponding command line can contain a variety of suspicious characters. \nThe trick is finding the thresholds where the inclusion of obfuscation characters \ngo from normal to anomalous (but benign) to suspicious enough to warrant alerting. \nThe following pseudo-detection logic offers a good starting point for developing \ndetection coverage for obfuscation in the command line. Part of the RedCanary 2024 \nThreat Detection Report.\n",
+    "description": "Detecting obfuscation in the command shell is relatively straightforward, but there are a lot of variations to consider when you\u2019re developing detection coverage. Of course, the process you\u2019re looking for will always be cmd.exe, but the corresponding command line can contain a variety of suspicious characters. The trick is finding the thresholds where the inclusion of obfuscation characters go from normal to anomalous (but benign) to suspicious enough to warrant alerting. The following pseudo-detection logic offers a good starting point for developing detection coverage for obfuscation in the command line. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3456,7 +3456,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "By monitoring and detecting on module loads, you can catch a variety of different malicious \nactivities, including defense evasion and credential theft. In cases where an adversary is \nusing WMI for credential theft, consider looking for the execution of wmiprvse.exe (or its \nchild processes) with unusual module loads like samlib.dll or vaultcli.dll. WMI is also a \nuseful vehicle for bypassing application controls, and we commonly see adversaries\u2014real and \nsimulated\u2013using a WMI bypass method called \u201cSquibblyTwo.\u201d The following pseudo-detection \nanalytic is designed specifically to catch application control bypasses, but you can likely \nadapt it to detect other threats by substituting in a different DLL or by removing the command. \nPart of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "By monitoring and detecting on module loads, you can catch a variety of different malicious activities, including defense evasion and credential theft. In cases where an adversary is using WMI for credential theft, consider looking for the execution of wmiprvse.exe (or its child processes) with unusual module loads like samlib.dll or vaultcli.dll. WMI is also a useful vehicle for bypassing application controls, and we commonly see adversaries\u2014real and simulated\u2013using a WMI bypass method called \u201cSquibblyTwo.\u201d The following pseudo-detection analytic is designed specifically to catch application control bypasses, but you can likely adapt it to detect other threats by substituting in a different DLL or by removing the command. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       7
     ],
@@ -3539,7 +3539,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "RedCanary detected high volumes of obfuscation this year looking for apparent phishing \nschemes where adversaries conceal JavaScript payloads in ZIP files and write them \nto the users and temp directories. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "RedCanary detected high volumes of obfuscation this year looking for apparent phishing schemes where adversaries conceal JavaScript payloads in ZIP files and write them to the users and temp directories. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       3
     ],
@@ -3620,7 +3620,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Red Canary has had success detecting ChromeLoader by looking for instances of NW.js \napplications that are unsigned and running from %AppData/Roaming%. This behavior is \nnot unique to ChromeLoader, and some tuning may be required to avoid detecting \nlegitimate applications. A partial list of common ChromeLoader NW.js runtime app \ninstallation paths is included below to help distinguish the signal from the noise. \nPart of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Red Canary has had success detecting ChromeLoader by looking for instances of NW.js applications that are unsigned and running from %AppData/Roaming%. This behavior is not unique to ChromeLoader, and some tuning may be required to avoid detecting legitimate applications. A partial list of common ChromeLoader NW.js runtime app installation paths is included below to help distinguish the signal from the noise. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3700,7 +3700,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Similar to the wmiexec.py detector logic, this detection analytic is looking for services.exe \nspawning cmd.exe with a command line that has the following strings: '/Q', '/c', 'echo',' > ', \n' 2>&1'. These strings are unique to the execution of smbexec.py, which allows a semi-interactive \nshell used through SMB. This script functions similar to psexec.py, but does not write a service \nbinary to disk on the target machine. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Similar to the wmiexec.py detector logic, this detection analytic is looking for services.exe spawning cmd.exe with a command line that has the following strings: '/Q', '/c', 'echo',' > ', ' 2>&1'. These strings are unique to the execution of smbexec.py, which allows a semi-interactive shell used through SMB. This script functions similar to psexec.py, but does not write a service binary to disk on the target machine. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3747,7 +3747,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects instances of explorer.exe spawning cmd.exe along with corresponding start and \nexit commands that we commonly observe in conjunction with a wide variety of malicious \nactivity. Part of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects instances of explorer.exe spawning cmd.exe along with corresponding start and exit commands that we commonly observe in conjunction with a wide variety of malicious activity. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3789,7 +3789,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects possible DLL Search Order hijacking using Avast antivirus wsc_proxy application. \nThis technique is associated with PlugX. Part of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects possible DLL Search Order hijacking using Avast antivirus wsc_proxy application. This technique is associated with PlugX. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -3869,7 +3869,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects instances of LSASS running under any non-privileged user context, which can indicate abuse.\nPart of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects instances of LSASS running under any non-privileged user context, which can indicate abuse. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       4688
     ],
@@ -3909,7 +3909,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The following pseudo-detector should help security teams detect instances \nwhere Rundll32 opens a cross process handle into LSASS to collect credentials. \nPart of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "The following pseudo-detector should help security teams detect instances where Rundll32 opens a cross process handle into LSASS to collect credentials. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       10
     ],
@@ -3952,7 +3952,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects app package installation processes where the app is not a Microsoft app \nbased on the publisher ID. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Detects app package installation processes where the app is not a Microsoft app based on the publisher ID. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -4074,7 +4074,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The following pseudo detector should generate an alert when services.exe spawns \ncmd.exe along with a corresponding echo or /c command, which are common attributes \nof post exploitation that we\u2019ve seen in association with this technique. Part of \nthe RedCanary 2024 Threat Detection Report.\n",
+    "description": "The following pseudo detector should generate an alert when services.exe spawns cmd.exe along with a corresponding echo or /c command, which are common attributes of post exploitation that we\u2019ve seen in association with this technique. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -4160,7 +4160,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Just like certutil, certreq can also be abused by adversaries to download and \nupload data. The following analytic will look for the execution of certreq.exe \nwith command options that suggest a file is being downloaded. Part of the \nRedCanary 2024 Threat Detection Report.\n",
+    "description": "Just like certutil, certreq can also be abused by adversaries to download and upload data. The following analytic will look for the execution of certreq.exe with command options that suggest a file is being downloaded. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -4201,7 +4201,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This analytic looks for the execution of a process that seems to be \npowershell.exe along with a corresponding command line containing the \nterm base64. Base64 encoding isn\u2019t inherently suspicious, but it\u2019s worth \nlooking out for in a lot of environments, and the following pseudo-detection \nlogic can help detect a wide variety of malicious activity. Part of the \nRedCanary 2024 Threat Detection Report.\n",
+    "description": "This analytic looks for the execution of a process that seems to be powershell.exe along with a corresponding command line containing the term base64. Base64 encoding isn\u2019t inherently suspicious, but it\u2019s worth looking out for in a lot of environments, and the following pseudo-detection logic can help detect a wide variety of malicious activity. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -4286,7 +4286,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "There are numerous default PowerShell cmdlets that allow administrators to leverage WMI via \nPowerShell. Both adversaries and administrators use these cmdlets to query the operating \nsystem or execute commands, either locally or remotely. Cmdlets like Get-WMIObject are often \nused for reconnaissance. Part of the RedCanary 2024 Threat Detection Report.\n",
+    "description": "There are numerous default PowerShell cmdlets that allow administrators to leverage WMI via PowerShell. Both adversaries and administrators use these cmdlets to query the operating system or execute commands, either locally or remotely. Cmdlets like Get-WMIObject are often used for reconnaissance. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -4371,7 +4371,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects Windows Scripting Host processes (wscript.exe and cscript.exe) that are \ninvoking the execution of common scripting formats that Red Canary has observed \nbeing used by Qbot\u2014such as .js, .vbs, and .wsf\u2014that are from a logical mounted \ndrive using the drive letters D: through Z: and that have a child process. Part \nof the RedCanary 2024 Threat Detection Report.\n",
+    "description": "Detects Windows Scripting Host processes (wscript.exe and cscript.exe) that are invoking the execution of common scripting formats that Red Canary has observed being used by Qbot\u2014such as .js, .vbs, and .wsf\u2014that are from a logical mounted drive using the drive letters D: through Z: and that have a child process. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -4456,7 +4456,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects instances where the ArcGIS Server process ArcSOC.exe, which hosts REST services running on an ArcGIS \nserver, creates files with suspicious file types, indicating that they may be executables, script files, \nor otherwise unusual.\n",
+    "description": "Detects instances where the ArcGIS Server process ArcSOC.exe, which hosts REST services running on an ArcGIS server, creates files with suspicious file types, indicating that they may be executables, script files, or otherwise unusual.",
     "eventid": [
       11
     ],
@@ -4501,7 +4501,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects powershell processes renamed to notepad.exe. This is a narrow example for \ndemonstration purposes only. Part of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects powershell processes renamed to notepad.exe. This is a narrow example for demonstration purposes only. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -4587,7 +4587,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This detection analytic looks for instances of explorer.exe spawning cmd.exe along \nwith corresponding start and exit commands that we commonly observe in conjunction \nwith a wide variety of malicious activity. Part of the RedCanary 2024 Threat \nDetection Report.\n",
+    "description": "This detection analytic looks for instances of explorer.exe spawning cmd.exe along with corresponding start and exit commands that we commonly observe in conjunction with a wide variety of malicious activity. Part of the RedCanary 2024 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -4712,7 +4712,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects processes running without command lines, which can indicate process injection. \nPart of the RedCanary 2023 Threat Detection Report.\n",
+    "description": "Detects processes running without command lines, which can indicate process injection. Part of the RedCanary 2023 Threat Detection Report.",
     "eventid": [
       1
     ],
@@ -4879,7 +4879,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the usage of curl.exe, KeyScramblerLogon, or other non-standard/suspicious processes used to create Autoit3.exe. \nThis activity has been associated with DarkGate malware, which uses Autoit3.exe to execute shellcode that performs \nprocess injection and connects to the DarkGate command-and-control server. Curl, KeyScramblerLogon, and these other \nprocesses consitute non-standard and suspicious ways to retrieve the Autoit3 executable.\n",
+    "description": "Detects the usage of curl.exe, KeyScramblerLogon, or other non-standard/suspicious processes used to create Autoit3.exe. This activity has been associated with DarkGate malware, which uses Autoit3.exe to execute shellcode that performs process injection and connects to the DarkGate command-and-control server. Curl, KeyScramblerLogon, and these other processes consitute non-standard and suspicious ways to retrieve the Autoit3 executable.",
     "eventid": [
       11
     ],
@@ -5093,7 +5093,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the presence of unicode characters which are homoglyphs, or identical in appearance, to ASCII letter characters.\nThis is used as an obfuscation and masquerading techniques. Only \"perfect\" homoglyphs are included; these are characters that\nare indistinguishable from ASCII characters and thus may make excellent candidates for homoglyph attack characters.\n",
+    "description": "Detects the presence of unicode characters which are homoglyphs, or identical in appearance, to ASCII letter characters. This is used as an obfuscation and masquerading techniques. Only \"perfect\" homoglyphs are included; these are characters that are indistinguishable from ASCII characters and thus may make excellent candidates for homoglyph attack characters.",
     "eventid": [
       1
     ],
@@ -5179,7 +5179,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the use of the iisreset.exe utility to stop IIS web services. This is used to prevent users \nfrom accessing IIS web resources, thereby releasing/preventing locks which could inhibit \nransomware-related encryption.\n",
+    "description": "Detects the use of the iisreset.exe utility to stop IIS web services. This is used to prevent users from accessing IIS web resources, thereby releasing/preventing locks which could inhibit ransomware-related encryption.",
     "eventid": [
       1
     ],
@@ -5627,7 +5627,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (EventType='CreateKey' AND Image LIKE '%\\\\svchost.exe' ESCAPE '\\' AND TargetObject REGEXP '^HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\ NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tree\\\\[A-Za-z]{8}$'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 AND EventType='CreateKey') AND (EventType='CreateKey' AND Image LIKE '%\\\\svchost.exe' ESCAPE '\\' AND TargetObject REGEXP '^HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\ NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tree\\\\[A-Za-z]{8}$'))"
     ],
     "schema_version": 2,
     "source": "mbabinski",
@@ -6147,7 +6147,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (EventType='CreateKey' AND (TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Phone\\\\%' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Personalization\\\\%' ESCAPE '\\') AND TargetObject LIKE '%0' ESCAPE '\\' AND Image LIKE '%\\\\wscript.exe' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 AND EventType='CreateKey') AND (EventType='CreateKey' AND (TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Phone\\\\%' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Personalization\\\\%' ESCAPE '\\') AND TargetObject LIKE '%0' ESCAPE '\\' AND Image LIKE '%\\\\wscript.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "mbabinski",
@@ -7232,7 +7232,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the use of a potentially-renamed psexec to run the Cicada3301 ransomware tool.\n",
+    "description": "Detects the use of a potentially-renamed psexec to run the Cicada3301 ransomware tool.",
     "eventid": [
       1
     ],
@@ -7684,7 +7684,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (EventType='CreateKey' AND TargetObject LIKE 'SYSTEM\\\\CurrentControlSet\\\\Services\\\\LanmanServer\\\\Parameters' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 AND EventType='CreateKey') AND (EventType='CreateKey' AND TargetObject LIKE 'SYSTEM\\\\CurrentControlSet\\\\Services\\\\LanmanServer\\\\Parameters' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "mbabinski",
@@ -7979,7 +7979,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND (CommandLine LIKE '%-nop%' ESCAPE '\\' OR CommandLine LIKE '%/nop%' ESCAPE '\\' OR CommandLine LIKE '%\u2013nop%' ESCAPE '\\' OR CommandLine LIKE '%\u2014nop%' ESCAPE '\\' OR CommandLine LIKE '%\u2015nop%' ESCAPE '\\' OR CommandLine LIKE '%-noni%' ESCAPE '\\' OR CommandLine LIKE '%/noni%' ESCAPE '\\' OR CommandLine LIKE '%\u2013noni%' ESCAPE '\\' OR CommandLine LIKE '%\u2014noni%' ESCAPE '\\' OR CommandLine LIKE '%\u2015noni%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression%' ESCAPE '\\' OR CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%downloadfile%' ESCAPE '\\' OR CommandLine LIKE '%downloadata%' ESCAPE '\\')))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND (CommandLine LIKE '%-nop%' ESCAPE '\\' OR CommandLine LIKE '%/nop%' ESCAPE '\\' OR CommandLine LIKE '%\u2013nop%' ESCAPE '\\' OR CommandLine LIKE '%\u2014nop%' ESCAPE '\\' OR CommandLine LIKE '%\u2015nop%' ESCAPE '\\' OR CommandLine LIKE '%-noni%' ESCAPE '\\' OR CommandLine LIKE '%/noni%' ESCAPE '\\' OR CommandLine LIKE '%\u2013noni%' ESCAPE '\\' OR CommandLine LIKE '%\u2014noni%' ESCAPE '\\' OR CommandLine LIKE '%\u2015noni%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression%' ESCAPE '\\' OR CommandLine LIKE '%invoke/expression%' ESCAPE '\\' OR CommandLine LIKE '%invoke\u2013expression%' ESCAPE '\\' OR CommandLine LIKE '%invoke\u2014expression%' ESCAPE '\\' OR CommandLine LIKE '%invoke\u2015expression%' ESCAPE '\\' OR CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%downloadfile%' ESCAPE '\\' OR CommandLine LIKE '%downloadata%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
     "source": "mbabinski",
@@ -8746,7 +8746,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects execution of the legitimate Autoit3 utility from a suspect parent process. AutoIt3.exe is used within \nthe DarkGate infection chain to execute shellcode that performs process injection and connects to the DarkGate \ncommand-and-control server.\n",
+    "description": "Detects execution of the legitimate Autoit3 utility from a suspect parent process. AutoIt3.exe is used within the DarkGate infection chain to execute shellcode that performs process injection and connects to the DarkGate command-and-control server.",
     "eventid": [
       1
     ],

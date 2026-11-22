@@ -4,7 +4,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects bitsadmin or the PowerShell BITS cmdlets being used to move a file. The Background Intelligent Transfer Service is a signed Windows component that downloads on behalf of a caller, so the traffic comes from a trusted process, the job survives reboots, and the transfer continues after the calling process exits. That combination is why it is a durable download and persistence primitive.\n",
+    "description": "Detects bitsadmin or the PowerShell BITS cmdlets being used to move a file. The Background Intelligent Transfer Service is a signed Windows component that downloads on behalf of a caller, so the traffic comes from a trusted process, the job survives reboots, and the transfer continues after the calling process exits. That combination is why it is a durable download and persistence primitive.",
     "eventid": [],
     "falsepositives": [
       "Windows Update and other Microsoft components use BITS internally, though rarely through bitsadmin.exe on the command line",
@@ -45,7 +45,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the burst of net, nltest and whoami calls typical of a freshly landed operator orienting inside a domain. Individually benign, so this is written as a threshold rule rather than a single-event alert.\n",
+    "description": "Detects the burst of net, nltest and whoami calls typical of a freshly landed operator orienting inside a domain. Individually benign, so this is written as a threshold rule rather than a single-event alert.",
     "eventid": [],
     "falsepositives": [
       "Administrators troubleshooting, and inventory scripts"
@@ -82,7 +82,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects fDenyTSConnections being set to 0, which turns on inbound RDP. Intruders flip it to open an interactive path to a host they already control through another channel. Sysmon Event ID 13.\n",
+    "description": "Detects fDenyTSConnections being set to 0, which turns on inbound RDP. Intruders flip it to open an interactive path to a host they already control through another channel. Sysmon Event ID 13.",
     "eventid": [],
     "falsepositives": [
       "Deliberate RDP enablement by admins or GPO; correlate with a change ticket"
@@ -121,7 +121,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a type 9 NewCredentials logon through seclogo, which is what runas /netonly produces and what Mimikatz sekurlsa::pth and similar token-making tools produce when they spawn a process with injected credentials. Event ID 4624.\n",
+    "description": "Detects a type 9 NewCredentials logon through seclogo, which is what runas /netonly produces and what Mimikatz sekurlsa::pth and similar token-making tools produce when they spawn a process with injected credentials. Event ID 4624.",
     "eventid": [
       4624
     ],
@@ -163,7 +163,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects command-line archive tools compressing user or share directories, which is how data is staged before it leaves. Pair with an egress rule to turn this into a high-confidence exfiltration signal.\n",
+    "description": "Detects command-line archive tools compressing user or share directories, which is how data is staged before it leaves. Pair with an egress rule to turn this into a high-confidence exfiltration signal.",
     "eventid": [],
     "falsepositives": [
       "Users legitimately archiving their own work"
@@ -201,7 +201,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects repeated DNS queries with unusually long labels against a single parent domain, the signature of data smuggled inside DNS. Expect tuning: CDNs and endpoint security products legitimately emit long names.\n",
+    "description": "Detects repeated DNS queries with unusually long labels against a single parent domain, the signature of data smuggled inside DNS. Expect tuning: CDNs and endpoint security products legitimately emit long names.",
     "eventid": [
       22
     ],
@@ -241,7 +241,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects child processes of the WinRM host, which is how Enter-PSSession and Invoke-Command land code on a remote machine. Expect noise wherever fleets are managed with PSRemoting; pair this with an allowlist of admin source hosts.\n",
+    "description": "Detects child processes of the WinRM host, which is how Enter-PSSession and Invoke-Command land code on a remote machine. Expect noise wherever fleets are managed with PSRemoting; pair this with an allowlist of admin source hosts.",
     "eventid": [],
     "falsepositives": [
       "Configuration management and routine remote administration"
@@ -277,7 +277,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects writes to the Run and RunOnce keys, the most common persistence location on Windows. Alert value comes from what is written, so review the target value rather than the key itself.\n",
+    "description": "Detects writes to the Run and RunOnce keys, the most common persistence location on Windows. Alert value comes from what is written, so review the target value rather than the key itself.",
     "eventid": [],
     "falsepositives": [
       "Software installers legitimately register autostart entries"
@@ -313,7 +313,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential Pass-the-Hash by flagging NTLM network logons (Event ID 4624, Logon Type 3) for interactive-style accounts. Noisy on its own (legacy NTLM apps); correlate with a preceding LSASS-access alert for high confidence.\n",
+    "description": "Detects potential Pass-the-Hash by flagging NTLM network logons (Event ID 4624, Logon Type 3) for interactive-style accounts. Noisy on its own (legacy NTLM apps); correlate with a preceding LSASS-access alert for high confidence.",
     "eventid": [
       4624
     ],
@@ -355,7 +355,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the reliable ransomware precursor of deleting volume shadow copies to prevent rollback. Legitimate software almost never does this; ransomware almost always does, just before mass encryption (T1486 via T1490).\n",
+    "description": "Detects the reliable ransomware precursor of deleting volume shadow copies to prevent rollback. Legitimate software almost never does this; ransomware almost always does, just before mass encryption (T1486 via T1490).",
     "eventid": [
       1
     ],
@@ -397,7 +397,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects a process other than the browser itself naming a browser's saved password or cookie store (Chromium Login Data, Cookies, Local State; Firefox key4.db, logins.json) on its command line. Infostealers and hands-on operators copy these files out before decrypting them offline.\n",
+    "description": "Detects a process other than the browser itself naming a browser's saved password or cookie store (Chromium Login Data, Cookies, Local State; Firefox key4.db, logins.json) on its command line. Infostealers and hands-on operators copy these files out before decrypting them offline.",
     "eventid": [],
     "falsepositives": [
       "Browser profile backup and migration tools"
@@ -434,7 +434,7 @@
     "channel": [
       "System"
     ],
-    "description": "Detects a new service whose binary lives in a user-writable directory or is launched through an interpreter. Services are a durable, SYSTEM-level foothold and legitimate ones almost never run out of temp.\n",
+    "description": "Detects a new service whose binary lives in a user-writable directory or is launched through an interpreter. Services are a durable, SYSTEM-level foothold and legitimate ones almost never run out of temp.",
     "eventid": [
       7045
     ],
@@ -474,7 +474,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Kerberos AS-REQ activity for accounts that have pre-authentication disabled. The KDC hands back an AS-REP encrypted with a key derived from the account password, which is then cracked offline. Deliberate use of DONT_REQ_PREAUTH is rare, so volume here is usually roasting.\n",
+    "description": "Detects Kerberos AS-REQ activity for accounts that have pre-authentication disabled. The KDC hands back an AS-REP encrypted with a key derived from the account password, which is then cracked offline. Deliberate use of DONT_REQ_PREAUTH is rare, so volume here is usually roasting.",
     "eventid": [
       4768
     ],
@@ -515,7 +515,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects delegation being turned on for a user or computer account, via a write to userAccountControl's TRUSTED_FOR_DELEGATION flag or to msDS-AllowedToDelegateTo. A host trusted for unconstrained delegation caches the TGT of every account that authenticates to it, so an attacker who gains it and then coerces a domain controller to connect walks away with the DC's ticket.\n",
+    "description": "Detects delegation being turned on for a user or computer account, via a write to userAccountControl's TRUSTED_FOR_DELEGATION flag or to msDS-AllowedToDelegateTo. A host trusted for unconstrained delegation caches the TGT of every account that authenticates to it, so an attacker who gains it and then coerces a domain controller to connect walks away with the DC's ticket.",
     "eventid": [
       5136
     ],
@@ -557,7 +557,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects modification of a groupPolicyContainer object or a write into the SYSVOL Policies share. A GPO is a distribution channel to every machine it links to, so editing one that applies broadly turns a single compromised account into code execution across the estate, delivered by the domain's own tooling.\n",
+    "description": "Detects modification of a groupPolicyContainer object or a write into the SYSVOL Policies share. A GPO is a distribution channel to every machine it links to, so editing one that applies broadly turns a single compromised account into code execution across the estate, delivered by the domain's own tooling.",
     "eventid": [
       5136,
       5145
@@ -601,7 +601,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects a thread created in a process the caller does not own, with the start address resolving into a module associated with injection or into no module at all. Injecting into a signed, expected process is how an implant inherits its network reputation and survives its own dropper exiting.\n",
+    "description": "Detects a thread created in a process the caller does not own, with the start address resolving into a module associated with injection or into no module at all. Injecting into a signed, expected process is how an implant inherits its network reputation and survives its own dropper exiting.",
     "eventid": [
       8
     ],
@@ -644,7 +644,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects tscon.exe connecting a session to another destination. Run as SYSTEM it takes over another user's disconnected RDP session without their password.\n",
+    "description": "Detects tscon.exe connecting a session to another destination. Run as SYSTEM it takes over another user's disconnected RDP session without their password.",
     "eventid": [],
     "falsepositives": [
       "Helpdesk tooling reconnecting sessions; rare"
@@ -681,7 +681,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the in-memory download-and-execute patterns used to stage a payload without writing it to disk, covering both the WebClient and Invoke-WebRequest forms alongside an execution primitive.\n",
+    "description": "Detects the in-memory download-and-execute patterns used to stage a payload without writing it to disk, covering both the WebClient and Invoke-WebRequest forms alongside an execution primitive.",
     "eventid": [],
     "falsepositives": [
       "Package bootstrap scripts, which should originate from known hosts"
@@ -719,7 +719,7 @@
     "channel": [
       "System"
     ],
-    "description": "Detects PsExec / smbexec style lateral movement by flagging service installs (Event ID 7045) with random service names or image paths in admin shares and temp.\n",
+    "description": "Detects PsExec / smbexec style lateral movement by flagging service installs (Event ID 7045) with random service names or image paths in admin shares and temp.",
     "eventid": [
       7045
     ],
@@ -759,7 +759,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a certificate request whose requester is a computer account. Coercing a domain controller to authenticate to the AD CS web enrollment endpoint over NTLM and relaying it (ESC8) produces exactly this: the CA sees the DC's machine account enrolling, usually against a user or DC template. Machine accounts do enroll legitimately, so pair this with the template name before escalating.\n",
+    "description": "Detects a certificate request whose requester is a computer account. Coercing a domain controller to authenticate to the AD CS web enrollment endpoint over NTLM and relaying it (ESC8) produces exactly this: the CA sees the DC's machine account enrolling, usually against a user or DC template. Machine accounts do enroll legitimately, so pair this with the template name before escalating.",
     "eventid": [
       4886,
       4887
@@ -803,7 +803,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects rundll32 executing a DLL from a user-writable directory, running JavaScript through its scriptlet handler, or launching with no arguments at all. rundll32 is signed by Microsoft and present everywhere, so an implant that lives inside it inherits a trusted image name. A no-argument rundll32 is a particularly reliable tell, since it does nothing useful and is a common injection host.\n",
+    "description": "Detects rundll32 executing a DLL from a user-writable directory, running JavaScript through its scriptlet handler, or launching with no arguments at all. rundll32 is signed by Microsoft and present everywhere, so an implant that lives inside it inherits a trusted image name. A no-argument rundll32 is a particularly reliable tell, since it does nothing useful and is a common injection host.",
     "eventid": [],
     "falsepositives": [
       "Installers and updaters that invoke a DLL export from a temp directory",
@@ -842,7 +842,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects named pipes matching Cobalt Strike's default naming for SMB beacons and post-exploitation jobs (msagent_, postex_, status_, and the MSSE- pattern). Operators can and do change these in a malleable profile, so this catches unmodified tooling rather than a tuned engagement. It stays worth having because unmodified tooling is what commodity intrusions actually run.\n",
+    "description": "Detects named pipes matching Cobalt Strike's default naming for SMB beacons and post-exploitation jobs (msagent_, postex_, status_, and the MSSE- pattern). Operators can and do change these in a malleable profile, so this catches unmodified tooling rather than a tuned engagement. It stays worth having because unmodified tooling is what commodity intrusions actually run.",
     "eventid": [
       17,
       18
@@ -884,7 +884,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects credential dumping by flagging process handle access to lsass.exe with read rights (Sysmon Event ID 10), excluding known security products. Tool-agnostic: catches Mimikatz, procdump, comsvcs, and custom loaders alike.\n",
+    "description": "Detects credential dumping by flagging process handle access to lsass.exe with read rights (Sysmon Event ID 10), excluding known security products. Tool-agnostic: catches Mimikatz, procdump, comsvcs, and custom loaders alike.",
     "eventid": [
       10
     ],
@@ -926,7 +926,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects creation of WMI event filters, consumers and bindings, a fileless persistence mechanism that survives reboot and is invisible to autoruns inspection of the usual locations.\n",
+    "description": "Detects creation of WMI event filters, consumers and bindings, a fileless persistence mechanism that survives reboot and is invisible to autoruns inspection of the usual locations.",
     "eventid": [
       19,
       20,
@@ -967,7 +967,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects rclone, megacmd and similar utilities being driven from the command line to copy data to cloud storage. Ransomware crews reach for rclone specifically because it is a legitimate, signed, cross-platform binary whose traffic is TLS to a mainstream provider, which defeats both signature matching and egress rules written around \"unknown destinations\". Pair with the archive-staging rule: stage then upload is the whole double-extortion pattern.\n",
+    "description": "Detects rclone, megacmd and similar utilities being driven from the command line to copy data to cloud storage. Ransomware crews reach for rclone specifically because it is a legitimate, signed, cross-platform binary whose traffic is TLS to a mainstream provider, which defeats both signature matching and egress rules written around \"unknown destinations\". Pair with the archive-staging rule: stage then upload is the whole double-extortion pattern.",
     "eventid": [],
     "falsepositives": [
       "Backup workflows that genuinely use rclone or WinSCP, which should be inventoried"
@@ -1005,7 +1005,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects mshta.exe running content from a URL or an inline script handler. mshta is signed by Microsoft and frequently allowlisted, which is exactly why it is used to run HTA and JScript payloads.\n",
+    "description": "Detects mshta.exe running content from a URL or an inline script handler. mshta is signed by Microsoft and frequently allowlisted, which is exactly why it is used to run HTA and JScript payloads.",
     "eventid": [],
     "falsepositives": [
       "A small number of legacy line-of-business apps still ship HTA front-ends"
@@ -1043,7 +1043,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects membership changes to high-value groups. Adding an account to Domain Admins or the local Administrators group is both a common attacker objective and a rare, auditable administrative act.\n",
+    "description": "Detects membership changes to high-value groups. Adding an account to Domain Admins or the local Administrators group is both a common attacker objective and a rare, auditable administrative act.",
     "eventid": [
       4728,
       4732,
@@ -1084,7 +1084,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects PowerShell invoked with a base64 encoded command, which is how most loaders and post-exploitation frameworks hide their payload from casual command-line review.\n",
+    "description": "Detects PowerShell invoked with a base64 encoded command, which is how most loaders and post-exploitation frameworks hide their payload from casual command-line review.",
     "eventid": [],
     "falsepositives": [
       "Some management suites wrap scripts in encoded commands; allowlist by parent"
@@ -1122,7 +1122,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects processes spawned by the WMI provider host, which is how wmic /node and Invoke-WmiMethod execute code on a remote machine. Legitimate WMI rarely spawns script interpreters or download utilities.\n",
+    "description": "Detects processes spawned by the WMI provider host, which is how wmic /node and Invoke-WmiMethod execute code on a remote machine. Legitimate WMI rarely spawns script interpreters or download utilities.",
     "eventid": [],
     "falsepositives": [
       "Monitoring and inventory agents that act on hosts over WMI"
@@ -1160,7 +1160,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects file writes to the hidden administrative shares, which is the staging half of PsExec-style lateral movement: drop the payload over SMB, then start it as a service on the target.\n",
+    "description": "Detects file writes to the hidden administrative shares, which is the staging half of PsExec-style lateral movement: drop the payload over SMB, then start it as a service on the target.",
     "eventid": [
       5145
     ],
@@ -1200,7 +1200,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects Kerberoasting by flagging RC4-encrypted (etype 0x17) TGS requests for user-account SPNs. Roasting tools force RC4 because it cracks far faster than AES.\n",
+    "description": "Detects Kerberoasting by flagging RC4-encrypted (etype 0x17) TGS requests for user-account SPNs. Roasting tools force RC4 because it cracks far faster than AES.",
     "eventid": [
       4769
     ],
@@ -1241,7 +1241,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects Sysmon's ProcessTampering event, raised when a process image on disk no longer matches what is mapped in memory. That mismatch is the defining artefact of process hollowing, herpaderping and doppelganging, where a legitimate binary is started suspended and its image replaced before execution resumes. Very few legitimate programs produce it.\n",
+    "description": "Detects Sysmon's ProcessTampering event, raised when a process image on disk no longer matches what is mapped in memory. That mismatch is the defining artefact of process hollowing, herpaderping and doppelganging, where a legitimate binary is started suspended and its image replaced before execution resumes. Very few legitimate programs produce it.",
     "eventid": [
       25
     ],
@@ -1280,7 +1280,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects an IIS, Apache, nginx, PHP or Tomcat worker starting a command interpreter or recon utility. That is what exploitation of a public-facing application (and a web shell in use afterwards) looks like from the host.\n",
+    "description": "Detects an IIS, Apache, nginx, PHP or Tomcat worker starting a command interpreter or recon utility. That is what exploitation of a public-facing application (and a web shell in use afterwards) looks like from the host.",
     "eventid": [],
     "falsepositives": [
       "Web applications that legitimately shell out (report generators, legacy CGI); allowlist by ParentCommandLine"
@@ -1319,7 +1319,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects wscript, cscript or mshta running a script straight out of a just-opened archive (Explorer's Temp1_ folders, 7-Zip and WinRAR temp directories) or the Downloads folder. Zipped JavaScript and HTA attachments are one of the most common first-stage loaders.\n",
+    "description": "Detects wscript, cscript or mshta running a script straight out of a just-opened archive (Explorer's Temp1_ folders, 7-Zip and WinRAR temp directories) or the Downloads folder. Zipped JavaScript and HTA attachments are one of the most common first-stage loaders.",
     "eventid": [],
     "falsepositives": [
       "Admins running vendor scripts they downloaded; rare on user endpoints"
@@ -1358,7 +1358,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects likely persistence via scheduled tasks by flagging schtasks.exe / at.exe /create where the task action points at a script host, encoded command, or a user-writable path. Task creation is common; the action is what makes it malicious.\n",
+    "description": "Detects likely persistence via scheduled tasks by flagging schtasks.exe / at.exe /create where the task action points at a script host, encoded command, or a user-writable path. Task creation is common; the action is what makes it malicious.",
     "eventid": [
       1
     ],
@@ -1400,7 +1400,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects certutil fetching remote content or decoding base64 payloads. It is a signed Microsoft binary present everywhere, which makes it a favourite substitute for curl on locked-down hosts.\n",
+    "description": "Detects certutil fetching remote content or decoding base64 payloads. It is a signed Microsoft binary present everywhere, which makes it a favourite substitute for curl on locked-down hosts.",
     "eventid": [],
     "falsepositives": [
       "Certificate maintenance scripts, which rarely use urlcache"
@@ -1438,7 +1438,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the process lineage created by malicious document macros: an Office app (Word, Excel, PowerPoint, Outlook) spawning a script host (PowerShell, cmd, wscript, mshta, rundll32). Reliable initial-access signal for phishing.\n",
+    "description": "Detects the process lineage created by malicious document macros: an Office app (Word, Excel, PowerPoint, Outlook) spawning a script host (PowerShell, cmd, wscript, mshta, rundll32). Reliable initial-access signal for phishing.",
     "eventid": [
       1
     ],
@@ -1481,7 +1481,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the command-line shapes produced by SharpHound and equivalent collectors. Mass AD enumeration is the reconnaissance step that precedes nearly every modern domain compromise.\n",
+    "description": "Detects the command-line shapes produced by SharpHound and equivalent collectors. Mass AD enumeration is the reconnaissance step that precedes nearly every modern domain compromise.",
     "eventid": [],
     "falsepositives": [
       "Authorised assessments; correlate with your engagement calendar"
@@ -1517,7 +1517,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects code launched through DCOM application objects such as MMC20.Application or ShellWindows, a quieter alternative to PsExec that leaves no service-creation artifact behind.\n",
+    "description": "Detects code launched through DCOM application objects such as MMC20.Application or ShellWindows, a quieter alternative to PsExec that leaves no service-creation artifact behind.",
     "eventid": [],
     "falsepositives": [
       "Administrators launching management consoles interactively"
@@ -1555,7 +1555,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the two common ways the Active Directory database leaves a domain controller: an ntdsutil IFM media creation, or a copy of NTDS.dit out of a volume shadow copy. Either yields every domain hash for offline cracking.\n",
+    "description": "Detects the two common ways the Active Directory database leaves a domain controller: an ntdsutil IFM media creation, or a copy of NTDS.dit out of a volume shadow copy. Either yields every domain hash for offline cracking.",
     "eventid": [],
     "falsepositives": [
       "Documented disaster-recovery or forensic acquisition"
@@ -1592,7 +1592,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects bulk service stops targeting databases, mail and backup agents. Ransomware does this to unlock files held open by those services so they can be encrypted too.\n",
+    "description": "Detects bulk service stops targeting databases, mail and backup agents. Ransomware does this to unlock files held open by those services so they can be encrypted too.",
     "eventid": [],
     "falsepositives": [
       "Patch windows and maintenance scripts"
@@ -1628,7 +1628,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a write to msDS-AllowedToActOnBehalfOfOtherIdentity. Whoever controls that attribute on a computer object can tell it to accept S4U requests from an account they own, then impersonate any user to that machine, including a domain administrator. Because a standard user can create computer accounts by default (ms-DS-MachineAccountQuota), RBCD is a routine path from \"write access to one object\" to \"local system on it\".\n",
+    "description": "Detects a write to msDS-AllowedToActOnBehalfOfOtherIdentity. Whoever controls that attribute on a computer object can tell it to accept S4U requests from an account they own, then impersonate any user to that machine, including a domain administrator. Because a standard user can create computer accounts by default (ms-DS-MachineAccountQuota), RBCD is a routine path from \"write access to one object\" to \"local system on it\".",
     "eventid": [
       5136
     ],
@@ -1669,7 +1669,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a password reset or attribute change on the krbtgt account. Its hash signs every Kerberos ticket in the domain, so it is both the key an attacker needs for a Golden Ticket and the key a defender rotates (twice) to invalidate one. Either way, an unexpected change here is one of the highest-signal events Active Directory produces.\n",
+    "description": "Detects a password reset or attribute change on the krbtgt account. Its hash signs every Kerberos ticket in the domain, so it is both the key an attacker needs for a Golden Ticket and the key a defender rotates (twice) to invalidate one. Either way, an unexpected change here is one of the highest-signal events Active Directory produces.",
     "eventid": [
       4723,
       4724,
@@ -1711,7 +1711,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects loading of drivers repeatedly abused to get kernel-level code execution from an administrator context. Bring-your-own-vulnerable-driver is the standard way ransomware crews disable endpoint protection: the driver is signed and legitimate, so it loads cleanly, and the vulnerability inside it is used to kill protected processes. Keep this list current against the Microsoft vulnerable driver blocklist and LOLDrivers.\n",
+    "description": "Detects loading of drivers repeatedly abused to get kernel-level code execution from an administrator context. Bring-your-own-vulnerable-driver is the standard way ransomware crews disable endpoint protection: the driver is signed and legitimate, so it loads cleanly, and the vulnerability inside it is used to kill protected processes. Keep this list current against the Microsoft vulnerable driver blocklist and LOLDrivers.",
     "eventid": [
       6
     ],
@@ -1753,7 +1753,7 @@
       "Microsoft-Windows-PowerShell/Operational",
       "PowerShellCore/Operational"
     ],
-    "description": "Detects the well-known reflection patterns used to neuter the Antimalware Scan Interface before running a payload. Matches script block content, so script block logging must be enabled.\n",
+    "description": "Detects the well-known reflection patterns used to neuter the Antimalware Scan Interface before running a payload. Matches script block content, so script block logging must be enabled.",
     "eventid": [],
     "falsepositives": [
       "Security research and detection engineering on the host itself"
@@ -1789,7 +1789,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects real-time protection or scanning being turned off through PowerShell or the registry, which is a routine precursor to dropping tooling that would otherwise be quarantined.\n",
+    "description": "Detects real-time protection or scanning being turned off through PowerShell or the registry, which is a routine precursor to dropping tooling that would otherwise be quarantined.",
     "eventid": [],
     "falsepositives": [
       "Deliberate exclusions during software installation, which should be approved"
@@ -1825,7 +1825,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects use of the directory replication extended rights, which let a caller ask a DC for password hashes without ever touching NTDS.dit. Only domain controllers should legitimately replicate, so this keys on caller identity.\n",
+    "description": "Detects use of the directory replication extended rights, which let a caller ask a DC for password hashes without ever touching NTDS.dit. Only domain controllers should legitimately replicate, so this keys on caller identity.",
     "eventid": [
       4662
     ],
@@ -1866,7 +1866,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects reg.exe saving the SAM, SYSTEM or SECURITY hives to disk. Together those give local account hashes plus the boot key needed to decrypt them, and it is a standard first move after landing on a host.\n",
+    "description": "Detects reg.exe saving the SAM, SYSTEM or SECURITY hives to disk. Together those give local account hashes plus the boot key needed to decrypt them, and it is a standard first move after landing on a host.",
     "eventid": [],
     "falsepositives": [
       "Backup tooling that exports hives, which should run from a known path"
@@ -1903,7 +1903,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the Squiblydoo pattern where regsvr32 loads a remote scriptlet with /i and scrobj.dll, executing code through a signed binary and bypassing application allowlisting.\n",
+    "description": "Detects the Squiblydoo pattern where regsvr32 loads a remote scriptlet with /i and scrobj.dll, executing code through a signed binary and bypassing application allowlisting.",
     "eventid": [],
     "falsepositives": [
       "Rare; legitimate COM registration does not fetch remote scriptlets"
@@ -1940,7 +1940,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the command lines of the common Kerberos ticket forging tools: Mimikatz kerberos::golden (golden with /krbtgt, silver with /service), Rubeus golden and silver, and Impacket ticketer. A forged ticket leaves little on the domain controller, so the forging step is the best place to catch it.\n",
+    "description": "Detects the command lines of the common Kerberos ticket forging tools: Mimikatz kerberos::golden (golden with /krbtgt, silver with /service), Rubeus golden and silver, and Impacket ticketer. A forged ticket leaves little on the domain controller, so the forging step is the best place to catch it.",
     "eventid": [],
     "falsepositives": [
       "Authorised red team activity"
@@ -1977,7 +1977,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a change to the AdminSDHolder object. Its ACL is stamped onto every protected group member (Domain Admins, Enterprise Admins and friends) by the SDProp task roughly every hour, so an entry added here becomes an entry on every privileged account, and re-appears after a defender removes it. It is the closest thing Active Directory has to a self-healing backdoor.\n",
+    "description": "Detects a change to the AdminSDHolder object. Its ACL is stamped onto every protected group member (Domain Admins, Enterprise Admins and friends) by the SDProp task roughly every hour, so an entry added here becomes an entry on every privileged account, and re-appears after a defender removes it. It is the closest thing Active Directory has to a self-healing backdoor.",
     "eventid": [
       4662,
       5136
@@ -2019,7 +2019,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a write to the msDS-KeyCredentialLink attribute of a user or computer object. Adding a key credential registers an attacker-controlled certificate for Kerberos PKINIT, giving them a way to authenticate as that principal and recover its NTLM hash without ever changing a password. Almost nothing writes this attribute outside Windows Hello for Business enrollment.\n",
+    "description": "Detects a write to the msDS-KeyCredentialLink attribute of a user or computer object. Adding a key credential registers an attacker-controlled certificate for Kerberos PKINIT, giving them a way to authenticate as that principal and recover its NTLM hash without ever changing a password. Almost nothing writes this attribute outside Windows Hello for Business enrollment.",
     "eventid": [
       5136
     ],
@@ -2062,7 +2062,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the registry change that forces Windows to keep cleartext credentials in LSASS memory again. Attackers set this, wait for users to re-authenticate, then dump. The write itself is the early warning, well before the dump.\n",
+    "description": "Detects the registry change that forces Windows to keep cleartext credentials in LSASS memory again. Attackers set this, wait for users to re-authenticate, then dump. The write itself is the early warning, well before the dump.",
     "eventid": [],
     "falsepositives": [
       "Legacy applications that genuinely require WDigest, which should be documented"
@@ -2100,7 +2100,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects a certificate request that carries a caller-supplied Subject Alternative Name (ESC1). If a template allows the enrollee to specify the SAN and permits client authentication, any user who can enroll can request a certificate that says they are the domain administrator, then authenticate with it. The certificate stays valid until it expires, which is why this beats a password reset as a persistence route.\n",
+    "description": "Detects a certificate request that carries a caller-supplied Subject Alternative Name (ESC1). If a template allows the enrollee to specify the SAN and permits client authentication, any user who can enroll can request a certificate that says they are the domain administrator, then authenticate with it. The certificate stays valid until it expires, which is why this beats a password reset as a persistence route.",
     "eventid": [
       4886,
       4887
@@ -2143,7 +2143,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects deletion of backup catalogs and disabling of Windows recovery, which ransomware does immediately before encrypting so victims cannot roll back. This usually fires minutes ahead of the encryption itself.\n",
+    "description": "Detects deletion of backup catalogs and disabling of Windows recovery, which ransomware does immediately before encrypting so victims cannot roll back. This usually fires minutes ahead of the encryption itself.",
     "eventid": [],
     "falsepositives": [
       "Backup retention maintenance, which should run from a known scheduled task"
@@ -2179,7 +2179,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects the living-off-the-land LSASS dump that calls MiniDump inside comsvcs.dll through rundll32, avoiding procdump and mimikatz binaries entirely. The ordinal form is the usual giveaway.\n",
+    "description": "Detects the living-off-the-land LSASS dump that calls MiniDump inside comsvcs.dll through rundll32, avoiding procdump and mimikatz binaries entirely. The ordinal form is the usual giveaway.",
     "eventid": [],
     "falsepositives": [
       "Essentially none in normal operation"
@@ -2216,7 +2216,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects registration of a new nTDSDSA object or an SPN change that makes a host look like a domain controller. DCShadow registers a rogue DC just long enough to push a directory replication, which writes attacker-chosen attributes into AD without generating the directory-change events a normal write would. Catching the registration is the reliable way to see it, because the changes themselves are designed not to be logged.\n",
+    "description": "Detects registration of a new nTDSDSA object or an SPN change that makes a host look like a domain controller. DCShadow registers a rogue DC just long enough to push a directory replication, which writes attacker-chosen attributes into AD without generating the directory-change events a normal write would. Catching the registration is the reliable way to see it, because the changes themselves are designed not to be logged.",
     "eventid": [
       5136,
       5137
@@ -2259,7 +2259,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects clearing of the Windows event log. There is almost no benign reason to wipe the Security log on a production host, and it is the classic final step before an operator disengages.\n",
+    "description": "Detects clearing of the Windows event log. There is almost no benign reason to wipe the Security log on a production host, and it is the classic final step before an operator disengages.",
     "eventid": [
       104,
       1102

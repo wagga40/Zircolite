@@ -385,7 +385,9 @@
       "Security"
     ],
     "description": "MedusaLocker key",
-    "eventid": [],
+    "eventid": [
+      4657
+    ],
     "falsepositives": [],
     "filename": "rules/medusalocker.yml",
     "id": "07f5619d-9387-5b84-b667-f69b2eb39a0e",
@@ -398,12 +400,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (EventID=13 AND TargetObject LIKE '%\\\\Software\\\\MDSLK%Self%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (EventID=13 AND ObjectName LIKE '%\\\\Software\\\\MDSLK%Self%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "joesecurity",
@@ -1143,7 +1145,9 @@
       "Security"
     ],
     "description": "VjW0rm Registry key",
-    "eventid": [],
+    "eventid": [
+      4657
+    ],
     "falsepositives": [],
     "filename": "rules/vjw0rm.yml",
     "id": "17e28344-dec3-5a7e-83c0-acd0bb628d0f",
@@ -1156,12 +1160,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (EventID=13 AND TargetObject LIKE '%HKEY\\_CURRENT\\_USER\\\\vjw0rm%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (EventID=13 AND ObjectName LIKE '%HKEY\\_CURRENT\\_USER\\\\vjw0rm%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "joesecurity",
@@ -4116,7 +4120,9 @@
       "Security"
     ],
     "description": "Sodinokibi random extension key",
-    "eventid": [],
+    "eventid": [
+      4657
+    ],
     "falsepositives": [],
     "filename": "rules/sodinokibi.yml",
     "id": "795712d2-a4ea-59a7-851c-166d0533f299",
@@ -4129,12 +4135,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (EventID=13 AND TargetObject LIKE '%recfg%rnd\\_ext%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (EventID=13 AND ObjectName LIKE '%recfg%rnd\\_ext%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "joesecurity",

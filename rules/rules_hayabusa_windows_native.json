@@ -77,7 +77,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This event logs when a named file stream (Alternate Data Stream) is created, \nand it generates events that log the hash of the contents of the file to which the stream is assigned (the unnamed stream),\nas well as the contents of the named stream. \nThere are malware variants that drop their executables or configuration settings via browser downloads, \nand this event is aimed at capturing that based on the browser attaching a Zone.Identifier \"mark of the web\" stream.\n",
+    "description": "This event logs when a named file stream (Alternate Data Stream) is created, and it generates events that log the hash of the contents of the file to which the stream is assigned (the unnamed stream), as well as the contents of the named stream. There are malware variants that drop their executables or configuration settings via browser downloads, and this event is aimed at capturing that based on the browser attaching a Zone.Identifier \"mark of the web\" stream.",
     "eventid": [
       15
     ],
@@ -112,7 +112,7 @@
       "Microsoft-Windows-PowerShell/Operational",
       "PowerShellCore/Operational"
     ],
-    "description": "Powershell Scriptblock Logging. Windows 10+ will flag suspicious PwSh as level 3 (warning) so \nI am filtering out these events as they are being created with the \"Potentially Malicious PwSh\" rule.\n",
+    "description": "Powershell Scriptblock Logging. Windows 10+ will flag suspicious PwSh as level 3 (warning) so I am filtering out these events as they are being created with the \"Potentially Malicious PwSh\" rule.",
     "eventid": [
       4104
     ],
@@ -220,7 +220,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Registry key and value create and delete operations map to this event type,\nwhich can be useful for monitoring for changes to Registry autostart locations, or specific malware registry modifications.\nMarked as noisy by default.\n",
+    "description": "Registry key and value create and delete operations map to this event type, which can be useful for monitoring for changes to Registry autostart locations, or specific malware registry modifications. Marked as noisy by default.",
     "eventid": [
       12
     ],
@@ -402,7 +402,7 @@
     "channel": [
       "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational"
     ],
-    "description": "This event is created when a new local session is created for either a local or remote interactive login.\nOriginal event message: \u201cShell start notification received\u201d\nThe Local Session Manager is responsible for creating or finding existing local sessions to support interactive logins.\nNote that local sessions are different from logon sessions.\nLocal sessions represent the logon sessions, desktop layout, processes, etc. associated with an interactive logon. \nEvent 22 is created when a new local session needs to be created.\nThat happens after a user successfully authenticates for a local or remote interactive logon session and the user does not already have an existing local session.\nThis event follows a Local Session Manager 21 event.\nThis event gives the same information in Remote Connection Manager 1149, Local Session Manager 21 and Security 4648.\n",
+    "description": "This event is created when a new local session is created for either a local or remote interactive login. Original event message: \u201cShell start notification received\u201d The Local Session Manager is responsible for creating or finding existing local sessions to support interactive logins. Note that local sessions are different from logon sessions. Local sessions represent the logon sessions, desktop layout, processes, etc. associated with an interactive logon. Event 22 is created when a new local session needs to be created. That happens after a user successfully authenticates for a local or remote interactive logon session and the user does not already have an existing local session. This event follows a Local Session Manager 21 event. This event gives the same information in Remote Connection Manager 1149, Local Session Manager 21 and Security 4648.",
     "eventid": [
       22
     ],
@@ -474,7 +474,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Registry key and value rename operations map to this event type, recording the new name of the key or value that was renamed.\nMarked as noisy by default although this does not seem to be enabled by default.\n",
+    "description": "Registry key and value rename operations map to this event type, recording the new name of the key or value that was renamed. Marked as noisy by default although this does not seem to be enabled by default.",
     "eventid": [
       14
     ],
@@ -507,7 +507,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "When a WMI event filter is registered, which is a method used by malware to execute, this event logs the WMI namespace, \nfilter name and filter expression.\n",
+    "description": "When a WMI event filter is registered, which is a method used by malware to execute, this event logs the WMI namespace, filter name and filter expression.",
     "eventid": [
       20
     ],
@@ -574,7 +574,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The main DFIR purpose is to capture files that attackers copy over via RDP, attacker commands that were copied and pasted, etc...\nThis event is generated when the system clipboard contents change.\nPasswords and other sensitive information may be leaked when copied into the clipboard so heavy filtering to prevent this is necessary.\nThe copied contents are not saved in the event log but archived to the same protected folder as the File Delete event does. (C:\\Sysmon)\nSYSTEM privileges are required to access this folder. \nHashes of the files can also be saved.\nSession is where the process writing to clipboard is running: System(0), Interactive, Remote, etc...\nClientInfo will store originating hostname and IP address in the case of a remote session. (i.e. Attacker using RDP.)\n",
+    "description": "The main DFIR purpose is to capture files that attackers copy over via RDP, attacker commands that were copied and pasted, etc... This event is generated when the system clipboard contents change. Passwords and other sensitive information may be leaked when copied into the clipboard so heavy filtering to prevent this is necessary. The copied contents are not saved in the event log but archived to the same protected folder as the File Delete event does. (C:\\Sysmon) SYSTEM privileges are required to access this folder. Hashes of the files can also be saved. Session is where the process writing to clipboard is running: System(0), Interactive, Remote, etc... ClientInfo will store originating hostname and IP address in the case of a remote session. (i.e. Attacker using RDP.)",
     "eventid": [
       24
     ],
@@ -608,7 +608,7 @@
     "channel": [
       "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational"
     ],
-    "description": "Event 24 is created when a local session disconnects. That happens after a user successfully logs off or disconnects a local or remote interactive logon session.\nThis event immediately follows a EID 23 RDP Logoff event.\nThis event has the same information as EID 23 and Security EID 4634.\n",
+    "description": "Event 24 is created when a local session disconnects. That happens after a user successfully logs off or disconnects a local or remote interactive logon session. This event immediately follows a EID 23 RDP Logoff event. This event has the same information as EID 23 and Security EID 4634.",
     "eventid": [
       24
     ],
@@ -1202,7 +1202,7 @@
     "channel": [
       "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational"
     ],
-    "description": "This event is generated when anyone connects to RDP and sends data. It does not need to be a legitimate RDP connection.\nUnfortunately, there are no details about the remote machine.\nThis event is noisy and will generate a lot of logs and is of limited investigative value.\nIf you see a large number of these events, but not successful logon events with EID 1149, etc... then it may indicate a brute force attack.\nThe Security event log will have more information so this event is only useful if the Security event logs are not available.\n",
+    "description": "This event is generated when anyone connects to RDP and sends data. It does not need to be a legitimate RDP connection. Unfortunately, there are no details about the remote machine. This event is noisy and will generate a lot of logs and is of limited investigative value. If you see a large number of these events, but not successful logon events with EID 1149, etc... then it may indicate a brute force attack. The Security event log will have more information so this event is only useful if the Security event logs are not available.",
     "eventid": [
       261
     ],
@@ -1274,7 +1274,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "When a WMI event filter is registered, which is a method used by malware to execute, this event logs the WMI namespace, \nfilter name and filter expression.\n",
+    "description": "When a WMI event filter is registered, which is a method used by malware to execute, this event logs the WMI namespace, filter name and filter expression.",
     "eventid": [
       19
     ],
@@ -1524,7 +1524,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "File create operations are logged when a file is created or overwritten. \nThis event is useful for monitoring autostart locations, like the Startup folder, as well as temporary and download directories, which are common places malware drops during initial infection.\n",
+    "description": "File create operations are logged when a file is created or overwritten. This event is useful for monitoring autostart locations, like the Startup folder, as well as temporary and download directories, which are common places malware drops during initial infection.",
     "eventid": [
       11
     ],
@@ -1558,7 +1558,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The Image Loaded event logs when a module (usually DLL) is loaded in a specific process.\nThis event is disabled by default and needs to be configured with the \u2013l option.\nIt indicates the process in which the module is loaded, hashes and signature information.\nThe signature is created asynchronously for performance reasons and indicates if the file was removed after loading.\nThis event should be configured carefully, as monitoring all image load events will generate a large number of events.\nMarked as noisy due to many events.\n",
+    "description": "The Image Loaded event logs when a module (usually DLL) is loaded in a specific process. This event is disabled by default and needs to be configured with the \u2013l option. It indicates the process in which the module is loaded, hashes and signature information. The signature is created asynchronously for performance reasons and indicates if the file was removed after loading. This event should be configured carefully, as monitoring all image load events will generate a large number of events. Marked as noisy due to many events.",
     "eventid": [
       7
     ],
@@ -1592,7 +1592,7 @@
     "channel": [
       "Security"
     ],
-    "description": "(From ultimatewindowsecurity.com)\nThis log is generated when\n1. A user connects to a server or runs a program locally using alternate credentials.\n   For instance a user maps a drive to a server but specifies a different user's credentials or opens a shortcut under RunAs by shift-control-right-clicking on the shortcut,\n   selecting Run as..., and then filling in a different user's credentials in the dialog box that appears.  Or a user logs on to a web site using new specific credentials.\n2. When a process logs on as a different account such as when the Scheduled Tasks service starts a task as the specified user.\n3. With User Account Control enabled, an end user runs a program requiring admin authority.  You will get this event where the process information is consent.exe.\n   Unfortunately the Subject does not identify the end user.\n4. Logging on interactively to a server with a domain account. (Two 4624 events will also be generated.)\nThis logon event is unique in that it is logged on the source computer and not the target computer like most other logon events.\nAlso, it will be logged regardless of the logon being successful or not so consider it an attempt and not necessarily an actual successful logon.\n",
+    "description": "(From ultimatewindowsecurity.com) This log is generated when 1. A user connects to a server or runs a program locally using alternate credentials. For instance a user maps a drive to a server but specifies a different user's credentials or opens a shortcut under RunAs by shift-control-right-clicking on the shortcut, selecting Run as..., and then filling in a different user's credentials in the dialog box that appears.  Or a user logs on to a web site using new specific credentials. 2. When a process logs on as a different account such as when the Scheduled Tasks service starts a task as the specified user. 3. With User Account Control enabled, an end user runs a program requiring admin authority.  You will get this event where the process information is consent.exe. Unfortunately the Subject does not identify the end user. 4. Logging on interactively to a server with a domain account. (Two 4624 events will also be generated.) This logon event is unique in that it is logged on the source computer and not the target computer like most other logon events. Also, it will be logged regardless of the logon being successful or not so consider it an attempt and not necessarily an actual successful logon.",
     "eventid": [
       4648
     ],
@@ -1850,7 +1850,7 @@
     "channel": [
       "System"
     ],
-    "description": "This is an event that shows the computer uptime.This event is important because it also contains the OS timezone information.\n",
+    "description": "This is an event that shows the computer uptime.This event is important because it also contains the OS timezone information.",
     "eventid": [
       6013
     ],
@@ -1883,7 +1883,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "A file was deleted. Additionally to logging the event, the deleted file is also saved in the ArchiveDirectory (which is C:\\Sysmon by default). \nUnder normal operating conditions this directory might grow to an unreasonable size - see event ID 26: FileDeleteDetected for similar behavior but without saving the deleted files.\n",
+    "description": "A file was deleted. Additionally to logging the event, the deleted file is also saved in the ArchiveDirectory (which is C:\\Sysmon by default). Under normal operating conditions this directory might grow to an unreasonable size - see event ID 26: FileDeleteDetected for similar behavior but without saving the deleted files.",
     "eventid": [
       23
     ],
@@ -1953,7 +1953,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This Registry event type identifies Registry value modifications. The event records the value written for Registry values of type DWORD and QWORD.\nMarked as noisy by default.\n",
+    "description": "This Registry event type identifies Registry value modifications. The event records the value written for Registry values of type DWORD and QWORD. Marked as noisy by default.",
     "eventid": [
       13
     ],
@@ -2094,7 +2094,7 @@
     "channel": [
       "Security"
     ],
-    "description": "(From ultimatewindowsecurity.com)\nThis log is generated when\n1. A user connects to a server or runs a program locally using alternate credentials.\n   For instance a user maps a drive to a server but specifies a different user's credentials or opens a shortcut under RunAs by shift-control-right-clicking on the shortcut,\n   selecting Run as..., and then filling in a different user's credentials in the dialog box that appears.  Or a user logs on to a web site using new specific credentials.\n2. When a process logs on as a different account such as when the Scheduled Tasks service starts a task as the specified user.\n3. With User Account Control enabled, an end user runs a program requiring admin authority.  You will get this event where the process information is consent.exe.\n   Unfortunately the Subject does not identify the end user.\n4. Logging on interactively to a server with a domain account. (Two 4624 events will also be generated.)\nThis logon event is unique in that it is logged on the source computer and not the target computer like most other logon events.\nAlso, it will be logged regardless of the logon being successful or not so consider it an attempt and not necessarily an actual successful logon.\n",
+    "description": "(From ultimatewindowsecurity.com) This log is generated when 1. A user connects to a server or runs a program locally using alternate credentials. For instance a user maps a drive to a server but specifies a different user's credentials or opens a shortcut under RunAs by shift-control-right-clicking on the shortcut, selecting Run as..., and then filling in a different user's credentials in the dialog box that appears.  Or a user logs on to a web site using new specific credentials. 2. When a process logs on as a different account such as when the Scheduled Tasks service starts a task as the specified user. 3. With User Account Control enabled, an end user runs a program requiring admin authority.  You will get this event where the process information is consent.exe. Unfortunately the Subject does not identify the end user. 4. Logging on interactively to a server with a domain account. (Two 4624 events will also be generated.) This logon event is unique in that it is logged on the source computer and not the target computer like most other logon events. Also, it will be logged regardless of the logon being successful or not so consider it an attempt and not necessarily an actual successful logon.",
     "eventid": [
       4648
     ],
@@ -2353,7 +2353,7 @@
     "channel": [
       "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational"
     ],
-    "description": "This event is created when a new local session is created for either a local or remote interactive login when a user successfully authenticates and there is no existing local session.\nThis event will be created when a user logs on for the first time or after a logout but not after just a disconnect because the session will still exist.\nIn that case, a reconnect event will be created.\nThe Local Session Manager is responsible for creating or finding existing local sessions to support interactive logins.\nNote that local sessions are different from logon sessions.\nLocal sessions represent the logon sessions, desktop layout, processes, etc. associated with an interactive logon. \nSrcIP will be an IP address if it is a remote session and \"LOCAL\" if it is a local session.\nThis event gives the same information in Remote Connection Manager 1149, Local Session Manager 22 and Security 4648.\n",
+    "description": "This event is created when a new local session is created for either a local or remote interactive login when a user successfully authenticates and there is no existing local session. This event will be created when a user logs on for the first time or after a logout but not after just a disconnect because the session will still exist. In that case, a reconnect event will be created. The Local Session Manager is responsible for creating or finding existing local sessions to support interactive logins. Note that local sessions are different from logon sessions. Local sessions represent the logon sessions, desktop layout, processes, etc. associated with an interactive logon. SrcIP will be an IP address if it is a remote session and \"LOCAL\" if it is a local session. This event gives the same information in Remote Connection Manager 1149, Local Session Manager 22 and Security 4648.",
     "eventid": [
       21
     ],
@@ -2566,7 +2566,7 @@
     "channel": [
       "System"
     ],
-    "description": "The computer started up. This event is important because it also contains the OS version information.\n%Data[3]% contains the Service Pack name (Ex: Service Pack 1) for Windows 7 systems but can be infered from the build number so is left out.\n%Data[4]% contains processor license information (Ex: Multiprocessor Free) but is not so useful so is left out.\n%Data[5]% contains the Revision (a.k.a. Update Version) Number in Windows 7 logs.\nWindows 10+ seems to always output 0 for this so it is not a reliable source for identifying the Revision Number.\n",
+    "description": "The computer started up. This event is important because it also contains the OS version information. %Data[3]% contains the Service Pack name (Ex: Service Pack 1) for Windows 7 systems but can be infered from the build number so is left out. %Data[4]% contains processor license information (Ex: Multiprocessor Free) but is not so useful so is left out. %Data[5]% contains the Revision (a.k.a. Update Version) Number in Windows 7 logs. Windows 10+ seems to always output 0 for this so it is not a reliable source for identifying the Revision Number.",
     "eventid": [
       6009
     ],
@@ -2915,7 +2915,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This event is generated when a process executes a DNS query, whether the result is successful or fails, cached or not. \nDNS Queries using the Windows DnsQuery_* API calls in dnsapi.dll will be logged but not applications that do their own DNS resolution.\n",
+    "description": "This event is generated when a process executes a DNS query, whether the result is successful or fails, cached or not. DNS Queries using the Windows DnsQuery_* API calls in dnsapi.dll will be logged but not applications that do their own DNS resolution.",
     "eventid": [
       22
     ],
@@ -3201,7 +3201,7 @@
     "channel": [
       "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational"
     ],
-    "description": "Logon for RDS (Remote Desktop Services). Formerly known as Terminal Services.\nUses RDP so I am refering to these as RDP Logons as that is what most people will expect.\nOn newer OSes (Win 7+, 2012+), this event is logged only when a user successfully logs on to a RDP session.\nOn older OSes (Vista, 2008), this event is logged when a user logs on to a RDP session, regardless of success.\nThis event might be be created when rdesktop is used as a client and NLA is disabled.\nUser and domain names are empty if the server is configured with Restricted Admin.\nInformation in this event is also found in the Security event log.\n",
+    "description": "Logon for RDS (Remote Desktop Services). Formerly known as Terminal Services. Uses RDP so I am refering to these as RDP Logons as that is what most people will expect. On newer OSes (Win 7+, 2012+), this event is logged only when a user successfully logs on to a RDP session. On older OSes (Vista, 2008), this event is logged when a user logs on to a RDP session, regardless of success. This event might be be created when rdesktop is used as a client and NLA is disabled. User and domain names are empty if the server is configured with Restricted Admin. Information in this event is also found in the Security event log.",
     "eventid": [
       1149
     ],
@@ -3238,7 +3238,7 @@
     "channel": [
       "Application"
     ],
-    "description": "Windows Installer installed software via an MSI file.\n%Data[1]%: Product Name\n%Data[2]%: Product Version\n%Data[3]%: Product Language in LCID format. (Ex: 1033 for English)\n%Data[4]%: Installation status code. 0 means success.\n%Data[5]%: Vendor\n%Data[6]%: Not sure.\nBinary: Not sure how to decode.\n",
+    "description": "Windows Installer installed software via an MSI file. %Data[1]%: Product Name %Data[2]%: Product Version %Data[3]%: Product Language in LCID format. (Ex: 1033 for English) %Data[4]%: Installation status code. 0 means success. %Data[5]%: Vendor %Data[6]%: Not sure. Binary: Not sure how to decode.",
     "eventid": [
       1022,
       1033
@@ -3822,7 +3822,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The process accessed event reports when a process opens another process, an operation that is often followed by information queries or reading and writing the address space of the target process. \nThis enables detection of hacking tools that read the memory contents of processes like Local Security Authority (Lsass.exe) in order to steal credentials for use in Pass-the-Hash attacks. \nEnabling it can generate significant amounts of logging if there are diagnostic utilities active that repeatedly open processes to query their state, so it generally should only be done so with filters that remove expected accesses.\nSource User and Target User are not available in earlier versions of Sysmon.\n",
+    "description": "The process accessed event reports when a process opens another process, an operation that is often followed by information queries or reading and writing the address space of the target process. This enables detection of hacking tools that read the memory contents of processes like Local Security Authority (Lsass.exe) in order to steal credentials for use in Pass-the-Hash attacks. Enabling it can generate significant amounts of logging if there are diagnostic utilities active that repeatedly open processes to query their state, so it generally should only be done so with filters that remove expected accesses. Source User and Target User are not available in earlier versions of Sysmon.",
     "eventid": [
       10
     ],
@@ -4375,7 +4375,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The Change File Creation Time Event is registered when a file creation time is explicitly modified by a process. \nThis event helps tracking the real creation time of a file. \nAttackers may change the file creation time of a backdoor to make it look like it was installed with the operating system. \nNote that many processes legitimately change the creation time of a file; it does not necessarily indicate malicious activity.\n",
+    "description": "The Change File Creation Time Event is registered when a file creation time is explicitly modified by a process. This event helps tracking the real creation time of a file. Attackers may change the file creation time of a backdoor to make it look like it was installed with the operating system. Note that many processes legitimately change the creation time of a file; it does not necessarily indicate malicious activity.",
     "eventid": [
       2
     ],
@@ -4449,7 +4449,7 @@
     "channel": [
       "Microsoft-Windows-VHDMP-Operational"
     ],
-    "description": "An ISO disk image was mounted. The original event is for when the handle is created. \nThere is an event ID 1 for when it is mounted but this happens at the same time and this event contains more detailed information \nso I am using this instead of EID 1 for VHD mounting.\nAttackers have started to place malware instead .iso files now that office documents downloaded from the internet have their macros blocked by default since 2022.\n",
+    "description": "An ISO disk image was mounted. The original event is for when the handle is created. There is an event ID 1 for when it is mounted but this happens at the same time and this event contains more detailed information so I am using this instead of EID 1 for VHD mounting. Attackers have started to place malware instead .iso files now that office documents downloaded from the internet have their macros blocked by default since 2022.",
     "eventid": [
       12
     ],
@@ -4516,7 +4516,7 @@
     "channel": [
       "System"
     ],
-    "description": "Blue Screen Of Death. MS calls these Bug Check Errors.\nparam1 will contain various error codes for debugging:\nexample: 0x0000009f (0x0000000000000003, 0xffffe682fdfaf570, 0xfffff800666c4750, 0xffffe6831844f050)\n    - 0x0000009f is the Bug Check Code (a.k.a. Stop Code) meaning DRIVER_POWER_STATE_FAILURE\n    - 0x0000000000000003 indicates the type of inconsistency. In this case, 0x3 means the system is transitioning from a sleep state (S4 or S5) to an awake state (S0).\n    - 0xffffe682fdfaf570 is a pointer to the DEVICE_OBJECT structure representing the device that is being enumerated.\n    - 0xfffff800666c4750 is a pointer to the IRP (I/O Request Packet) that was pending for the device object.\n    - 0xffffe6831844f050 is a pointer to the NTSTATUS code indicating the cause of the failure.\nparam2 is the path to a memory dump (ex: C:\\WINDOWS\\MEMORY.DMP)\nparam3 is the report ID (ex: cf65ecb3-8a81-4a04-89ae-8d1fff1aecf8)\n",
+    "description": "Blue Screen Of Death. MS calls these Bug Check Errors. param1 will contain various error codes for debugging: example: 0x0000009f (0x0000000000000003, 0xffffe682fdfaf570, 0xfffff800666c4750, 0xffffe6831844f050) - 0x0000009f is the Bug Check Code (a.k.a. Stop Code) meaning DRIVER_POWER_STATE_FAILURE - 0x0000000000000003 indicates the type of inconsistency. In this case, 0x3 means the system is transitioning from a sleep state (S4 or S5) to an awake state (S0). - 0xffffe682fdfaf570 is a pointer to the DEVICE_OBJECT structure representing the device that is being enumerated. - 0xfffff800666c4750 is a pointer to the IRP (I/O Request Packet) that was pending for the device object. - 0xffffe6831844f050 is a pointer to the NTSTATUS code indicating the cause of the failure. param2 is the path to a memory dump (ex: C:\\WINDOWS\\MEMORY.DMP) param3 is the report ID (ex: cf65ecb3-8a81-4a04-89ae-8d1fff1aecf8)",
     "eventid": [
       1001
     ],
@@ -4703,7 +4703,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The CreateRemoteThread (Process Injection) event detects when a process creates a thread in another process. \nThis technique is used by malware to inject code and hide in other processes. \nThe event indicates the source and target process. \nIt gives information on the code that will be run in the new thread: StartAddress, StartModule and StartFunction. \nNote that StartModule and StartFunction fields are inferred, they might be empty if the starting address is outside loaded modules or known exported functions.\n",
+    "description": "The CreateRemoteThread (Process Injection) event detects when a process creates a thread in another process. This technique is used by malware to inject code and hide in other processes. The event indicates the source and target process. It gives information on the code that will be run in the new thread: StartAddress, StartModule and StartFunction. Note that StartModule and StartFunction fields are inferred, they might be empty if the starting address is outside loaded modules or known exported functions.",
     "eventid": [
       8
     ],
@@ -4775,7 +4775,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "When a WMI event filter is registered, which is a method used by malware to execute, this event logs the WMI namespace, \nfilter name and filter expression.\n",
+    "description": "When a WMI event filter is registered, which is a method used by malware to execute, this event logs the WMI namespace, filter name and filter expression.",
     "eventid": [
       19
     ],
@@ -4885,7 +4885,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This event logs when a named file stream (Alternate Data Stream) is created,\nand it generates events that log the hash of the contents of the file to which the stream is assigned (the unnamed stream),\nas well as the contents of the named stream. \nThere are malware variants that drop their executables or configuration settings via browser downloads, \nand this event is aimed at capturing that based on the browser attaching a Zone.Identifier \"mark of the web\" stream.\n",
+    "description": "This event logs when a named file stream (Alternate Data Stream) is created, and it generates events that log the hash of the contents of the file to which the stream is assigned (the unnamed stream), as well as the contents of the named stream. There are malware variants that drop their executables or configuration settings via browser downloads, and this event is aimed at capturing that based on the browser attaching a Zone.Identifier \"mark of the web\" stream.",
     "eventid": [
       15
     ],
@@ -4950,7 +4950,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The main DFIR purpose is to capture files that attackers copy over via RDP, attacker commands that were copied and pasted, etc...\nThis event is generated when the system clipboard contents change.\nPasswords and other sensitive information may be leaked when copied into the clipboard so heavy filtering to prevent this is necessary.\nThe copied contents are not saved in the event log but archived to the same protected folder as the File Delete event does. (C:\\Sysmon)\nSYSTEM privileges are required to access this folder. \nHashes of the files can also be saved.\nSession is where the process writing to clipboard is running: System(0), Interactive, Remote, etc...\nClientInfo will store originating hostname and IP address in the case of a remote session. (i.e. Attacker using RDP.)\n",
+    "description": "The main DFIR purpose is to capture files that attackers copy over via RDP, attacker commands that were copied and pasted, etc... This event is generated when the system clipboard contents change. Passwords and other sensitive information may be leaked when copied into the clipboard so heavy filtering to prevent this is necessary. The copied contents are not saved in the event log but archived to the same protected folder as the File Delete event does. (C:\\Sysmon) SYSTEM privileges are required to access this folder. Hashes of the files can also be saved. Session is where the process writing to clipboard is running: System(0), Interactive, Remote, etc... ClientInfo will store originating hostname and IP address in the case of a remote session. (i.e. Attacker using RDP.)",
     "eventid": [
       24
     ],
@@ -4984,7 +4984,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Malware may generate a 4673 event (A privileged service was called) when dumping hashes or wiping disk. \nFor example, mimikatz will generate 4 logs using SeTcbPrivilege (Act as part of the OS.) \nDisk wipers like bcwipe will also generate this.\nMore legitimate filepaths may have to be added to the filter.\nThis is marked as a medium alert as there is a high possibility for false positives.\n",
+    "description": "Malware may generate a 4673 event (A privileged service was called) when dumping hashes or wiping disk. For example, mimikatz will generate 4 logs using SeTcbPrivilege (Act as part of the OS.) Disk wipers like bcwipe will also generate this. More legitimate filepaths may have to be added to the filter. This is marked as a medium alert as there is a high possibility for false positives.",
     "eventid": [
       4673
     ],
@@ -5060,7 +5060,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This event is generated when a process executes a DNS query, whether the result is successful or fails, cached or not. \nThe telemetry for this event was added for Windows 8.1 so it is not available on Windows 7 and earlier.\n",
+    "description": "This event is generated when a process executes a DNS query, whether the result is successful or fails, cached or not. The telemetry for this event was added for Windows 8.1 so it is not available on Windows 7 and earlier.",
     "eventid": [
       22
     ],
@@ -5248,7 +5248,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "This Registry event type identifies Registry value modifications.\nThe event records the value written for Registry values of type DWORD and QWORD.\n",
+    "description": "This Registry event type identifies Registry value modifications. The event records the value written for Registry values of type DWORD and QWORD.",
     "eventid": [
       13
     ],
@@ -5426,7 +5426,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "A file was deleted. Additionally to logging the event, the deleted file is also saved in the ArchiveDirectory (which is C:\\Sysmon by default). \nUnder normal operating conditions this directory might grow to an unreasonable size - see event ID 26: FileDeleteDetected for similar behavior but without saving the deleted files.\n",
+    "description": "A file was deleted. Additionally to logging the event, the deleted file is also saved in the ArchiveDirectory (which is C:\\Sysmon by default). Under normal operating conditions this directory might grow to an unreasonable size - see event ID 26: FileDeleteDetected for similar behavior but without saving the deleted files.",
     "eventid": [
       23
     ],
@@ -5539,7 +5539,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The RawAccessRead event detects when a process conducts reading operations from the drive using the \\\\.\\ denotation. \nThis technique is often used by malware for data exfiltration of files that are locked for reading, as well as to avoid file access auditing tools. \nThe event indicates the source process and target device.\n",
+    "description": "The RawAccessRead event detects when a process conducts reading operations from the drive using the \\\\.\\ denotation. This technique is often used by malware for data exfiltration of files that are locked for reading, as well as to avoid file access auditing tools. The event indicates the source process and target device.",
     "eventid": [
       9
     ],
@@ -5648,7 +5648,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects process hollowing or process herpaderping techniques which would normally not be visible in Task Manager.\nProcess hollowing is when malware launches a legitimate process in a suspended state and replaces legitimate code in the process with malicious code. \nThis malicious code is then executed by the process, with whatever permissions are assigned to the process.\nProcess herpaderping is where malware modifies its image on the disk to look like legitimate software after the malware is loaded. \nWhen security software scans the on-disk file, it will see a harmless file while the malicious code runs in memory.\n",
+    "description": "Detects process hollowing or process herpaderping techniques which would normally not be visible in Task Manager. Process hollowing is when malware launches a legitimate process in a suspended state and replaces legitimate code in the process with malicious code. This malicious code is then executed by the process, with whatever permissions are assigned to the process. Process herpaderping is where malware modifies its image on the disk to look like legitimate software after the malware is loaded. When security software scans the on-disk file, it will see a harmless file while the malicious code runs in memory.",
     "eventid": [
       25
     ],
@@ -5681,7 +5681,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "File create operations are logged when a file is created or overwritten. \nThis event is useful for monitoring autostart locations, like the Startup folder, as well as temporary and download directories, which are common places malware drops during initial infection.\n",
+    "description": "File create operations are logged when a file is created or overwritten. This event is useful for monitoring autostart locations, like the Startup folder, as well as temporary and download directories, which are common places malware drops during initial infection.",
     "eventid": [
       11
     ],
@@ -5945,7 +5945,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "When a WMI event filter is registered, which is a method used by malware to execute, this event logs the WMI namespace, \nfilter name and filter expression.\n",
+    "description": "When a WMI event filter is registered, which is a method used by malware to execute, this event logs the WMI namespace, filter name and filter expression.",
     "eventid": [
       20
     ],
@@ -6098,7 +6098,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The CreateRemoteThread (Process Injection) event detects when a process creates a thread in another process. \nThis technique is used by malware to inject code and hide in other processes. \nThe event indicates the source and target process. \nIt gives information on the code that will be run in the new thread: StartAddress, StartModule and StartFunction. \nNote that StartModule and StartFunction fields are inferred, they might be empty if the starting address is outside loaded modules or known exported functions.\n",
+    "description": "The CreateRemoteThread (Process Injection) event detects when a process creates a thread in another process. This technique is used by malware to inject code and hide in other processes. The event indicates the source and target process. It gives information on the code that will be run in the new thread: StartAddress, StartModule and StartFunction. Note that StartModule and StartFunction fields are inferred, they might be empty if the starting address is outside loaded modules or known exported functions.",
     "eventid": [
       8
     ],
@@ -6172,7 +6172,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "The process accessed event reports when a process opens another process, an operation that is often followed by information queries or reading and writing the address space of the target process. \nThis enables detection of hacking tools that read the memory contents of processes like Local Security Authority (Lsass.exe) in order to steal credentials for use in Pass-the-Hash attacks. \nEnabling it can generate significant amounts of logging if there are diagnostic utilities active that repeatedly open processes to query their state, so it generally should only be done so with filters that remove expected accesses.\n",
+    "description": "The process accessed event reports when a process opens another process, an operation that is often followed by information queries or reading and writing the address space of the target process. This enables detection of hacking tools that read the memory contents of processes like Local Security Authority (Lsass.exe) in order to steal credentials for use in Pass-the-Hash attacks. Enabling it can generate significant amounts of logging if there are diagnostic utilities active that repeatedly open processes to query their state, so it generally should only be done so with filters that remove expected accesses.",
     "eventid": [
       10
     ],
@@ -6585,7 +6585,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects commands commonly used by ransomware and destructive malware to inhibit system recovery, such as deleting or resizing Volume Shadow Copies, deleting backup catalogs, or disabling Windows automatic recovery.\nThis rule uses the built-in Windows Security \"Process Creation\" event (4688) so that it works without Sysmon. Command line auditing must be enabled.\n",
+    "description": "Detects commands commonly used by ransomware and destructive malware to inhibit system recovery, such as deleting or resizing Volume Shadow Copies, deleting backup catalogs, or disabling Windows automatic recovery. This rule uses the built-in Windows Security \"Process Creation\" event (4688) so that it works without Sysmon. Command line auditing must be enabled.",
     "eventid": [
       4688
     ],
@@ -6625,7 +6625,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects commands commonly used by ransomware and destructive malware to inhibit system recovery, such as deleting or resizing Volume Shadow Copies, deleting backup catalogs, or disabling Windows automatic recovery.\nThis is the Sysmon process creation (EventID 1) version of the Security 4688 rule.\n",
+    "description": "Detects commands commonly used by ransomware and destructive malware to inhibit system recovery, such as deleting or resizing Volume Shadow Copies, deleting backup catalogs, or disabling Windows automatic recovery. This is the Sysmon process creation (EventID 1) version of the Security 4688 rule.",
     "eventid": [
       1
     ],

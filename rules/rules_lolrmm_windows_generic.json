@@ -4,7 +4,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of rdp2tcp RMM tool\n",
+    "description": "Detects potential processes activity of rdp2tcp RMM tool",
     "eventid": [
       4688
     ],
@@ -44,7 +44,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Opale RMM tool\n",
+    "description": "Detects potential registry activity of Opale RMM tool",
     "eventid": [
       4657
     ],
@@ -62,12 +62,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Opale-Agent%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Opale-Agent%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -84,7 +84,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of DragonDisk RMM tool\n",
+    "description": "Detects potential processes activity of DragonDisk RMM tool",
     "eventid": [
       4688
     ],
@@ -124,7 +124,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of TightVNC RMM tool\n",
+    "description": "Detects potential processes activity of TightVNC RMM tool",
     "eventid": [
       4688
     ],
@@ -164,7 +164,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ManageEngine RMM tool\n",
+    "description": "Detects potential processes activity of ManageEngine RMM tool",
     "eventid": [
       4688
     ],
@@ -204,7 +204,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Bitvise SSH Server RMM tool\n",
+    "description": "Detects potential processes activity of Bitvise SSH Server RMM tool",
     "eventid": [
       4688
     ],
@@ -244,7 +244,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Mini RMM Agent RMM tool\n",
+    "description": "Detects potential registry activity of Mini RMM Agent RMM tool",
     "eventid": [
       4657
     ],
@@ -262,12 +262,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\MiniRMMAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\MiniRmmAgent%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\MiniRMMAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\MiniRmmAgent%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -284,7 +284,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Zecurit RMM tool\n",
+    "description": "Detects potential processes activity of Zecurit RMM tool",
     "eventid": [
       4688
     ],
@@ -324,7 +324,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Controlio RMM tool\n",
+    "description": "Detects potential processes activity of Controlio RMM tool",
     "eventid": [
       4688
     ],
@@ -364,7 +364,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RemoteCall RMM tool\n",
+    "description": "Detects potential processes activity of RemoteCall RMM tool",
     "eventid": [
       4688
     ],
@@ -443,7 +443,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of VNC RMM tool\n",
+    "description": "Detects potential processes activity of VNC RMM tool",
     "eventid": [
       4688
     ],
@@ -483,7 +483,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SysAid RMM tool\n",
+    "description": "Detects potential processes activity of SysAid RMM tool",
     "eventid": [
       4688
     ],
@@ -523,7 +523,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of DeskDay RMM tool\n",
+    "description": "Detects potential processes activity of DeskDay RMM tool",
     "eventid": [
       4688
     ],
@@ -563,7 +563,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of N-able N-central RMM tool\n",
+    "description": "Detects potential processes activity of N-able N-central RMM tool",
     "eventid": [
       4688
     ],
@@ -603,7 +603,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of TigerVNC RMM tool\n",
+    "description": "Detects potential processes activity of TigerVNC RMM tool",
     "eventid": [
       4688
     ],
@@ -643,7 +643,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ESET Remote Administrator RMM tool\n",
+    "description": "Detects potential processes activity of ESET Remote Administrator RMM tool",
     "eventid": [
       4688
     ],
@@ -683,7 +683,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Komari RMM tool\n",
+    "description": "Detects potential registry activity of Komari RMM tool",
     "eventid": [
       4657
     ],
@@ -701,12 +701,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\komari-agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\Windows Update Service%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\komari-agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\Windows Update Service%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -723,7 +723,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Remcos RMM tool\n",
+    "description": "Detects potential processes activity of Remcos RMM tool",
     "eventid": [
       4688
     ],
@@ -763,7 +763,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Xshell RMM tool\n",
+    "description": "Detects potential processes activity of Xshell RMM tool",
     "eventid": [
       4688
     ],
@@ -803,7 +803,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ZOC RMM tool\n",
+    "description": "Detects potential processes activity of ZOC RMM tool",
     "eventid": [
       4688
     ],
@@ -843,7 +843,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of IT Agent RMM tool\n",
+    "description": "Detects potential processes activity of IT Agent RMM tool",
     "eventid": [
       4688
     ],
@@ -883,7 +883,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of GoToAssist (GoTo Resolve) RMM tool\n",
+    "description": "Detects potential registry activity of GoToAssist (GoTo Resolve) RMM tool",
     "eventid": [
       4657
     ],
@@ -901,12 +901,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GoTo Resolve Unattended\\\\%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GoTo Resolve Unattended\\\\%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -923,7 +923,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of LogMeIn rescue RMM tool\n",
+    "description": "Detects potential processes activity of LogMeIn rescue RMM tool",
     "eventid": [
       4688
     ],
@@ -963,7 +963,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of NetMaster RMM tool\n",
+    "description": "Detects potential registry activity of NetMaster RMM tool",
     "eventid": [
       4657
     ],
@@ -981,12 +981,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\netmaster%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\netmaster%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -1003,7 +1003,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of iDrive RMM tool\n",
+    "description": "Detects potential registry activity of iDrive RMM tool",
     "eventid": [
       4657
     ],
@@ -1021,12 +1021,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\IDrive*%' ESCAPE '\\' OR TargetObject LIKE '%HKEY\\_CURRENT\\_USER\\\\SOFTWARE\\\\IDrive*%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\IDrive*%' ESCAPE '\\' OR ObjectName LIKE '%HKEY\\_CURRENT\\_USER\\\\SOFTWARE\\\\IDrive*%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -1043,7 +1043,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Royal Apps RMM tool\n",
+    "description": "Detects potential processes activity of Royal Apps RMM tool",
     "eventid": [
       4688
     ],
@@ -1083,7 +1083,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of I'm InTouch RMM tool\n",
+    "description": "Detects potential processes activity of I'm InTouch RMM tool",
     "eventid": [
       4688
     ],
@@ -1123,7 +1123,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Veyon RMM tool\n",
+    "description": "Detects potential processes activity of Veyon RMM tool",
     "eventid": [
       4688
     ],
@@ -1163,7 +1163,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of RdClient RMM tool\n",
+    "description": "Detects potential registry activity of RdClient RMM tool",
     "eventid": [
       4657
     ],
@@ -1181,12 +1181,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\RdClient%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\RdClient%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -1203,7 +1203,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of MSP360 RMM tool\n",
+    "description": "Detects potential processes activity of MSP360 RMM tool",
     "eventid": [
       4688
     ],
@@ -1243,7 +1243,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of MeshCentral RMM tool\n",
+    "description": "Detects potential processes activity of MeshCentral RMM tool",
     "eventid": [
       4688
     ],
@@ -1283,7 +1283,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of KiTTY RMM tool\n",
+    "description": "Detects potential processes activity of KiTTY RMM tool",
     "eventid": [
       4688
     ],
@@ -1323,7 +1323,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of FastViewer RMM tool\n",
+    "description": "Detects potential processes activity of FastViewer RMM tool",
     "eventid": [
       4688
     ],
@@ -1363,7 +1363,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of RMMCRAT RMM tool\n",
+    "description": "Detects potential registry activity of RMMCRAT RMM tool",
     "eventid": [
       4657
     ],
@@ -1381,12 +1381,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\RMMAgent%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\RMMAgent%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -1403,7 +1403,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Acronis Cyber Protect (Remotix) RMM tool\n",
+    "description": "Detects potential processes activity of Acronis Cyber Protect (Remotix) RMM tool",
     "eventid": [
       4688
     ],
@@ -1443,7 +1443,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of GotoHTTP RMM tool\n",
+    "description": "Detects potential processes activity of GotoHTTP RMM tool",
     "eventid": [
       4688
     ],
@@ -1522,7 +1522,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Quick Assist RMM tool\n",
+    "description": "Detects potential processes activity of Quick Assist RMM tool",
     "eventid": [
       4688
     ],
@@ -1562,7 +1562,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of RdViewer RMM tool\n",
+    "description": "Detects potential registry activity of RdViewer RMM tool",
     "eventid": [
       4657
     ],
@@ -1580,12 +1580,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Rd\\_Service%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Rd\\_Service%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -1602,7 +1602,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of MioNet (WD Anywhere Access) RMM tool\n",
+    "description": "Detects potential processes activity of MioNet (WD Anywhere Access) RMM tool",
     "eventid": [
       4688
     ],
@@ -1642,7 +1642,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of BeyondTrust (Bomgar) RMM tool\n",
+    "description": "Detects potential processes activity of BeyondTrust (Bomgar) RMM tool",
     "eventid": [
       4688
     ],
@@ -1721,7 +1721,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Nexus RMM (Scogo) RMM tool\n",
+    "description": "Detects potential processes activity of Nexus RMM (Scogo) RMM tool",
     "eventid": [
       4688
     ],
@@ -1761,7 +1761,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ConnectWise Control RMM tool\n",
+    "description": "Detects potential processes activity of ConnectWise Control RMM tool",
     "eventid": [
       4688
     ],
@@ -1801,7 +1801,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Seetrol RMM tool\n",
+    "description": "Detects potential processes activity of Seetrol RMM tool",
     "eventid": [
       4688
     ],
@@ -1880,7 +1880,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of TiFLUX RMM tool\n",
+    "description": "Detects potential registry activity of TiFLUX RMM tool",
     "eventid": [
       4657
     ],
@@ -1898,12 +1898,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TiService%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TiService\\\\ImagePath%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TiService\\\\Start%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\TiFLUX*%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\TiFLUX*%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\TiFLUX\\\\org\\_id%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\TiAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKCU\\\\SOFTWARE\\\\TiFlux%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TiService%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TiService\\\\ImagePath%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TiService\\\\Start%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\TiFLUX*%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\TiFLUX*%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\TiFLUX\\\\org\\_id%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\TiAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKCU\\\\SOFTWARE\\\\TiFlux%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -1998,7 +1998,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of mRemoteNG RMM tool\n",
+    "description": "Detects potential processes activity of mRemoteNG RMM tool",
     "eventid": [
       4688
     ],
@@ -2038,7 +2038,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Pcvisit RMM tool\n",
+    "description": "Detects potential processes activity of Pcvisit RMM tool",
     "eventid": [
       4688
     ],
@@ -2078,7 +2078,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of PuTTY RMM tool\n",
+    "description": "Detects potential processes activity of PuTTY RMM tool",
     "eventid": [
       4688
     ],
@@ -2118,7 +2118,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SpyAnywhere RMM tool\n",
+    "description": "Detects potential processes activity of SpyAnywhere RMM tool",
     "eventid": [
       4688
     ],
@@ -2158,7 +2158,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Opale RMM tool\n",
+    "description": "Detects potential processes activity of Opale RMM tool",
     "eventid": [
       4688
     ],
@@ -2198,7 +2198,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of UltraViewer RMM tool\n",
+    "description": "Detects potential processes activity of UltraViewer RMM tool",
     "eventid": [
       4688
     ],
@@ -2238,7 +2238,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Ammyy Admin RMM tool\n",
+    "description": "Detects potential processes activity of Ammyy Admin RMM tool",
     "eventid": [
       4688
     ],
@@ -2278,7 +2278,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of NVDA (Non-Visual Desktop Access) RMM tool\n",
+    "description": "Detects potential processes activity of NVDA (Non-Visual Desktop Access) RMM tool",
     "eventid": [
       4688
     ],
@@ -2318,7 +2318,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Yandex.Disk RMM tool\n",
+    "description": "Detects potential processes activity of Yandex.Disk RMM tool",
     "eventid": [
       4688
     ],
@@ -2358,7 +2358,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of OpsBridge Agent RMM tool\n",
+    "description": "Detects potential processes activity of OpsBridge Agent RMM tool",
     "eventid": [
       4688
     ],
@@ -2398,7 +2398,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Vicarius vRx RMM tool\n",
+    "description": "Detects potential processes activity of Vicarius vRx RMM tool",
     "eventid": [
       4688
     ],
@@ -2438,7 +2438,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ezHelp RMM tool\n",
+    "description": "Detects potential processes activity of ezHelp RMM tool",
     "eventid": [
       4688
     ],
@@ -2478,7 +2478,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SuperPuTTY RMM tool\n",
+    "description": "Detects potential processes activity of SuperPuTTY RMM tool",
     "eventid": [
       4688
     ],
@@ -2518,7 +2518,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Solar-PuTTY RMM tool\n",
+    "description": "Detects potential processes activity of Solar-PuTTY RMM tool",
     "eventid": [
       4688
     ],
@@ -2558,7 +2558,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of GatherPlace-desktop sharing RMM tool\n",
+    "description": "Detects potential processes activity of GatherPlace-desktop sharing RMM tool",
     "eventid": [
       4688
     ],
@@ -2598,7 +2598,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Panorama9 RMM tool\n",
+    "description": "Detects potential processes activity of Panorama9 RMM tool",
     "eventid": [
       4688
     ],
@@ -2638,7 +2638,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Remote Utilities RMM tool\n",
+    "description": "Detects potential processes activity of Remote Utilities RMM tool",
     "eventid": [
       4688
     ],
@@ -2678,7 +2678,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of AnyDesk RMM tool\n",
+    "description": "Detects potential registry activity of AnyDesk RMM tool",
     "eventid": [
       4657
     ],
@@ -2696,12 +2696,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Clients\\\\Media\\\\AnyDesk%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Clients\\\\Media\\\\AnyDesk-%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AnyDesk%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AnyDesk-%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\.anydesk\\\\shell\\\\open\\\\command%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\AnyDesk\\\\shell\\\\open\\\\command%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\AnyDesk-%\\\\shell\\\\open\\\\command%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Print\\\\Printers\\\\AnyDesk Printer*%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\DRIVERS\\\\DriverDatabase\\\\DeviceIds\\\\USBPRINT\\\\AnyDesk%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\DRIVERS\\\\DriverDatabase\\\\DeviceIds\\\\WSDPRINT\\\\AnyDesk%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\AnyDesk%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\AnyDesk-%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Clients\\\\Media\\\\AnyDesk%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Clients\\\\Media\\\\AnyDesk-%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AnyDesk%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AnyDesk-%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\.anydesk\\\\shell\\\\open\\\\command%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\AnyDesk\\\\shell\\\\open\\\\command%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\AnyDesk-%\\\\shell\\\\open\\\\command%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Print\\\\Printers\\\\AnyDesk Printer*%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\DRIVERS\\\\DriverDatabase\\\\DeviceIds\\\\USBPRINT\\\\AnyDesk%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\DRIVERS\\\\DriverDatabase\\\\DeviceIds\\\\WSDPRINT\\\\AnyDesk%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\AnyDesk%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\AnyDesk-%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -2757,7 +2757,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of MyGreenPC RMM tool\n",
+    "description": "Detects potential processes activity of MyGreenPC RMM tool",
     "eventid": [
       4688
     ],
@@ -2836,7 +2836,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of UniSystem RMM RMM tool\n",
+    "description": "Detects potential processes activity of UniSystem RMM RMM tool",
     "eventid": [
       4688
     ],
@@ -2876,7 +2876,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Mremote RMM tool\n",
+    "description": "Detects potential registry activity of Mremote RMM tool",
     "eventid": [
       4657
     ],
@@ -2894,12 +2894,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\MremoteAgent%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\MremoteAgent%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -2916,7 +2916,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of InvGate RMM tool\n",
+    "description": "Detects potential registry activity of InvGate RMM tool",
     "eventid": [
       4657
     ],
@@ -2934,12 +2934,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\InvClient%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\InvClient\\\\ImagePath%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{41F5BB80-6416-4AF4-B67B-FA36C29DB4C4}%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{F0076285-D0E2-4B49-92BD-25E0B7B27DF6}%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\Installer\\\\Products\\\\08BB5F1461464FA46BB7AF632CD94B4C%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{41F5BB80-6416-4AF4-B67B-FA36C29DB4C4}%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\InvClient%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\InvClient\\\\ImagePath%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{41F5BB80-6416-4AF4-B67B-FA36C29DB4C4}%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{F0076285-D0E2-4B49-92BD-25E0B7B27DF6}%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\Installer\\\\Products\\\\08BB5F1461464FA46BB7AF632CD94B4C%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{41F5BB80-6416-4AF4-B67B-FA36C29DB4C4}%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -2995,7 +2995,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Pocket Controller RMM tool\n",
+    "description": "Detects potential processes activity of Pocket Controller RMM tool",
     "eventid": [
       4688
     ],
@@ -3035,7 +3035,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Guacamole RMM tool\n",
+    "description": "Detects potential processes activity of Guacamole RMM tool",
     "eventid": [
       4688
     ],
@@ -3075,7 +3075,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Faronics Deep Freeze RMM tool\n",
+    "description": "Detects potential registry activity of Faronics Deep Freeze RMM tool",
     "eventid": [
       4657
     ],
@@ -3093,12 +3093,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Faronics\\\\Deep Freeze%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Faronics%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\DFServ%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Faronics\\\\Deep Freeze%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Faronics%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\DFServ%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -3115,7 +3115,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ScreenConnect RMM tool\n",
+    "description": "Detects potential processes activity of ScreenConnect RMM tool",
     "eventid": [
       4688
     ],
@@ -3155,7 +3155,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Onionshare RMM tool\n",
+    "description": "Detects potential processes activity of Onionshare RMM tool",
     "eventid": [
       4688
     ],
@@ -3195,7 +3195,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RemoteAgentAgent RMM tool\n",
+    "description": "Detects potential processes activity of RemoteAgentAgent RMM tool",
     "eventid": [
       4688
     ],
@@ -3235,7 +3235,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of DeskShare RMM tool\n",
+    "description": "Detects potential processes activity of DeskShare RMM tool",
     "eventid": [
       4688
     ],
@@ -3314,7 +3314,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Tanium RMM tool\n",
+    "description": "Detects potential processes activity of Tanium RMM tool",
     "eventid": [
       4688
     ],
@@ -3354,7 +3354,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of AnyDesk RMM tool\n",
+    "description": "Detects potential processes activity of AnyDesk RMM tool",
     "eventid": [
       4688
     ],
@@ -3394,7 +3394,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of PSEXEC RMM tool\n",
+    "description": "Detects potential processes activity of PSEXEC RMM tool",
     "eventid": [
       4688
     ],
@@ -3434,7 +3434,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of RMMmax RMM tool\n",
+    "description": "Detects potential registry activity of RMMmax RMM tool",
     "eventid": [
       4657
     ],
@@ -3452,12 +3452,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\RMMmax\\\\AgentService%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\RMMmaxAgentService%' ESCAPE '\\' OR TargetObject LIKE '%HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\RMMmaxAgentService%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\RMMmax\\\\AgentService%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\RMMmaxAgentService%' ESCAPE '\\' OR ObjectName LIKE '%HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\RMMmaxAgentService%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -3474,7 +3474,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Remmon RMM tool\n",
+    "description": "Detects potential processes activity of Remmon RMM tool",
     "eventid": [
       4688
     ],
@@ -3514,7 +3514,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of DW Service RMM tool\n",
+    "description": "Detects potential processes activity of DW Service RMM tool",
     "eventid": [
       4688
     ],
@@ -3554,7 +3554,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Teramind RMM tool\n",
+    "description": "Detects potential registry activity of Teramind RMM tool",
     "eventid": [
       4657
     ],
@@ -3572,12 +3572,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\tsvchst%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\tsvchst\\\\ImagePath%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\tsvchst\\\\Start%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\tsvchst%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\tsvchst\\\\ImagePath%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\tsvchst\\\\Start%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -3594,7 +3594,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of AeroAdmin RMM tool\n",
+    "description": "Detects potential processes activity of AeroAdmin RMM tool",
     "eventid": [
       4688
     ],
@@ -3634,7 +3634,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of TeamViewer RMM tool\n",
+    "description": "Detects potential processes activity of TeamViewer RMM tool",
     "eventid": [
       4688
     ],
@@ -3674,7 +3674,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of mstsc.exe (Microsoft Remote Desktop Connection) RMM tool\n",
+    "description": "Detects potential processes activity of mstsc.exe (Microsoft Remote Desktop Connection) RMM tool",
     "eventid": [
       4688
     ],
@@ -3714,7 +3714,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of NTR Remote RMM tool\n",
+    "description": "Detects potential processes activity of NTR Remote RMM tool",
     "eventid": [
       4688
     ],
@@ -3754,7 +3754,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of CrossTec Remote Control RMM tool\n",
+    "description": "Detects potential processes activity of CrossTec Remote Control RMM tool",
     "eventid": [
       4688
     ],
@@ -3794,7 +3794,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of S3 Browser RMM tool\n",
+    "description": "Detects potential processes activity of S3 Browser RMM tool",
     "eventid": [
       4688
     ],
@@ -3834,7 +3834,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of LS RMM RMM tool\n",
+    "description": "Detects potential processes activity of LS RMM RMM tool",
     "eventid": [
       4688
     ],
@@ -3874,7 +3874,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of BeAnyWhere RMM tool\n",
+    "description": "Detects potential processes activity of BeAnyWhere RMM tool",
     "eventid": [
       4688
     ],
@@ -3914,7 +3914,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of NetBird RMM tool\n",
+    "description": "Detects potential processes activity of NetBird RMM tool",
     "eventid": [
       4688
     ],
@@ -3954,7 +3954,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SecureCRT RMM tool\n",
+    "description": "Detects potential processes activity of SecureCRT RMM tool",
     "eventid": [
       4688
     ],
@@ -3994,7 +3994,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Centurion RMM tool\n",
+    "description": "Detects potential processes activity of Centurion RMM tool",
     "eventid": [
       4688
     ],
@@ -4034,7 +4034,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Freshservice RMM tool\n",
+    "description": "Detects potential processes activity of Freshservice RMM tool",
     "eventid": [
       4688
     ],
@@ -4074,7 +4074,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Netop Remote Control (Impero Connect) RMM tool\n",
+    "description": "Detects potential processes activity of Netop Remote Control (Impero Connect) RMM tool",
     "eventid": [
       4688
     ],
@@ -4114,7 +4114,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ToDesk RMM tool\n",
+    "description": "Detects potential processes activity of ToDesk RMM tool",
     "eventid": [
       4688
     ],
@@ -4154,7 +4154,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Anyplace Control RMM tool\n",
+    "description": "Detects potential processes activity of Anyplace Control RMM tool",
     "eventid": [
       4688
     ],
@@ -4194,7 +4194,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Remotely RMM tool\n",
+    "description": "Detects potential processes activity of Remotely RMM tool",
     "eventid": [
       4688
     ],
@@ -4234,7 +4234,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of MyIVO RMM tool\n",
+    "description": "Detects potential processes activity of MyIVO RMM tool",
     "eventid": [
       4688
     ],
@@ -4274,7 +4274,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Lunixar RMM tool\n",
+    "description": "Detects potential registry activity of Lunixar RMM tool",
     "eventid": [
       4657
     ],
@@ -4292,12 +4292,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\LunixarRMM%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\LunixarRMM%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -4314,7 +4314,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of WinSCP RMM tool\n",
+    "description": "Detects potential processes activity of WinSCP RMM tool",
     "eventid": [
       4688
     ],
@@ -4354,7 +4354,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Teleport Connect RMM tool\n",
+    "description": "Detects potential processes activity of Teleport Connect RMM tool",
     "eventid": [
       4688
     ],
@@ -4394,7 +4394,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of FreeNX RMM tool\n",
+    "description": "Detects potential processes activity of FreeNX RMM tool",
     "eventid": [
       4688
     ],
@@ -4473,7 +4473,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of GoToAssist (GoTo Resolve) RMM tool\n",
+    "description": "Detects potential processes activity of GoToAssist (GoTo Resolve) RMM tool",
     "eventid": [
       4688
     ],
@@ -4513,7 +4513,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ZeroTier RMM tool\n",
+    "description": "Detects potential processes activity of ZeroTier RMM tool",
     "eventid": [
       4688
     ],
@@ -4592,7 +4592,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Rocket Remote Desktop RMM tool\n",
+    "description": "Detects potential processes activity of Rocket Remote Desktop RMM tool",
     "eventid": [
       4688
     ],
@@ -4632,7 +4632,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Microsoft Quick Assist RMM tool\n",
+    "description": "Detects potential processes activity of Microsoft Quick Assist RMM tool",
     "eventid": [
       4688
     ],
@@ -4672,7 +4672,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of TiFLUX RMM tool\n",
+    "description": "Detects potential processes activity of TiFLUX RMM tool",
     "eventid": [
       4688
     ],
@@ -4712,7 +4712,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Royal TS RMM tool\n",
+    "description": "Detects potential processes activity of Royal TS RMM tool",
     "eventid": [
       4688
     ],
@@ -4752,7 +4752,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of LightRmmAgent RMM tool\n",
+    "description": "Detects potential registry activity of LightRmmAgent RMM tool",
     "eventid": [
       4657
     ],
@@ -4770,12 +4770,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\LightRmmAgent%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\LightRmmAgent%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -4792,7 +4792,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Splashtop (Beta) RMM tool\n",
+    "description": "Detects potential processes activity of Splashtop (Beta) RMM tool",
     "eventid": [
       4688
     ],
@@ -4832,7 +4832,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Remote Manipulator System RMM tool\n",
+    "description": "Detects potential processes activity of Remote Manipulator System RMM tool",
     "eventid": [
       4688
     ],
@@ -4872,7 +4872,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Ping32 RMM tool\n",
+    "description": "Detects potential registry activity of Ping32 RMM tool",
     "eventid": [
       4657
     ],
@@ -4890,12 +4890,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\NSecsoft\\\\Debug%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\NSecsoft\\\\NSecAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\NSecsoft\\\\NSecAgent%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\NSecsoft\\\\Debug%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\NSecsoft\\\\NSecAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\NSecsoft\\\\NSecAgent%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -4912,7 +4912,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Supremo RMM tool\n",
+    "description": "Detects potential processes activity of Supremo RMM tool",
     "eventid": [
       4688
     ],
@@ -4952,7 +4952,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of PSEXEC (Clone) RMM tool\n",
+    "description": "Detects potential processes activity of PSEXEC (Clone) RMM tool",
     "eventid": [
       4688
     ],
@@ -4992,7 +4992,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of HopToDesk RMM tool\n",
+    "description": "Detects potential registry activity of HopToDesk RMM tool",
     "eventid": [
       4657
     ],
@@ -5010,12 +5010,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKEY\\_CURRENT\\_USER\\\\Software\\\\Classes\\\\HopToDesk\\\\shell\\\\open\\\\command%' ESCAPE '\\' OR TargetObject LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\HopToDesk%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKEY\\_CURRENT\\_USER\\\\Software\\\\Classes\\\\HopToDesk\\\\shell\\\\open\\\\command%' ESCAPE '\\' OR ObjectName LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\HopToDesk%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -5071,7 +5071,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RemotePC RMM tool\n",
+    "description": "Detects potential processes activity of RemotePC RMM tool",
     "eventid": [
       4688
     ],
@@ -5111,7 +5111,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Network Monitor for Employees RMM tool\n",
+    "description": "Detects potential processes activity of Network Monitor for Employees RMM tool",
     "eventid": [
       4688
     ],
@@ -5151,7 +5151,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of UltraVNC RMM tool\n",
+    "description": "Detects potential processes activity of UltraVNC RMM tool",
     "eventid": [
       4688
     ],
@@ -5191,7 +5191,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Ninite Pro (Ninite Agent) RMM tool\n",
+    "description": "Detects potential processes activity of Ninite Pro (Ninite Agent) RMM tool",
     "eventid": [
       4688
     ],
@@ -5231,7 +5231,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Auvik RMM tool\n",
+    "description": "Detects potential processes activity of Auvik RMM tool",
     "eventid": [
       4688
     ],
@@ -5271,7 +5271,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Xeox RMM tool\n",
+    "description": "Detects potential processes activity of Xeox RMM tool",
     "eventid": [
       4688
     ],
@@ -5311,7 +5311,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of PChelpware RMM tool\n",
+    "description": "Detects potential processes activity of PChelpware RMM tool",
     "eventid": [
       4688
     ],
@@ -5351,7 +5351,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Nezha RMM tool\n",
+    "description": "Detects potential processes activity of Nezha RMM tool",
     "eventid": [
       4688
     ],
@@ -5391,7 +5391,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of VIZOR RMM tool\n",
+    "description": "Detects potential registry activity of VIZOR RMM tool",
     "eventid": [
       4657
     ],
@@ -5409,12 +5409,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{04821777-1FD1-4C1A-AC4D-BF5D4D53C34C}%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{A40A237D-C090-4C05-8580-9DBECFE3602B}%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{04821777-1FD1-4C1A-AC4D-BF5D4D53C34C}%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Metaquest%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{04821777-1FD1-4C1A-AC4D-BF5D4D53C34C}%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{A40A237D-C090-4C05-8580-9DBECFE3602B}%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{04821777-1FD1-4C1A-AC4D-BF5D4D53C34C}%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Metaquest%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -5431,7 +5431,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Xpra RMM tool\n",
+    "description": "Detects potential processes activity of Xpra RMM tool",
     "eventid": [
       4688
     ],
@@ -5471,7 +5471,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Faronics Core RMM tool\n",
+    "description": "Detects potential registry activity of Faronics Core RMM tool",
     "eventid": [
       4657
     ],
@@ -5489,12 +5489,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FaronicsCoreAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Faronics\\\\Faronics Core 3%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Faronics\\\\Faronics Core 3%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Faronics%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FaronicsCoreAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Faronics\\\\Faronics Core 3%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Faronics\\\\Faronics Core 3%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Faronics%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -5511,7 +5511,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of GetScreen RMM tool\n",
+    "description": "Detects potential processes activity of GetScreen RMM tool",
     "eventid": [
       4688
     ],
@@ -5551,7 +5551,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of BeInSync RMM tool\n",
+    "description": "Detects potential processes activity of BeInSync RMM tool",
     "eventid": [
       4688
     ],
@@ -5591,7 +5591,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Goverlan RMM tool\n",
+    "description": "Detects potential processes activity of Goverlan RMM tool",
     "eventid": [
       4688
     ],
@@ -5631,7 +5631,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Splashtop Remote RMM tool\n",
+    "description": "Detects potential processes activity of Splashtop Remote RMM tool",
     "eventid": [
       4688
     ],
@@ -5671,7 +5671,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential process activity of the built-in mstsc.exe (Microsoft\nRemote Desktop Connection) client, which adversaries abuse for interactive\nlateral movement and living-off-the-land remote access.\n",
+    "description": "Detects potential process activity of the built-in mstsc.exe (Microsoft Remote Desktop Connection) client, which adversaries abuse for interactive lateral movement and living-off-the-land remote access.",
     "eventid": [
       4688
     ],
@@ -5752,7 +5752,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Action1 RMM tool\n",
+    "description": "Detects potential registry activity of Action1 RMM tool",
     "eventid": [
       4657
     ],
@@ -5770,12 +5770,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\A1Agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\Windows Error Reporting\\\\LocalDumps\\\\action1\\_agent.exe%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Action1%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\Software\\\\Action1\\\\Agent%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\A1Agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\Windows Error Reporting\\\\LocalDumps\\\\action1\\_agent.exe%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Action1%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\Software\\\\Action1\\\\Agent%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -5792,7 +5792,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of OpsBridge Agent RMM tool\n",
+    "description": "Detects potential registry activity of OpsBridge Agent RMM tool",
     "eventid": [
       4657
     ],
@@ -5810,12 +5810,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\OpsBridgeAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tree\\\\OpsBridge Agent%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\OpsBridgeAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tree\\\\OpsBridge Agent%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -5832,7 +5832,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ITSupport247 (ConnectWise) RMM tool\n",
+    "description": "Detects potential processes activity of ITSupport247 (ConnectWise) RMM tool",
     "eventid": [
       4688
     ],
@@ -5872,7 +5872,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Absolute (Computrace) RMM tool\n",
+    "description": "Detects potential processes activity of Absolute (Computrace) RMM tool",
     "eventid": [
       4688
     ],
@@ -5912,7 +5912,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of TeamViewer RMM tool\n",
+    "description": "Detects potential registry activity of TeamViewer RMM tool",
     "eventid": [
       4657
     ],
@@ -5930,12 +5930,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\TeamViewer*%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TeamViewer*%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\TeamViewer\\\\ConnectionHistory%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\TeamViewer*%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MainWindowHandle%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\DesktopWallpaperSingleImage%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\DesktopWallpaperSingleImagePath%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\DesktopWallpaperSingleImagePosition%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MinimizeToTray%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MultiMedia\\\\AudioUserSelectedCapturingEndpoint%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MultiMedia\\\\AudioSendingVolumeV2%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MultiMedia\\\\AudioUserSelectedRenderingEndpoint%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\ClientWindow\\_Mode%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\ClientWindowPositions%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\TeamViewer*%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TeamViewer*%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\TeamViewer\\\\ConnectionHistory%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\TeamViewer*%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MainWindowHandle%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\DesktopWallpaperSingleImage%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\DesktopWallpaperSingleImagePath%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\DesktopWallpaperSingleImagePosition%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MinimizeToTray%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MultiMedia\\\\AudioUserSelectedCapturingEndpoint%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MultiMedia\\\\AudioSendingVolumeV2%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\MultiMedia\\\\AudioUserSelectedRenderingEndpoint%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\ClientWindow\\_Mode%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\SOFTWARE\\\\TeamViewer\\\\ClientWindowPositions%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -5952,7 +5952,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ScreenMeet RMM tool\n",
+    "description": "Detects potential processes activity of ScreenMeet RMM tool",
     "eventid": [
       4688
     ],
@@ -5992,7 +5992,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Splashtop RMM tool\n",
+    "description": "Detects potential processes activity of Splashtop RMM tool",
     "eventid": [
       4688
     ],
@@ -6032,7 +6032,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Monitic RMM tool\n",
+    "description": "Detects potential processes activity of Monitic RMM tool",
     "eventid": [
       4688
     ],
@@ -6072,7 +6072,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of iDrive RMM tool\n",
+    "description": "Detects potential processes activity of iDrive RMM tool",
     "eventid": [
       4688
     ],
@@ -6151,7 +6151,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RdClient RMM tool\n",
+    "description": "Detects potential processes activity of RdClient RMM tool",
     "eventid": [
       4688
     ],
@@ -6191,7 +6191,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Zabbix Agent RMM tool\n",
+    "description": "Detects potential processes activity of Zabbix Agent RMM tool",
     "eventid": [
       4688
     ],
@@ -6231,7 +6231,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Obliance RMM tool\n",
+    "description": "Detects potential processes activity of Obliance RMM tool",
     "eventid": [
       4688
     ],
@@ -6271,7 +6271,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Quest KACE Agent (formerly Dell KACE) RMM tool\n",
+    "description": "Detects potential processes activity of Quest KACE Agent (formerly Dell KACE) RMM tool",
     "eventid": [
       4688
     ],
@@ -6311,7 +6311,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of NetBird RMM tool\n",
+    "description": "Detects potential registry activity of NetBird RMM tool",
     "eventid": [
       4657
     ],
@@ -6329,12 +6329,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Winlogon\\\\SpecialAccounts\\\\UserList\\\\user%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Netbird%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Winlogon\\\\SpecialAccounts\\\\UserList\\\\user%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Netbird%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -6351,7 +6351,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of TrustConnect RMM tool\n",
+    "description": "Detects potential registry activity of TrustConnect RMM tool",
     "eventid": [
       4657
     ],
@@ -6369,12 +6369,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TrustConnect Agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\TrustConnect Agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\TrustConnectAgent\\_%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\AppID\\\\TrustConnectAgent.exe%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\TrustConnect Agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\TrustConnect Agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\TrustConnectAgent\\_%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\AppID\\\\TrustConnectAgent.exe%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -6430,7 +6430,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of LabTech RMM (Now ConnectWise Automate) RMM tool\n",
+    "description": "Detects potential processes activity of LabTech RMM (Now ConnectWise Automate) RMM tool",
     "eventid": [
       4688
     ],
@@ -6470,7 +6470,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of eHorus RMM tool\n",
+    "description": "Detects potential processes activity of eHorus RMM tool",
     "eventid": [
       4688
     ],
@@ -6510,7 +6510,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of CloudFlare Tunnel RMM tool\n",
+    "description": "Detects potential processes activity of CloudFlare Tunnel RMM tool",
     "eventid": [
       4688
     ],
@@ -6550,7 +6550,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of HopToDesk RMM tool\n",
+    "description": "Detects potential processes activity of HopToDesk RMM tool",
     "eventid": [
       4688
     ],
@@ -6590,7 +6590,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of NinjaRMM RMM tool\n",
+    "description": "Detects potential processes activity of NinjaRMM RMM tool",
     "eventid": [
       4688
     ],
@@ -6708,7 +6708,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of IntelliAdmin Remote Control RMM tool\n",
+    "description": "Detects potential processes activity of IntelliAdmin Remote Control RMM tool",
     "eventid": [
       4688
     ],
@@ -6748,7 +6748,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of SetMe PRO RMM tool\n",
+    "description": "Detects potential registry activity of SetMe PRO RMM tool",
     "eventid": [
       4657
     ],
@@ -6766,12 +6766,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\tinClientSessionManager-%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\tinClientSessionManager-%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\tinClientSessionManager-%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\tinClientSessionManager-%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -6788,7 +6788,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of OCS inventory RMM tool\n",
+    "description": "Detects potential processes activity of OCS inventory RMM tool",
     "eventid": [
       4688
     ],
@@ -6828,7 +6828,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Any Support RMM tool\n",
+    "description": "Detects potential processes activity of Any Support RMM tool",
     "eventid": [
       4688
     ],
@@ -6907,7 +6907,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Tactical RMM RMM tool\n",
+    "description": "Detects potential processes activity of Tactical RMM RMM tool",
     "eventid": [
       4688
     ],
@@ -6947,7 +6947,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RDPView RMM tool\n",
+    "description": "Detects potential processes activity of RDPView RMM tool",
     "eventid": [
       4688
     ],
@@ -6987,7 +6987,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Lite Manager RMM tool\n",
+    "description": "Detects potential processes activity of Lite Manager RMM tool",
     "eventid": [
       4688
     ],
@@ -7066,7 +7066,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Syspectr RMM tool\n",
+    "description": "Detects potential processes activity of Syspectr RMM tool",
     "eventid": [
       4688
     ],
@@ -7106,7 +7106,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Level.io RMM tool\n",
+    "description": "Detects potential processes activity of Level.io RMM tool",
     "eventid": [
       4688
     ],
@@ -7146,7 +7146,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of NoMachine RMM tool\n",
+    "description": "Detects potential processes activity of NoMachine RMM tool",
     "eventid": [
       4688
     ],
@@ -7186,7 +7186,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Teramind RMM tool\n",
+    "description": "Detects potential processes activity of Teramind RMM tool",
     "eventid": [
       4688
     ],
@@ -7226,7 +7226,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of OptiTune RMM tool\n",
+    "description": "Detects potential processes activity of OptiTune RMM tool",
     "eventid": [
       4688
     ],
@@ -7305,7 +7305,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of GoToAssist RMM tool\n",
+    "description": "Detects potential processes activity of GoToAssist RMM tool",
     "eventid": [
       4688
     ],
@@ -7345,7 +7345,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Bitvise SSH Client RMM tool\n",
+    "description": "Detects potential processes activity of Bitvise SSH Client RMM tool",
     "eventid": [
       4688
     ],
@@ -7385,7 +7385,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Sentinel RMM RMM tool\n",
+    "description": "Detects potential processes activity of Sentinel RMM RMM tool",
     "eventid": [
       4688
     ],
@@ -7425,7 +7425,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of ControlR RMM tool\n",
+    "description": "Detects potential registry activity of ControlR RMM tool",
     "eventid": [
       4657
     ],
@@ -7443,12 +7443,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\ControlR%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\ControlR (%)%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\ControlR%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\ControlR (%)%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -7465,7 +7465,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Parsec RMM tool\n",
+    "description": "Detects potential processes activity of Parsec RMM tool",
     "eventid": [
       4688
     ],
@@ -7505,7 +7505,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of GetScreen RMM tool\n",
+    "description": "Detects potential registry activity of GetScreen RMM tool",
     "eventid": [
       4657
     ],
@@ -7523,12 +7523,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKU\\\\{SID}\\\\Software\\\\GetScreen%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\{SID}\\\\Software\\\\GetScreen\\\\Getscreen.me%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\GetscreenSV%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKU\\\\{SID}\\\\Software\\\\GetScreen%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\{SID}\\\\Software\\\\GetScreen\\\\Getscreen.me%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\GetscreenSV%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -7584,7 +7584,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SimpleHelp RMM tool\n",
+    "description": "Detects potential processes activity of SimpleHelp RMM tool",
     "eventid": [
       4688
     ],
@@ -7624,7 +7624,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RemotePass RMM tool\n",
+    "description": "Detects potential processes activity of RemotePass RMM tool",
     "eventid": [
       4688
     ],
@@ -7664,7 +7664,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Weezo RMM tool\n",
+    "description": "Detects potential processes activity of Weezo RMM tool",
     "eventid": [
       4688
     ],
@@ -7704,7 +7704,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Total Software Deployment RMM tool\n",
+    "description": "Detects potential processes activity of Total Software Deployment RMM tool",
     "eventid": [
       4688
     ],
@@ -7744,7 +7744,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Laplink Everywhere RMM tool\n",
+    "description": "Detects potential processes activity of Laplink Everywhere RMM tool",
     "eventid": [
       4688
     ],
@@ -7784,7 +7784,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of DesktopNow RMM tool\n",
+    "description": "Detects potential processes activity of DesktopNow RMM tool",
     "eventid": [
       4688
     ],
@@ -7824,7 +7824,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Faronics Insight RMM tool\n",
+    "description": "Detects potential registry activity of Faronics Insight RMM tool",
     "eventid": [
       4657
     ],
@@ -7842,12 +7842,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Faronics%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FIStudentSvc%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Faronics%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FIStudentSvc%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -7864,7 +7864,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Site24x7 RMM tool\n",
+    "description": "Detects potential processes activity of Site24x7 RMM tool",
     "eventid": [
       4688
     ],
@@ -7904,7 +7904,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of KHelpDesk RMM tool\n",
+    "description": "Detects potential processes activity of KHelpDesk RMM tool",
     "eventid": [
       4688
     ],
@@ -7944,7 +7944,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ExtraPuTTY RMM tool\n",
+    "description": "Detects potential processes activity of ExtraPuTTY RMM tool",
     "eventid": [
       4688
     ],
@@ -7984,7 +7984,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Splashtop RMM tool\n",
+    "description": "Detects potential registry activity of Splashtop RMM tool",
     "eventid": [
       4657
     ],
@@ -8002,12 +8002,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%KLM\\\\SOFTWARE\\\\WOW6432Node\\\\Splashtop Inc.*%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\Splashtop Software Updater%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\SplashtopRemoteService%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Splashtop-Splashtop Streamer-Remote Session/Operational%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Splashtop-Splashtop Streamer-Status/Operational%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\Splashtop Software Updater\\\\InstallRefCount%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\SplashtopRemoteService%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\.DEFAULT\\\\Software\\\\Splashtop Inc.*%' ESCAPE '\\' OR TargetObject LIKE '%HKU\\\\SID\\\\Software\\\\Splashtop Inc.*%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Print\\\\Printers\\\\Splashtop PDF Remote Printer%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Splashtop Inc.\\\\Splashtop Remote Server\\\\ClientInfo*%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%KLM\\\\SOFTWARE\\\\WOW6432Node\\\\Splashtop Inc.*%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\Splashtop Software Updater%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\SplashtopRemoteService%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Splashtop-Splashtop Streamer-Remote Session/Operational%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Splashtop-Splashtop Streamer-Status/Operational%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\Splashtop Software Updater\\\\InstallRefCount%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\SplashtopRemoteService%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\.DEFAULT\\\\Software\\\\Splashtop Inc.*%' ESCAPE '\\' OR ObjectName LIKE '%HKU\\\\SID\\\\Software\\\\Splashtop Inc.*%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Print\\\\Printers\\\\Splashtop PDF Remote Printer%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Splashtop Inc.\\\\Splashtop Remote Server\\\\ClientInfo*%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -8024,7 +8024,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of HelpWire RMM tool\n",
+    "description": "Detects potential processes activity of HelpWire RMM tool",
     "eventid": [
       4688
     ],
@@ -8064,7 +8064,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of FleetDeck.io RMM tool\n",
+    "description": "Detects potential registry activity of FleetDeck.io RMM tool",
     "eventid": [
       4657
     ],
@@ -8082,12 +8082,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FleetDeck Agent Service%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FleetDeck Agent Service%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -8104,7 +8104,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of RustDesk RMM tool\n",
+    "description": "Detects potential registry activity of RustDesk RMM tool",
     "eventid": [
       4657
     ],
@@ -8122,12 +8122,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\RustDesk%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\RustDesk%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\RustDesk%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\RustDesk%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -8144,7 +8144,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Overlord RMM tool\n",
+    "description": "Detects potential registry activity of Overlord RMM tool",
     "eventid": [
       4657
     ],
@@ -8162,12 +8162,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKCU\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\OverlordAgent-%' ESCAPE '\\' OR TargetObject LIKE '%HKCU\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\OverlordAgent%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKCU\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\OverlordAgent-%' ESCAPE '\\' OR ObjectName LIKE '%HKCU\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\OverlordAgent%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -8184,7 +8184,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Distant Desktop RMM tool\n",
+    "description": "Detects potential processes activity of Distant Desktop RMM tool",
     "eventid": [
       4688
     ],
@@ -8224,7 +8224,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of NetSupport Manager RMM tool\n",
+    "description": "Detects potential processes activity of NetSupport Manager RMM tool",
     "eventid": [
       4688
     ],
@@ -8264,7 +8264,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Duplicati RMM tool\n",
+    "description": "Detects potential processes activity of Duplicati RMM tool",
     "eventid": [
       4688
     ],
@@ -8304,7 +8304,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Comodo RMM RMM tool\n",
+    "description": "Detects potential processes activity of Comodo RMM RMM tool",
     "eventid": [
       4688
     ],
@@ -8344,7 +8344,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ServerEye RMM tool\n",
+    "description": "Detects potential processes activity of ServerEye RMM tool",
     "eventid": [
       4688
     ],
@@ -8384,7 +8384,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Faronics Core RMM tool\n",
+    "description": "Detects potential processes activity of Faronics Core RMM tool",
     "eventid": [
       4688
     ],
@@ -8424,7 +8424,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Overlord RMM tool\n",
+    "description": "Detects potential processes activity of Overlord RMM tool",
     "eventid": [
       4688
     ],
@@ -8464,7 +8464,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Teleport Connect RMM tool\n",
+    "description": "Detects potential registry activity of Teleport Connect RMM tool",
     "eventid": [
       4657
     ],
@@ -8482,12 +8482,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Policies\\\\Teleport\\\\TeleportConnect%' ESCAPE '\\' OR TargetObject LIKE '%HKCU\\\\SOFTWARE\\\\Policies\\\\Teleport\\\\TeleportConnect%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Policies\\\\Teleport\\\\TeleportConnect%' ESCAPE '\\' OR ObjectName LIKE '%HKCU\\\\SOFTWARE\\\\Policies\\\\Teleport\\\\TeleportConnect%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -8504,7 +8504,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of N-Able Advanced Monitoring Agent RMM tool\n",
+    "description": "Detects potential processes activity of N-Able Advanced Monitoring Agent RMM tool",
     "eventid": [
       4688
     ],
@@ -8544,7 +8544,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Iperius Remote RMM tool\n",
+    "description": "Detects potential processes activity of Iperius Remote RMM tool",
     "eventid": [
       4688
     ],
@@ -8584,7 +8584,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of BreezeRMM RMM tool\n",
+    "description": "Detects potential processes activity of BreezeRMM RMM tool",
     "eventid": [
       4688
     ],
@@ -8624,7 +8624,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RDCMan RMM tool\n",
+    "description": "Detects potential processes activity of RDCMan RMM tool",
     "eventid": [
       4688
     ],
@@ -8664,7 +8664,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of NetLock RMM RMM tool\n",
+    "description": "Detects potential processes activity of NetLock RMM RMM tool",
     "eventid": [
       4688
     ],
@@ -8704,7 +8704,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Veyon RMM tool\n",
+    "description": "Detects potential registry activity of Veyon RMM tool",
     "eventid": [
       4657
     ],
@@ -8722,12 +8722,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Veyon Solutions%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\VeyonService%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Veyon Solutions%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\VeyonService%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -8744,7 +8744,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of InvGate RMM tool\n",
+    "description": "Detects potential processes activity of InvGate RMM tool",
     "eventid": [
       4688
     ],
@@ -8784,7 +8784,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Obliance RMM tool\n",
+    "description": "Detects potential registry activity of Obliance RMM tool",
     "eventid": [
       4657
     ],
@@ -8802,12 +8802,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\OblianceAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\OblianceTray%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\OblianceAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\OblianceAgent%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\OblianceAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\OblianceTray%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\OblianceAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\OblianceAgent%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -8824,7 +8824,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Remote Desktop Plus RMM tool\n",
+    "description": "Detects potential processes activity of Remote Desktop Plus RMM tool",
     "eventid": [
       4688
     ],
@@ -8864,7 +8864,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Jump Desktop RMM tool\n",
+    "description": "Detects potential processes activity of Jump Desktop RMM tool",
     "eventid": [
       4688
     ],
@@ -8904,7 +8904,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ngrok RMM tool\n",
+    "description": "Detects potential processes activity of ngrok RMM tool",
     "eventid": [
       4688
     ],
@@ -8944,7 +8944,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of DameWare RMM tool\n",
+    "description": "Detects potential processes activity of DameWare RMM tool",
     "eventid": [
       4688
     ],
@@ -8984,7 +8984,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Pilixo RMM tool\n",
+    "description": "Detects potential processes activity of Pilixo RMM tool",
     "eventid": [
       4688
     ],
@@ -9024,7 +9024,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of GxM RMM Agent RMM tool\n",
+    "description": "Detects potential registry activity of GxM RMM Agent RMM tool",
     "eventid": [
       4657
     ],
@@ -9042,12 +9042,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\GxMAgent%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\GxMAgent%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -9064,7 +9064,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of NoteOn-desktop sharing RMM tool\n",
+    "description": "Detects potential processes activity of NoteOn-desktop sharing RMM tool",
     "eventid": [
       4688
     ],
@@ -9104,7 +9104,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Rapid7 RMM tool\n",
+    "description": "Detects potential processes activity of Rapid7 RMM tool",
     "eventid": [
       4688
     ],
@@ -9144,7 +9144,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Tailscale RMM tool\n",
+    "description": "Detects potential processes activity of Tailscale RMM tool",
     "eventid": [
       4688
     ],
@@ -9184,7 +9184,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of BlackCrypt RMM Agent RMM tool\n",
+    "description": "Detects potential registry activity of BlackCrypt RMM Agent RMM tool",
     "eventid": [
       4657
     ],
@@ -9202,12 +9202,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKCU\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\BlackCryptAgent%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKCU\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\BlackCryptAgent%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -9224,7 +9224,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of FleetDeck.io RMM tool\n",
+    "description": "Detects potential processes activity of FleetDeck.io RMM tool",
     "eventid": [
       4688
     ],
@@ -9264,7 +9264,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ProxiPort RMM tool\n",
+    "description": "Detects potential processes activity of ProxiPort RMM tool",
     "eventid": [
       4688
     ],
@@ -9304,7 +9304,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of ScreenConnect RMM tool\n",
+    "description": "Detects potential registry activity of ScreenConnect RMM tool",
     "eventid": [
       4657
     ],
@@ -9322,12 +9322,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\ScreenConnect Client (%)\\\\ImagePath%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\Authentication Packages%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\CLSID\\\\{6FF59A85-BC37-4CD4-C175-070CC4814204}%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\ScreenConnect Client (%)%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\ScreenConnect Client (%)\\\\ImagePath%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\Authentication Packages%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\CLSID\\\\{6FF59A85-BC37-4CD4-C175-070CC4814204}%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\ScreenConnect Client (%)%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -9344,7 +9344,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of HelpBeam RMM tool\n",
+    "description": "Detects potential processes activity of HelpBeam RMM tool",
     "eventid": [
       4688
     ],
@@ -9384,7 +9384,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Komari RMM tool\n",
+    "description": "Detects potential processes activity of Komari RMM tool",
     "eventid": [
       4688
     ],
@@ -9424,7 +9424,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Impero Connect RMM tool\n",
+    "description": "Detects potential processes activity of Impero Connect RMM tool",
     "eventid": [
       4688
     ],
@@ -9464,7 +9464,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RemSupp RMM tool\n",
+    "description": "Detects potential processes activity of RemSupp RMM tool",
     "eventid": [
       4688
     ],
@@ -9504,7 +9504,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Netviewer (GoToMeet) RMM tool\n",
+    "description": "Detects potential processes activity of Netviewer (GoToMeet) RMM tool",
     "eventid": [
       4688
     ],
@@ -9583,7 +9583,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SuperOps RMM tool\n",
+    "description": "Detects potential processes activity of SuperOps RMM tool",
     "eventid": [
       4688
     ],
@@ -9623,7 +9623,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of pcAnywhere RMM tool\n",
+    "description": "Detects potential processes activity of pcAnywhere RMM tool",
     "eventid": [
       4688
     ],
@@ -9663,7 +9663,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Sophos-Remote Management System RMM tool\n",
+    "description": "Detects potential processes activity of Sophos-Remote Management System RMM tool",
     "eventid": [
       4688
     ],
@@ -9742,7 +9742,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of LiteManager RMM tool\n",
+    "description": "Detects potential processes activity of LiteManager RMM tool",
     "eventid": [
       4688
     ],
@@ -9782,7 +9782,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ManageEngine ServiceDesk Plus RMM tool\n",
+    "description": "Detects potential processes activity of ManageEngine ServiceDesk Plus RMM tool",
     "eventid": [
       4688
     ],
@@ -9822,7 +9822,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RES Automation Manager RMM tool\n",
+    "description": "Detects potential processes activity of RES Automation Manager RMM tool",
     "eventid": [
       4688
     ],
@@ -9862,7 +9862,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Remote Ripple RMM tool\n",
+    "description": "Detects potential processes activity of Remote Ripple RMM tool",
     "eventid": [
       4688
     ],
@@ -9902,7 +9902,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Laplink Gold RMM tool\n",
+    "description": "Detects potential processes activity of Laplink Gold RMM tool",
     "eventid": [
       4688
     ],
@@ -9942,7 +9942,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Rodex RMM tool\n",
+    "description": "Detects potential processes activity of Rodex RMM tool",
     "eventid": [
       4688
     ],
@@ -9982,7 +9982,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RMMmax RMM tool\n",
+    "description": "Detects potential processes activity of RMMmax RMM tool",
     "eventid": [
       4688
     ],
@@ -10022,7 +10022,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SmarTTY RMM tool\n",
+    "description": "Detects potential processes activity of SmarTTY RMM tool",
     "eventid": [
       4688
     ],
@@ -10062,7 +10062,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Ammyy Admin RMM tool\n",
+    "description": "Detects potential registry activity of Ammyy Admin RMM tool",
     "eventid": [
       4657
     ],
@@ -10080,12 +10080,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKU\\\\.DEFAULT\\\\Software\\\\Ammyy\\\\Admin%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\ControlSet001\\\\Control\\\\SafeBoot\\\\Network\\\\AmmyyAdmin%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKU\\\\.DEFAULT\\\\Software\\\\Ammyy\\\\Admin%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\ControlSet001\\\\Control\\\\SafeBoot\\\\Network\\\\AmmyyAdmin%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -10102,7 +10102,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Faronics Insight RMM tool\n",
+    "description": "Detects potential processes activity of Faronics Insight RMM tool",
     "eventid": [
       4688
     ],
@@ -10142,7 +10142,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SkyFex RMM tool\n",
+    "description": "Detects potential processes activity of SkyFex RMM tool",
     "eventid": [
       4688
     ],
@@ -10182,7 +10182,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SetMe PRO RMM tool\n",
+    "description": "Detects potential processes activity of SetMe PRO RMM tool",
     "eventid": [
       4688
     ],
@@ -10222,7 +10222,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Net Monitor for Employees RMM tool\n",
+    "description": "Detects potential processes activity of Net Monitor for Employees RMM tool",
     "eventid": [
       4688
     ],
@@ -10262,7 +10262,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of AweRay RMM tool\n",
+    "description": "Detects potential processes activity of AweRay RMM tool",
     "eventid": [
       4688
     ],
@@ -10302,7 +10302,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of CrossLoop RMM tool\n",
+    "description": "Detects potential processes activity of CrossLoop RMM tool",
     "eventid": [
       4688
     ],
@@ -10342,7 +10342,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of StifleR (2Pint Software) RMM tool\n",
+    "description": "Detects potential registry activity of StifleR (2Pint Software) RMM tool",
     "eventid": [
       4657
     ],
@@ -10360,12 +10360,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\StifleRClient%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\StifleRClient%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -10382,7 +10382,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Atera RMM tool\n",
+    "description": "Detects potential registry activity of Atera RMM tool",
     "eventid": [
       4657
     ],
@@ -10400,12 +10400,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\ATERA Networks\\\\AlphaAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AteraAgent%' ESCAPE '\\' OR TargetObject LIKE '%KLM\\\\SOFTWARE\\\\WOW6432Node\\\\Splashtop Inc.%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\Splashtop Software Updater%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\ControlSet\\\\Services\\\\EventLog\\\\Application\\\\AlphaAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\ControlSet\\\\Services\\\\EventLog\\\\Application\\\\AteraAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Tracing\\\\AteraAgent\\_RASAPI32%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Tracing\\\\AteraAgent\\_RASMANCS%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\ATERA Networks*%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\ATERA Networks\\\\AlphaAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AteraAgent%' ESCAPE '\\' OR ObjectName LIKE '%KLM\\\\SOFTWARE\\\\WOW6432Node\\\\Splashtop Inc.%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\Splashtop Software Updater%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\ControlSet\\\\Services\\\\EventLog\\\\Application\\\\AlphaAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\ControlSet\\\\Services\\\\EventLog\\\\Application\\\\AteraAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Tracing\\\\AteraAgent\\_RASAPI32%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Tracing\\\\AteraAgent\\_RASMANCS%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\ATERA Networks*%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -10422,7 +10422,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Syncthing RMM tool\n",
+    "description": "Detects potential processes activity of Syncthing RMM tool",
     "eventid": [
       4688
     ],
@@ -10462,7 +10462,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of TeleDesktop RMM tool\n",
+    "description": "Detects potential processes activity of TeleDesktop RMM tool",
     "eventid": [
       4688
     ],
@@ -10502,7 +10502,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of PDQ Connect RMM tool\n",
+    "description": "Detects potential processes activity of PDQ Connect RMM tool",
     "eventid": [
       4688
     ],
@@ -10581,7 +10581,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RPort RMM tool\n",
+    "description": "Detects potential processes activity of RPort RMM tool",
     "eventid": [
       4688
     ],
@@ -10621,7 +10621,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of RG System (RG Supervision) RMM tool\n",
+    "description": "Detects potential registry activity of RG System (RG Supervision) RMM tool",
     "eventid": [
       4657
     ],
@@ -10639,12 +10639,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\RG Systemes\\\\RG Supervision%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\RG Systemes\\\\RG Supervision%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\RG-Supervision%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\RG Systemes\\\\RG Supervision%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\RG Systemes\\\\RG Supervision%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\RG-Supervision%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -10661,7 +10661,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RemoteView RMM tool\n",
+    "description": "Detects potential processes activity of RemoteView RMM tool",
     "eventid": [
       4688
     ],
@@ -10701,7 +10701,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of HelpU RMM tool\n",
+    "description": "Detects potential processes activity of HelpU RMM tool",
     "eventid": [
       4688
     ],
@@ -10741,7 +10741,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of AliWangWang-remote-control RMM tool\n",
+    "description": "Detects potential processes activity of AliWangWang-remote-control RMM tool",
     "eventid": [
       4688
     ],
@@ -10820,7 +10820,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ShowMyPC RMM tool\n",
+    "description": "Detects potential processes activity of ShowMyPC RMM tool",
     "eventid": [
       4688
     ],
@@ -10860,7 +10860,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Freshservice RMM tool\n",
+    "description": "Detects potential registry activity of Freshservice RMM tool",
     "eventid": [
       4657
     ],
@@ -10878,12 +10878,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FSAgentService%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FreshServiceScan%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Freshdesk\\\\FSAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Freshdesk\\\\FSAgent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Freshworks\\\\FreshServiceProbe%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Freshworks\\\\FreshServiceProbe%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\FreshService Probe%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\FreshService Probe%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{8BE075F9-36C7-4145-8BC0-35D420223576}%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{892D2C60-AFC1-48C0-8C5D-A2DC856A3605}%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FSAgentService%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\FreshServiceScan%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Freshdesk\\\\FSAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Freshdesk\\\\FSAgent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Freshworks\\\\FreshServiceProbe%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Freshworks\\\\FreshServiceProbe%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\FreshService Probe%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\FreshService Probe%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{8BE075F9-36C7-4145-8BC0-35D420223576}%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{892D2C60-AFC1-48C0-8C5D-A2DC856A3605}%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -10900,7 +10900,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Pcnow RMM tool\n",
+    "description": "Detects potential processes activity of Pcnow RMM tool",
     "eventid": [
       4688
     ],
@@ -10940,7 +10940,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Alpemix RMM tool\n",
+    "description": "Detects potential registry activity of Alpemix RMM tool",
     "eventid": [
       4657
     ],
@@ -10958,12 +10958,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AlpemixSrvcx%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AlpemixSrvcx%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -10980,7 +10980,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Chrome Remote Desktop RMM tool\n",
+    "description": "Detects potential processes activity of Chrome Remote Desktop RMM tool",
     "eventid": [
       4688
     ],
@@ -11020,7 +11020,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Beacon (Synertek) RMM tool\n",
+    "description": "Detects potential processes activity of Beacon (Synertek) RMM tool",
     "eventid": [
       4688
     ],
@@ -11060,7 +11060,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of GoToMyPC RMM tool\n",
+    "description": "Detects potential registry activity of GoToMyPC RMM tool",
     "eventid": [
       4657
     ],
@@ -11078,12 +11078,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\WOW6432Node\\\\Citrix\\\\GoToMyPc%' ESCAPE '\\' OR TargetObject LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\WOW6432Node\\\\Citrix\\\\GoToMyPc\\\\GuestInvite%' ESCAPE '\\' OR TargetObject LIKE '%HKEY\\_CURRENT\\_USER\\\\SOFTWARE\\\\Citrix\\\\GoToMyPc\\\\FileTransfer\\\\history%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\WOW6432Node\\\\Citrix\\\\GoToMyPc%' ESCAPE '\\' OR ObjectName LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\WOW6432Node\\\\Citrix\\\\GoToMyPc\\\\GuestInvite%' ESCAPE '\\' OR ObjectName LIKE '%HKEY\\_CURRENT\\_USER\\\\SOFTWARE\\\\Citrix\\\\GoToMyPc\\\\FileTransfer\\\\history%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -11100,7 +11100,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of ManageEngine ServiceDesk Plus RMM tool\n",
+    "description": "Detects potential registry activity of ManageEngine ServiceDesk Plus RMM tool",
     "eventid": [
       4657
     ],
@@ -11118,12 +11118,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{%}%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{%}%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -11140,7 +11140,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Insync RMM tool\n",
+    "description": "Detects potential processes activity of Insync RMM tool",
     "eventid": [
       4688
     ],
@@ -11180,7 +11180,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Mikogo RMM tool\n",
+    "description": "Detects potential processes activity of Mikogo RMM tool",
     "eventid": [
       4688
     ],
@@ -11220,7 +11220,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Ping32 RMM tool\n",
+    "description": "Detects potential processes activity of Ping32 RMM tool",
     "eventid": [
       4688
     ],
@@ -11260,7 +11260,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Manage Engine (Desktop Central) RMM tool\n",
+    "description": "Detects potential processes activity of Manage Engine (Desktop Central) RMM tool",
     "eventid": [
       4688
     ],
@@ -11300,7 +11300,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RAdmin RMM tool\n",
+    "description": "Detects potential processes activity of RAdmin RMM tool",
     "eventid": [
       4688
     ],
@@ -11340,7 +11340,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of WebRDP RMM tool\n",
+    "description": "Detects potential processes activity of WebRDP RMM tool",
     "eventid": [
       4688
     ],
@@ -11380,7 +11380,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of BeamYourScreen RMM tool\n",
+    "description": "Detects potential processes activity of BeamYourScreen RMM tool",
     "eventid": [
       4688
     ],
@@ -11420,7 +11420,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Itarian RMM tool\n",
+    "description": "Detects potential processes activity of Itarian RMM tool",
     "eventid": [
       4688
     ],
@@ -11460,7 +11460,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of GoToMyPC RMM tool\n",
+    "description": "Detects potential processes activity of GoToMyPC RMM tool",
     "eventid": [
       4688
     ],
@@ -11500,7 +11500,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of OpenDesk RMM Agent RMM tool\n",
+    "description": "Detects potential processes activity of OpenDesk RMM Agent RMM tool",
     "eventid": [
       4688
     ],
@@ -11540,7 +11540,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Nezha RMM tool\n",
+    "description": "Detects potential registry activity of Nezha RMM tool",
     "eventid": [
       4657
     ],
@@ -11558,12 +11558,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\nezha-agent%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\nezha-agent%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -11580,7 +11580,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RustDesk RMM tool\n",
+    "description": "Detects potential processes activity of RustDesk RMM tool",
     "eventid": [
       4688
     ],
@@ -11620,7 +11620,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Netviewer RMM tool\n",
+    "description": "Detects potential processes activity of Netviewer RMM tool",
     "eventid": [
       4688
     ],
@@ -11660,7 +11660,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of CloudFlare Tunnel RMM tool\n",
+    "description": "Detects potential registry activity of CloudFlare Tunnel RMM tool",
     "eventid": [
       4657
     ],
@@ -11678,12 +11678,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Cloudflared%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\EventLog\\\\Application\\\\Cloudflared%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Cloudflared%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\EventLog\\\\Application\\\\Cloudflared%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -11700,7 +11700,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Jump Cloud RMM tool\n",
+    "description": "Detects potential processes activity of Jump Cloud RMM tool",
     "eventid": [
       4688
     ],
@@ -11740,7 +11740,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of HeartbeatRM RMM tool\n",
+    "description": "Detects potential processes activity of HeartbeatRM RMM tool",
     "eventid": [
       4688
     ],
@@ -11780,7 +11780,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Remote.it RMM tool\n",
+    "description": "Detects potential processes activity of Remote.it RMM tool",
     "eventid": [
       4688
     ],
@@ -11820,7 +11820,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Sorillus RMM tool\n",
+    "description": "Detects potential processes activity of Sorillus RMM tool",
     "eventid": [
       4688
     ],
@@ -11860,7 +11860,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ImmyBot RMM tool\n",
+    "description": "Detects potential processes activity of ImmyBot RMM tool",
     "eventid": [
       4688
     ],
@@ -11900,7 +11900,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Allocentra RMM tool\n",
+    "description": "Detects potential registry activity of Allocentra RMM tool",
     "eventid": [
       4657
     ],
@@ -11918,12 +11918,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Allocentra\\\\Agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AllocentraAgent%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Allocentra\\\\Agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\AllocentraAgent%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -11940,7 +11940,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of FixMe.it RMM tool\n",
+    "description": "Detects potential processes activity of FixMe.it RMM tool",
     "eventid": [
       4688
     ],
@@ -11980,7 +11980,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of MEGAsync RMM tool\n",
+    "description": "Detects potential processes activity of MEGAsync RMM tool",
     "eventid": [
       4688
     ],
@@ -12059,7 +12059,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Domotz RMM tool\n",
+    "description": "Detects potential processes activity of Domotz RMM tool",
     "eventid": [
       4688
     ],
@@ -12099,7 +12099,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Faronics Deploy RMM tool\n",
+    "description": "Detects potential registry activity of Faronics Deploy RMM tool",
     "eventid": [
       4657
     ],
@@ -12117,12 +12117,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Faronics%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Faronics\\\\Faronics Core 3\\\\Storage Spaces\\\\Spaces\\\\FWA%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\AppID\\\\FWAService.exe%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\{359C24F1-51B5-44CE-8F2D-2FBB1A0FE4EA}\\\\FWA\\_GUI\\_Agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{581F69E6-A5D1-48C7-9F6F-CC333007F7EB}%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Faronics%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Faronics\\\\Faronics Core 3\\\\Storage Spaces\\\\Spaces\\\\FWA%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\AppID\\\\FWAService.exe%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Classes\\\\{359C24F1-51B5-44CE-8F2D-2FBB1A0FE4EA}\\\\FWA\\_GUI\\_Agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\{581F69E6-A5D1-48C7-9F6F-CC333007F7EB}%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -12139,7 +12139,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Syncro RMM tool\n",
+    "description": "Detects potential processes activity of Syncro RMM tool",
     "eventid": [
       4688
     ],
@@ -12179,7 +12179,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Ericom Connect RMM tool\n",
+    "description": "Detects potential processes activity of Ericom Connect RMM tool",
     "eventid": [
       4688
     ],
@@ -12219,7 +12219,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Level RMM tool\n",
+    "description": "Detects potential processes activity of Level RMM tool",
     "eventid": [
       4688
     ],
@@ -12259,7 +12259,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RemotePulse RMM tool\n",
+    "description": "Detects potential processes activity of RemotePulse RMM tool",
     "eventid": [
       4688
     ],
@@ -12299,7 +12299,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Instant Housecall RMM tool\n",
+    "description": "Detects potential processes activity of Instant Housecall RMM tool",
     "eventid": [
       4688
     ],
@@ -12339,7 +12339,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Zecurit RMM tool\n",
+    "description": "Detects potential registry activity of Zecurit RMM tool",
     "eventid": [
       4657
     ],
@@ -12357,12 +12357,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Zecurit\\\\Agent%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Zecurit\\\\Agent%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -12379,7 +12379,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ControlR RMM tool\n",
+    "description": "Detects potential processes activity of ControlR RMM tool",
     "eventid": [
       4688
     ],
@@ -12419,7 +12419,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Ultra VNC RMM tool\n",
+    "description": "Detects potential processes activity of Ultra VNC RMM tool",
     "eventid": [
       4688
     ],
@@ -12459,7 +12459,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of MioNet (Also known as WD Anywhere Access) RMM tool\n",
+    "description": "Detects potential processes activity of MioNet (Also known as WD Anywhere Access) RMM tool",
     "eventid": [
       4688
     ],
@@ -12499,7 +12499,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of RemSupp RMM tool\n",
+    "description": "Detects potential registry activity of RemSupp RMM tool",
     "eventid": [
       4657
     ],
@@ -12517,12 +12517,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKCU\\\\Software\\\\99ac595d-36d0-5122-a860-22a3443073cb%' ESCAPE '\\' OR TargetObject LIKE '%HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\99ac595d-36d0-5122-a860-22a3443073cb%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKCU\\\\Software\\\\99ac595d-36d0-5122-a860-22a3443073cb%' ESCAPE '\\' OR ObjectName LIKE '%HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\99ac595d-36d0-5122-a860-22a3443073cb%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -12539,7 +12539,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Ericom AccessNow RMM tool\n",
+    "description": "Detects potential processes activity of Ericom AccessNow RMM tool",
     "eventid": [
       4688
     ],
@@ -12579,7 +12579,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of RAdmin RMM tool\n",
+    "description": "Detects potential registry activity of RAdmin RMM tool",
     "eventid": [
       4657
     ],
@@ -12597,12 +12597,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\WOW6432Node\\\\Radmin\\\\v3.0\\\\Server\\\\Parameters\\\\Radmin Security%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\WOW6432Node\\\\Radmin\\\\v3.0\\\\Server\\\\Parameters\\\\Radmin Security%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -12658,7 +12658,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Faronics Deploy RMM tool\n",
+    "description": "Detects potential processes activity of Faronics Deploy RMM tool",
     "eventid": [
       4688
     ],
@@ -12698,7 +12698,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Remobo RMM tool\n",
+    "description": "Detects potential processes activity of Remobo RMM tool",
     "eventid": [
       4688
     ],
@@ -12738,7 +12738,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of LS RMM RMM tool\n",
+    "description": "Detects potential registry activity of LS RMM RMM tool",
     "eventid": [
       4657
     ],
@@ -12756,12 +12756,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\LS RMM%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\LSRMMWorker%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\LS RMM%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\LSRMMWorker%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -12778,7 +12778,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Lunixar RMM tool\n",
+    "description": "Detects potential processes activity of Lunixar RMM tool",
     "eventid": [
       4688
     ],
@@ -12818,7 +12818,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of 247ithelp.com (ConnectWise) RMM tool\n",
+    "description": "Detects potential processes activity of 247ithelp.com (ConnectWise) RMM tool",
     "eventid": [
       4688
     ],
@@ -12858,7 +12858,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Parallels Access RMM tool\n",
+    "description": "Detects potential processes activity of Parallels Access RMM tool",
     "eventid": [
       4688
     ],
@@ -12898,7 +12898,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of LabTeach (Connectwise Automate) RMM tool\n",
+    "description": "Detects potential processes activity of LabTeach (Connectwise Automate) RMM tool",
     "eventid": [
       4688
     ],
@@ -12938,7 +12938,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Mini RMM Agent RMM tool\n",
+    "description": "Detects potential processes activity of Mini RMM Agent RMM tool",
     "eventid": [
       4688
     ],
@@ -12978,7 +12978,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of SimpleHelp RMM tool\n",
+    "description": "Detects potential registry activity of SimpleHelp RMM tool",
     "eventid": [
       4657
     ],
@@ -12996,12 +12996,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\SimpleSetup%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\SimpleSetup%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -13018,7 +13018,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Echoware RMM tool\n",
+    "description": "Detects potential processes activity of Echoware RMM tool",
     "eventid": [
       4688
     ],
@@ -13058,7 +13058,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of CentraStage (Now Datto) RMM tool\n",
+    "description": "Detects potential processes activity of CentraStage (Now Datto) RMM tool",
     "eventid": [
       4688
     ],
@@ -13098,7 +13098,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Allocentra RMM tool\n",
+    "description": "Detects potential processes activity of Allocentra RMM tool",
     "eventid": [
       4688
     ],
@@ -13138,7 +13138,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Atera RMM tool\n",
+    "description": "Detects potential processes activity of Atera RMM tool",
     "eventid": [
       4688
     ],
@@ -13178,7 +13178,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of rdpwrap RMM tool\n",
+    "description": "Detects potential processes activity of rdpwrap RMM tool",
     "eventid": [
       4688
     ],
@@ -13218,7 +13218,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of NetMaster RMM tool\n",
+    "description": "Detects potential processes activity of NetMaster RMM tool",
     "eventid": [
       4688
     ],
@@ -13258,7 +13258,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of TurboMeeting RMM tool\n",
+    "description": "Detects potential processes activity of TurboMeeting RMM tool",
     "eventid": [
       4688
     ],
@@ -13337,7 +13337,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Pocket Controller (Soti Xsight) RMM tool\n",
+    "description": "Detects potential processes activity of Pocket Controller (Soti Xsight) RMM tool",
     "eventid": [
       4688
     ],
@@ -13377,7 +13377,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Sentinel RMM RMM tool\n",
+    "description": "Detects potential registry activity of Sentinel RMM RMM tool",
     "eventid": [
       4657
     ],
@@ -13395,12 +13395,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tree\\\\SentinelAgent%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tree\\\\SentinelAgent%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -13417,7 +13417,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of SunLogin RMM tool\n",
+    "description": "Detects potential processes activity of SunLogin RMM tool",
     "eventid": [
       4688
     ],
@@ -13457,7 +13457,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Alpemix RMM tool\n",
+    "description": "Detects potential processes activity of Alpemix RMM tool",
     "eventid": [
       4688
     ],
@@ -13497,7 +13497,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of LocalXpose RMM tool\n",
+    "description": "Detects potential processes activity of LocalXpose RMM tool",
     "eventid": [
       4688
     ],
@@ -13537,7 +13537,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RuDesktop RMM tool\n",
+    "description": "Detects potential processes activity of RuDesktop RMM tool",
     "eventid": [
       4688
     ],
@@ -13616,7 +13616,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Rodex RMM RMM tool\n",
+    "description": "Detects potential processes activity of Rodex RMM RMM tool",
     "eventid": [
       4688
     ],
@@ -13656,7 +13656,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Pandora RC (eHorus) RMM tool\n",
+    "description": "Detects potential processes activity of Pandora RC (eHorus) RMM tool",
     "eventid": [
       4688
     ],
@@ -13735,7 +13735,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ISL Light RMM tool\n",
+    "description": "Detects potential processes activity of ISL Light RMM tool",
     "eventid": [
       4688
     ],
@@ -13775,7 +13775,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Devolutions Remote Desktop Manager RMM tool\n",
+    "description": "Detects potential processes activity of Devolutions Remote Desktop Manager RMM tool",
     "eventid": [
       4688
     ],
@@ -13815,7 +13815,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Adobe Connect RMM tool\n",
+    "description": "Detects potential processes activity of Adobe Connect RMM tool",
     "eventid": [
       4688
     ],
@@ -13855,7 +13855,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Duet Display RMM tool\n",
+    "description": "Detects potential processes activity of Duet Display RMM tool",
     "eventid": [
       4688
     ],
@@ -13895,7 +13895,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of RemoteUtilities RMM tool\n",
+    "description": "Detects potential processes activity of RemoteUtilities RMM tool",
     "eventid": [
       4688
     ],
@@ -13935,7 +13935,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Aspia RMM tool\n",
+    "description": "Detects potential processes activity of Aspia RMM tool",
     "eventid": [
       4688
     ],
@@ -13975,7 +13975,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of EMCO Remote Console RMM tool\n",
+    "description": "Detects potential processes activity of EMCO Remote Console RMM tool",
     "eventid": [
       4688
     ],
@@ -14054,7 +14054,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Senso.cloud RMM tool\n",
+    "description": "Detects potential processes activity of Senso.cloud RMM tool",
     "eventid": [
       4688
     ],
@@ -14094,7 +14094,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Kabuto RMM tool\n",
+    "description": "Detects potential processes activity of Kabuto RMM tool",
     "eventid": [
       4688
     ],
@@ -14134,7 +14134,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of ISL Online RMM tool\n",
+    "description": "Detects potential processes activity of ISL Online RMM tool",
     "eventid": [
       4688
     ],
@@ -14174,7 +14174,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Faronics Deep Freeze RMM tool\n",
+    "description": "Detects potential processes activity of Faronics Deep Freeze RMM tool",
     "eventid": [
       4688
     ],
@@ -14214,7 +14214,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of mstsc.exe (Microsoft Remote Desktop Connection) RMM tool\n",
+    "description": "Detects potential registry activity of mstsc.exe (Microsoft Remote Desktop Connection) RMM tool",
     "eventid": [
       4657
     ],
@@ -14232,12 +14232,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKCU\\\\Software\\\\Microsoft\\\\Terminal Server Client\\\\Default%' ESCAPE '\\' OR TargetObject LIKE '%HKCU\\\\Software\\\\Microsoft\\\\Terminal Server Client\\\\Servers%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKCU\\\\Software\\\\Microsoft\\\\Terminal Server Client\\\\Default%' ESCAPE '\\' OR ObjectName LIKE '%HKCU\\\\Software\\\\Microsoft\\\\Terminal Server Client\\\\Servers%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -14254,7 +14254,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of LANDesk RMM tool\n",
+    "description": "Detects potential processes activity of LANDesk RMM tool",
     "eventid": [
       4688
     ],
@@ -14294,7 +14294,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Ivanti Remote Control RMM tool\n",
+    "description": "Detects potential processes activity of Ivanti Remote Control RMM tool",
     "eventid": [
       4688
     ],
@@ -14334,7 +14334,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of PuTTY Tray RMM tool\n",
+    "description": "Detects potential processes activity of PuTTY Tray RMM tool",
     "eventid": [
       4688
     ],
@@ -14374,7 +14374,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Naverisk RMM tool\n",
+    "description": "Detects potential processes activity of Naverisk RMM tool",
     "eventid": [
       4688
     ],
@@ -14414,7 +14414,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Pocket Cloud (Wyse) RMM tool\n",
+    "description": "Detects potential processes activity of Pocket Cloud (Wyse) RMM tool",
     "eventid": [
       4688
     ],
@@ -14454,7 +14454,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Neturo RMM tool\n",
+    "description": "Detects potential processes activity of Neturo RMM tool",
     "eventid": [
       4688
     ],
@@ -14494,7 +14494,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of QQ IM-remote assistance RMM tool\n",
+    "description": "Detects potential processes activity of QQ IM-remote assistance RMM tool",
     "eventid": [
       4688
     ],
@@ -14534,7 +14534,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Zoho Assist RMM tool\n",
+    "description": "Detects potential processes activity of Zoho Assist RMM tool",
     "eventid": [
       4688
     ],
@@ -14574,7 +14574,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of ProxiPort RMM tool\n",
+    "description": "Detects potential registry activity of ProxiPort RMM tool",
     "eventid": [
       4657
     ],
@@ -14592,12 +14592,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\proxiport%' ESCAPE '\\')"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\proxiport%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -14614,7 +14614,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Lavawall RMM tool\n",
+    "description": "Detects potential processes activity of Lavawall RMM tool",
     "eventid": [
       4688
     ],
@@ -14654,7 +14654,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Connectwise Automate (LabTech) RMM tool\n",
+    "description": "Detects potential processes activity of Connectwise Automate (LabTech) RMM tool",
     "eventid": [
       4688
     ],
@@ -14694,7 +14694,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of GxM RMM Agent RMM tool\n",
+    "description": "Detects potential processes activity of GxM RMM Agent RMM tool",
     "eventid": [
       4688
     ],
@@ -14734,7 +14734,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of GLPI Agent RMM tool\n",
+    "description": "Detects potential registry activity of GLPI Agent RMM tool",
     "eventid": [
       4657
     ],
@@ -14752,12 +14752,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\GLPI-Agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\Installer%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\Installer\\\\Version%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\GLPI-Agent\\\\Installer\\\\Version%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\Monitor%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\server%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\httpd-port%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\httpd-ip%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\httpd-trust%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\tag%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\tasks%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\GLPI-Agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\Installer%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\Installer\\\\Version%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\GLPI-Agent\\\\Installer\\\\Version%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\Monitor%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\server%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\httpd-port%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\httpd-ip%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\httpd-trust%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\tag%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\GLPI-Agent\\\\tasks%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -14774,7 +14774,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential registry activity of Lavawall RMM tool\n",
+    "description": "Detects potential registry activity of Lavawall RMM tool",
     "eventid": [
       4657
     ],
@@ -14792,12 +14792,12 @@
     "required_fields": [
       "Channel",
       "EventID",
-      "OperationType",
-      "TargetObject"
+      "ObjectName",
+      "OperationType"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\LavaWall\\\\Agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Lavawall Support Agent%' ESCAPE '\\' OR TargetObject LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\LavaWallRemoteAgent%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (ObjectName LIKE '%HKLM\\\\SOFTWARE\\\\WOW6432Node\\\\LavaWall\\\\Agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Lavawall Support Agent%' ESCAPE '\\' OR ObjectName LIKE '%HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\LavaWallRemoteAgent%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "lolrmm",
@@ -14814,7 +14814,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of TrustConnect RMM tool\n",
+    "description": "Detects potential processes activity of TrustConnect RMM tool",
     "eventid": [
       4688
     ],
@@ -14854,7 +14854,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Pulseway RMM tool\n",
+    "description": "Detects potential processes activity of Pulseway RMM tool",
     "eventid": [
       4688
     ],
@@ -14894,7 +14894,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Netop Remote Control (aka Impero Connect) RMM tool\n",
+    "description": "Detects potential processes activity of Netop Remote Control (aka Impero Connect) RMM tool",
     "eventid": [
       4688
     ],
@@ -14934,7 +14934,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects potential processes activity of Komari RMM tool\n",
+    "description": "Detects potential processes activity of Komari RMM tool",
     "eventid": [
       4688
     ],

@@ -273,7 +273,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (EventType='CreateKey' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\.quantum%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 AND EventType='CreateKey') AND (EventType='CreateKey' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\.quantum%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "reversinglabs",

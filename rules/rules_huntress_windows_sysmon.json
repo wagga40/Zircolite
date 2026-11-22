@@ -1,0 +1,1945 @@
+[
+  {
+    "author": "Matt Anderson, Andrew Schwartz",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects when MsMpEng.exe (Microsoft Defender Antimalware Service) queries information about other processes. This is generally normal behavior for an antivirus but is provided as per specific request.",
+    "eventid": [
+      10
+    ],
+    "falsepositives": [],
+    "filename": "2025/2025-05/defendnot/sigma/win_security_process_access_defendnot.yml",
+    "id": "5d80958a-e7ec-4b0b-b597-a1d1b69f1562",
+    "level": "informational",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "GrantedAccess",
+      "SourceImage",
+      "TargetImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND SourceImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' AND TargetImage LIKE '%\\\\defendnot-loader.exe' ESCAPE '\\' AND GrantedAccess='0x1000')"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution"
+    ],
+    "title": "MsMpEng.exe Process Access defendnot loader"
+  },
+  {
+    "author": "Huntress Labs",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the activity of a suspicious child spawning from Windows Update Service (WSUS), potential CVE-2025-59287.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Should be low false positivies... nothing should spawn from wsusservice.exe"
+    ],
+    "filename": "2025/2025-10/WSUS_RCE_CVE-2025-59287/susp_wsusservice_child.yml",
+    "id": "622c4f64-c277-424a-9a1c-80c73d7243a0",
+    "level": "informational",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "process.name",
+      "process.parent.command_line",
+      "process.parent.pe.original_file_name"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (`process.parent.pe.original_file_name`='wsusservice.exe' OR (`process.parent.pe.original_file_name`='w3wp.exe' AND `process.parent.command_line` LIKE '%wsuspool%' ESCAPE '\\' AND `process.name`='cmd.exe')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [],
+    "title": "Suspicious Windows Update Service Child"
+  },
+  {
+    "author": "Chad Hudson, Matt Anderson",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects Javaw spawning suspicious powershell commands. This has been observed as possible post-exploitation activity of Cleo software.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2024/2024-12/Cleo/sigma/win_proc_creation_suspicious_powershell_from_javaw.yml",
+    "id": "a0ec945f-2328-40e9-96f6-27dadf72861b",
+    "level": "informational",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\javaw.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\') AND (CommandLine LIKE '% -nop%' ESCAPE '\\' OR CommandLine LIKE '% -noni%' ESCAPE '\\' OR CommandLine LIKE '% -NonInteractive%' ESCAPE '\\' OR CommandLine LIKE '% -w hidden %' ESCAPE '\\' OR CommandLine LIKE '% -windowstyle hidden%' ESCAPE '\\' OR CommandLine LIKE '%(New-Object Net.WebClient).Download%' ESCAPE '\\' OR CommandLine LIKE '% -enc %' ESCAPE '\\' OR CommandLine LIKE '% -EncodedCommand %' ESCAPE '\\') AND CommandLine LIKE '%powershell%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [],
+    "title": "Javaw Spawning Suspicious Powershell Commands"
+  },
+  {
+    "author": "Craig Sweeney",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the use of Nslookup to enumerate mail servers while using a shortened query type parameter \u201c-q\u201d",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate usage by System Administrators"
+    ],
+    "filename": "2025/2025-05/Advanced_Critical_Marketing_Research_Intrusion/windows_susp_mail_exchanger_enumeration_with_shortened_query_paramter_via_nslookup.yml",
+    "id": "1c1fdf59-f501-5177-8415-fc6118076974",
+    "level": "low",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\u2019\\\\nslookup.exe\u2019' ESCAPE '\\' AND CommandLine LIKE '%\u2018-q=mx\u2019%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.discovery",
+      "attack.t1016"
+    ],
+    "title": "Mail Exchanger Enumeration via Nslookup with a Shortened Query Parameter"
+  },
+  {
+    "author": "Craig Sweeney, Matt Anderson",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects Mesh Agent, the client software used to connect to a Mesh Central Server",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate usage by System Administrators"
+    ],
+    "filename": "2025/2025-05/Advanced_Critical_Marketing_Research_Intrusion/windows_mesh_agent_execution.yml",
+    "id": "753d9010-fed7-425e-9d3a-0a5510024840",
+    "level": "low",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "Description",
+      "EventID",
+      "Product"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Product='\u2019MeshCentral Agent\u2019' OR Description='MeshCentral Background Service Agent'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.t1219"
+    ],
+    "title": "Mesh Agent Execution"
+  },
+  {
+    "author": "Tyler Bohlmann, Andrew Schwartz, Matt Anderson",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the ctx.bin file that gets created after the defendnot-loader.exe binary is executed.",
+    "eventid": [
+      11
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2025/2025-05/defendnot/sigma/win_security_defendnot_file_creation.yml",
+    "id": "029fe628-7ebc-4db9-812d-b38e5a7f173c",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "file_event",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%\\\\defendnot-loader.exe' ESCAPE '\\' AND TargetFilename LIKE '%\\\\ctx.bin' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-evasion"
+    ],
+    "title": "defendnot File Creation"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the use of powershell commands from headless conhost window. The \"--headless\" flag hides the windows from the user upon execution.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2024/2024-07/boinc/sigma/powershell_from_headless_conhost.yml",
+    "id": "056c7317-9a09-4bd4-9067-d051312752ea",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\conhost.exe' ESCAPE '\\' AND (CommandLine LIKE '%--headless%' ESCAPE '\\' AND CommandLine LIKE '%powershell%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1059.001",
+      "attack.t1059.003"
+    ],
+    "title": "Powershell From Headless Conhost"
+  },
+  {
+    "author": "Matt Anderson, Craig Sweeney (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the use of winrar.exe commands to recurse subfolders. This may indicate a threat actor looking to archive all files within a directory without specificity, which is highly uncommon.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate use of Winrar command line version",
+      "Other command line tools or software that use these flags"
+    ],
+    "filename": "2024/2024-11/safepay/sigma/proc_creation_win_winrar_archive_create_recursive.yml",
+    "id": "116f209c-43a5-4581-a491-86dbdd3f57ec",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\rar.exe' ESCAPE '\\' OR Image LIKE '%\\\\winrar.exe' ESCAPE '\\') OR OriginalFileName='WinRAR.exe') AND (CommandLine LIKE '% -r%' ESCAPE '\\' AND CommandLine LIKE '% a %' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.collection",
+      "attack.t1560.001"
+    ],
+    "title": "Create WinRAR Archive - Recurse Subfolders"
+  },
+  {
+    "author": "Huntress DE&TH Team",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects PowerShell reverse shell",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2022/2022-12/29-OWASSRF/detections/sigma/pwsh-reverse-shell.yml",
+    "id": "19bab1e3-73a8-4330-86a5-cc339c511c18",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND ((CommandLine LIKE '%net.sockets.tcpclient%' ESCAPE '\\' AND CommandLine LIKE '%io.streamwriter%' ESCAPE '\\') OR (CommandLine LIKE '%net.sockets.tcpclient%' ESCAPE '\\' AND CommandLine LIKE '%getstream%' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [],
+    "title": "Pwsh-reverse-shell"
+  },
+  {
+    "author": "Huntress DE&TH Team",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "This detects file modifications to the temporary xml user database file indicating local user modification in the ScreenConnect server. This will occur during exploitation of the ScreenConnect Authentication Bypass vulnerability (CVE-2024-1709) in versions <23.9.8, but may also be observed when making legitimate modifications to local users or permissions. This requires an Advanced Auditing policy to log a successful Windows Event ID 4663 events and with a SACL set on the directory.",
+    "eventid": [
+      11
+    ],
+    "falsepositives": [
+      "This will occur legitimately as well and will result in some benign activity."
+    ],
+    "filename": "2024/2024-02/connectwise/sigma/file_event_win_sysmon_cve_2024_1709_database_modification_screenconnect.yml",
+    "id": "1a821580-588b-4323-9422-660f7e131020",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "file_event",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%.xml' ESCAPE '\\' AND (TargetFilename LIKE '%Temp%' ESCAPE '\\' AND TargetFilename LIKE '%ScreenConnect%' ESCAPE '\\') AND Image LIKE '%ScreenConnect.Service.exe%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "cve.2024.1709"
+    ],
+    "title": "ScreenConnect User Database Modification - Sysmon"
+  },
+  {
+    "author": "Tyler Bohlmann, Andrew Schwartz, Matt Anderson",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the execution of defendnot-loader.exe.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2025/2025-05/defendnot/sigma/win_security_defendnot_process_creation.yml",
+    "id": "1d1b35be-128d-434d-b9fd-54b77ec849c6",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\defendnot-loader.exe' ESCAPE '\\' OR CommandLine LIKE '%defendnot-loader.exe%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.003"
+    ],
+    "title": "defendnot Execution"
+  },
+  {
+    "author": "Craig Sweeney, Matt Anderson, Jose Oregon, Tim Kasper, Faith Stratton, Samantha Shaw",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects execution of a shell process with CrushFTP as a parent process. May indicate post-exploitation of a vulnerability in CrushFTP.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2025/2025-03/CrushFTP/sigma/win_proc_creation_shell_child_process_crushftp.yml",
+    "id": "459628e3-1b00-4e9b-9e5b-7da8961aea35",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell\\_ise.exe' ESCAPE '\\') AND ParentImage LIKE '%\\\\crushftpservice.exe' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial_access",
+      "attack.execution",
+      "attack.t1059.001",
+      "attack.t1059.003",
+      "attack.t1190"
+    ],
+    "title": "Shell Process from CrushFTP"
+  },
+  {
+    "author": "Tyler Bohlmann, Andrew Schwartz, Matt Anderson",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects defendnot.dll being loaded by taskmgr.exe after initial defendnot-loader.exe execution.",
+    "eventid": [
+      7
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2025/2025-05/defendnot/sigma/win_image_load_defendnot_dll_taskmgr.yml",
+    "id": "657104f9-6995-4f73-ae33-34e3bf01e051",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "image_load",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ImageLoaded"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=7 AND (ImageLoaded LIKE '%\\\\defendnot.dll' ESCAPE '\\' AND Image LIKE '%\\\\taskmgr.exe' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-evasion"
+    ],
+    "title": "defendnot.dll Loaded Via Taskmgr"
+  },
+  {
+    "author": "Craig Sweeney, Jai Minton, Michael Tigges, Matt Anderson, John Hammond (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects execution of a shell process from the \"Portal\" Application Pool used by Gladinet Centrestack or the \u201cManagement\u201d Application Pool used by Triofox, as a parent process. This may indicate successful exploitation of a vulnerability in Centrestack or Triofox.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2025/2025-04/CentreStack_CVE-2025-30406/sigma/windows_susp_exec_from_centrastack_or_triofox.yml",
+    "id": "6a3be0d6-2305-4fa3-a5bc-b4d35c0b5f12",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell\\_ise.exe' ESCAPE '\\') AND (ParentImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' AND (ParentCommandLine LIKE '%\\\\portal\\\\portal.config%' ESCAPE '\\' OR ParentCommandLine LIKE '%\\\\management\\\\management.config%' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial_access",
+      "attack.execution",
+      "attack.t1059.001",
+      "attack.t1059.003",
+      "attack.t1190"
+    ],
+    "title": "Shell Process from Gladinet CentreStack or Triofox"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects deletion of registry key that adds 'Scan with Defender' option in context menu.  Attackers may use this to make it harder for users to scan files that are suspicious.",
+    "eventid": [
+      12
+    ],
+    "falsepositives": [
+      "Unlikely, as this weakens defenses and normally would not be done even if using another AV."
+    ],
+    "filename": "2025/2025-07/defense_evasion/sigma/registry_delete_defender_context_menu.yml",
+    "id": "72a0369a-2576-4aaf-bfc9-6bb24a574ac6",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "registry_delete",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "EventType",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 AND (EventType='DeleteKey' OR EventType='DeleteValue')) AND TargetObject LIKE '%shellex\\\\ContextMenuHandlers\\\\EPP%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-evasion"
+    ],
+    "title": "Delete Defender Scan ShellEx Context Menu Registry Key"
+  },
+  {
+    "author": "Tyler Bohlmann, Andrew Schwartz, Matt Anderson",
+    "channel": [
+      "Application"
+    ],
+    "description": "Detects two different types of Event 15 from SecurityCenter occurring within 5 seconds - one with STATE_OFF and another with STATE_ON",
+    "eventid": [
+      15
+    ],
+    "falsepositives": [
+      "Legitimate Windows Defender configuration changes",
+      "Security software updates or restarts",
+      "Administrative security policy modifications"
+    ],
+    "filename": "2025/2025-05/defendnot/sigma/win_security_defendnot_defender_state_correlation.yml",
+    "id": "833017cc-0fec-4e3c-8d62-19541d09d462",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "application"
+    },
+    "required_fields": [
+      "Channel",
+      "EventData",
+      "EventID",
+      "Source"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Application' AND ((EventID=15 AND Source='SecurityCenter') AND (EventData LIKE '%SECURITY\\_PRODUCT\\_STATE\\_OFF%' ESCAPE '\\' OR (EventData LIKE '%SECURITY\\_PRODUCT\\_STATE\\_ON%' ESCAPE '\\' AND EventData LIKE '%https://github.com/es3n1n/defendnot%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1562.001"
+    ],
+    "title": "defendnot Windows Defender State Toggle Events"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects when a user disables Defender settings via GUI.  This can be used by adversaries to impair defenses.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "May be turned off by a user or admin for legitimate purposes."
+    ],
+    "filename": "2024/2024-11/safepay/sigma/proc_creation_win_disable_defender_systemsettings_gui.yml",
+    "id": "87c21d4e-e312-4f0b-ab86-f9b8e60dd68e",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\SystemSettingsAdminFlows.exe' ESCAPE '\\' OR OriginalFileName='SystemSettingsAdminFlows.EXE') AND ParentImage LIKE '%\\\\SystemSettings.exe' ESCAPE '\\' AND (CommandLine LIKE '%Defender DisableEnhancedNotifications 1%' ESCAPE '\\' OR CommandLine LIKE '%Defender SubmitSamplesConsent 0%' ESCAPE '\\' OR CommandLine LIKE '%Defender SpynetReporting 0%' ESCAPE '\\' OR CommandLine LIKE '%Defender RTP 1%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-evasion",
+      "attack.t1562"
+    ],
+    "title": "Windows Defender Threat Protection Settings Disabled via GUI"
+  },
+  {
+    "author": "Craig Sweeney, Anna Pham, Michael Tigges, Matt Anderson, Andrew Schwartz (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects execution of a Cmd process from a parent Node Process, with a suspicious enumeration or output command such as \"whoami\" or \"systeminfo\". This is a possible indication of exploitation of Meta React Server Components vulnerability identified as CVE-2025-55182, \"React2Shell\".",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2025/2025-12/react_CVE-2025-55182/susp_command_line_child_proc_node.yml",
+    "id": "a805d365-a3fc-485b-ac64-262cd9568538",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%systeminfo%' ESCAPE '\\' OR CommandLine LIKE '%quser%' ESCAPE '\\' OR CommandLine LIKE '%echo%' ESCAPE '\\') AND ParentImage LIKE '%\\\\nodejs\\\\node.exe' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial_access",
+      "attack.execution",
+      "attack.discovery",
+      "attack.t1059.003",
+      "attack.t1190",
+      "attack.t1082",
+      "attack.t1033"
+    ],
+    "title": "Suspicious Command from Node.Js"
+  },
+  {
+    "author": "Alden Schmidt, Matt Anderson",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects when a user disables Defender settings without using the Settings GUI.  This can be used by adversaries to impair defenses.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "May be turned off by a user or admin for legitimate purposes."
+    ],
+    "filename": "2024/2024-11/safepay/sigma/proc_creation_win_disable_defender_threat_protection_settings.yml",
+    "id": "ad44351e-89c4-4b1c-8cb0-676c55bf11ce",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\SystemSettingsAdminFlows.exe' ESCAPE '\\' OR OriginalFileName='SystemSettingsAdminFlows.EXE') AND (CommandLine LIKE '%Defender DisableEnhancedNotifications 1%' ESCAPE '\\' OR CommandLine LIKE '%Defender SubmitSamplesConsent 0%' ESCAPE '\\' OR CommandLine LIKE '%Defender SpynetReporting 0%' ESCAPE '\\' OR CommandLine LIKE '%Defender RTP 1%' ESCAPE '\\')) AND (NOT COALESCE((ParentImage LIKE '%\\\\SystemSettings.exe' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.defense-evasion",
+      "attack.t1562"
+    ],
+    "title": "Windows Defender Threat Protection Settings Disabled"
+  },
+  {
+    "author": "Huntress Team",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects Tar.exe being used to extract a file to a specified location via the \"-xf\" flag to extract files and the \"-C\" flag to specify the target directory.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate administrative usage"
+    ],
+    "filename": "2026/2026-02/Exorcising_Demons/susp_tar_extract.yml",
+    "id": "b45cebcf-96a8-402c-a369-eb48c608fe00",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (OriginalFileName='bsdtar' AND (CommandLine LIKE '%-xf%' ESCAPE '\\' AND CommandLine LIKE '%-C%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.collection",
+      "attack.t1074.001",
+      "attack.t1140",
+      "attack.t1027",
+      "attack.t1059.003"
+    ],
+    "title": "Tar Archive Extraction to Specified Location"
+  },
+  {
+    "author": "Tyler Bohlmann, Andrew Schwartz, Matt Anderson",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects taskmgr.exe child process spawning from defendnot-loader.exe execution.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2025/2025-05/defendnot/sigma/win_security_defendnot_child_process_taskmgr.yml",
+    "id": "d4ce1024-710e-41ab-8de5-aad408bac1a8",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\defendnot-loader.exe' ESCAPE '\\' AND Image LIKE '%\\\\taskmgr.exe' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-evasion",
+      "attack.t1055"
+    ],
+    "title": "Taskmgr Child Process of defendnot"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detect use of processes with no name (\".exe\"), which can be used to evade Image-based detections.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate software (rare)"
+    ],
+    "filename": "2024/2024-07/boinc/sigma/process_no_name.yml",
+    "id": "f208d6d8-d83a-4c2c-960d-877c37da84e5",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND Image LIKE '%.exe' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.defense_evasion"
+    ],
+    "title": "Process with No Name"
+  },
+  {
+    "author": "Huntress DE&TH Team",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects suspicious Rundll32 WebDAV client execution with observed .WAV artifact added to the UNC path. The .WAV is associated with the value stored in the PidLidReminderFileParameter which determines the audio tone to use in a missed meeting or overdue task. The UNC path in the attack forces the victim machine to look for the file on a remote server where the victim machine attempts to authenticate -- subsequently leaking NTLM hashes.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "unknown"
+    ],
+    "filename": "2023/2023-03/cve-23397/win_cve_23397_davclnt_wav.yml",
+    "id": "00c2ad6a-fb88-42c9-bc48-57450e33ea0f",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\svchost.exe' ESCAPE '\\' AND Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND (CommandLine LIKE '%C:\\\\windows\\\\system32\\\\davclnt.dll,DavSetCookie%' ESCAPE '\\' AND CommandLine LIKE '%.WAV%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.exfiltration",
+      "attack.t1048.003"
+    ],
+    "title": "Possible CVE-2023-23397"
+  },
+  {
+    "author": "Tyler Bohlmann (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the use of bcdedit.exe to disable the Early Launch Antimalware (ELAM) drivers. Early launch anti-malware (ELAM) provides protection for the computers in your network when they start up and before third-party drivers initialize. Malicious software can load as a driver or rootkits might attack before the operating system completely loads.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Highly unlikely"
+    ],
+    "filename": "2025/2025-07/defense_evasion/sigma/proc_creation_win_bcdedit_disable_elam_drivers.yml",
+    "id": "0aa12a68-f55a-4b93-ba80-4c1627426b3c",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\bcdedit.exe' ESCAPE '\\' OR OriginalFileName='bcdedit.exe') AND (CommandLine LIKE '%/set%' ESCAPE '\\' AND CommandLine LIKE '%{current}%' ESCAPE '\\' AND CommandLine LIKE '%disableelamdrivers%' ESCAPE '\\' AND CommandLine LIKE '%yes%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-evasion",
+      "attack.t1562.001"
+    ],
+    "title": "Disabling ELAM drivers via BCDEdit.exe"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects DlpUserAgent.exe (Microsoft Defender Data Loss Prevention User Agent) running from an unusual or unknown directory, which may be indicative of DLL Side-Loading. This binary legitimately resides within the Windows Defender directory and has been observed being abused by threat actors to sideload malicious DLLs delivering C2 payloads such as Havoc.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2026/2026-02/Exorcising_Demons/proc_creation_win_susp_dlpuseragent_sideloading.yml",
+    "id": "26a153b1-e5e8-4288-b1d1-d4ed6fc1c596",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (OriginalFileName='DlpUserAgent.exe' AND (NOT COALESCE((Image LIKE '%\\\\Windows Defender\\\\%' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1574.002"
+    ],
+    "title": "Possible DLL Side-Loading Using DlpUserAgent.exe"
+  },
+  {
+    "author": "Matt Anderson",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects creation of scheduled tasks potentially used for autorun persistence (Event ID 4698), such as those created by defendnot or similar tooling.",
+    "eventid": [
+      4698
+    ],
+    "falsepositives": [
+      "Legitimate admin tasks with similar names or command lines"
+    ],
+    "filename": "2025/2025-05/defendnot/sigma/win_security_defendnot_default_scheduled_task_creation.yml",
+    "id": "3156aabd-474b-408e-8fc5-f9a92e026cd1",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "TaskContent",
+      "TaskName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4698 AND (TaskName LIKE '%defendnot%' ESCAPE '\\' OR TaskName LIKE '%autorun%' ESCAPE '\\' OR TaskName LIKE '%Loader%' ESCAPE '\\') AND (TaskContent LIKE '%defendnot%' ESCAPE '\\' OR TaskContent LIKE '%--from-autorun%' ESCAPE '\\' OR TaskContent LIKE '%defendnot-loader%' ESCAPE '\\' OR TaskContent LIKE '%\\\\defendnot.dll%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1053.005"
+    ],
+    "title": "Defendnot Scheduled Task Creation - Security"
+  },
+  {
+    "author": "",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects processes spawning from tomcat located in the GoAnywhere folder",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2023/2023-02/07-GoAnywhere/detections/sigma/process-spawned-from-goanywhere-tomcat.yml",
+    "id": "3667b97f-e86c-434b-b70d-88ccaee6854b",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\Goanywhere\\\\tomcat\\\\bin\\\\tomcat.exe' ESCAPE '\\' AND (NOT COALESCE((Image LIKE '%\\\\conhost.exe' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.execution"
+    ],
+    "title": "Process Spawned From GoAnywhere Tomcat"
+  },
+  {
+    "author": "Craig Sweeney, Tanner Filip, Matt Anderson, John Hammond (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects execution of a command shell with Wing FTP Server as a Parent Process.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2025/2025-07/WingFTP_CVE-2025-47812/sigma/windows_susp_command_shell_from_wingftp_process.yml",
+    "id": "4dbc580c-f70d-4285-aaa7-bec4bebdccde",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND ParentImage LIKE '%\\\\wftpserver.exe' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial_access",
+      "attack.execution",
+      "attack.t1059.001",
+      "attack.t1059.003",
+      "attack.t1190"
+    ],
+    "title": "Command Shell from Wing FTP Server"
+  },
+  {
+    "author": "Huntress DE&TH Team",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects suspicious code execution from vulnerable PaperCut versions MF and NG",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Expected admin activity"
+    ],
+    "filename": "2023/2023-04/20-PaperCut/win_susp_papercut_code_execution.yml",
+    "id": "4f315700-6fb5-4284-bfd6-eb8dc9f0928f",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\pc-app.exe' ESCAPE '\\' AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.execution"
+    ],
+    "title": "PaperCut MF/NG Vulnerability"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects a command line that names the WinRing0 vulnerable driver alongside a URL. Cryptominer droppers fetch WinRing0x64.sys next to the miner so it can tune CPU registers, while hardware monitoring tools ship the driver inside their installers rather than downloading it on its own. Look for a miner binary and config.json downloaded to the same directory and a service created to run it.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Administrators manually fetching a hardware-monitoring driver"
+    ],
+    "filename": "2026/2026-10/AhsayCBS_XMRig_Miner/proc_creation_win_susp_winring0_driver_download_cli.yml",
+    "id": "56d828d5-f28b-48b5-aba7-531351f184f7",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%winring0%' ESCAPE '\\' AND (CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%ftp://%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.t1105",
+      "attack.impact",
+      "attack.t1496"
+    ],
+    "title": "WinRing0 Driver Downloaded via Command Line"
+  },
+  {
+    "author": "Matt Anderson, Craig Sweeney (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the use of winrar.exe commands to create an archive with a specific volume size. This may indicate a threat actor increasing the size of the volume to prevent making separate files.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate use of Winrar command line version",
+      "Other command line tools or software that use these flags"
+    ],
+    "filename": "2024/2024-11/safepay/sigma/proc_creation_win_winrar_archive_create_volume_size.yml",
+    "id": "70580f07-a998-419f-bb5d-2a2fc4a87f7b",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\rar.exe' ESCAPE '\\' OR Image LIKE '%\\\\winrar.exe' ESCAPE '\\') OR OriginalFileName='WinRAR.exe') AND (CommandLine LIKE '% -v%' ESCAPE '\\' AND CommandLine LIKE '% a %' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.collection",
+      "attack.t1560.001"
+    ],
+    "title": "Create WinRAR Archive - Specify Volume Size"
+  },
+  {
+    "author": "Tyler Bohlmann (Huntress)",
+    "channel": [
+      "Microsoft-Windows-PowerShell/Operational",
+      "PowerShellCore/Operational"
+    ],
+    "description": "Detects a PowerShell ScriptBlock that watches for Task Manager and stops or starts a service depending on whether it is open. Cryptominer operators use this pattern to hide the miner service from users who go looking for high CPU usage. Check the ScriptBlock for the service name and look for that service's binary path and creation event.",
+    "eventid": [
+      4104
+    ],
+    "falsepositives": [
+      "Administrative scripts that coordinate service state with Task Manager"
+    ],
+    "filename": "2026/2026-10/AhsayCBS_XMRig_Miner/posh_ps_susp_taskmgr_aware_service_control.yml",
+    "id": "7a3e9c52-4d1b-4f86-9b0e-5c2d8a61f4e3",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "ps_script",
+      "product": "windows",
+      "service": "powershell"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ScriptBlockText"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%taskmgr%' ESCAPE '\\' AND (ScriptBlockText LIKE '%Stop-Service%' ESCAPE '\\' AND ScriptBlockText LIKE '%Start-Service%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1564",
+      "attack.impact",
+      "attack.t1496",
+      "attack.execution",
+      "attack.t1059.001"
+    ],
+    "title": "PowerShell Scriptblock - Task Manager Aware Service Control"
+  },
+  {
+    "author": "Tyler Bohlmann, Andrew Schwartz, Matt Anderson",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects the update of the default scheduled task creation of defendnot after binary execution.",
+    "eventid": [
+      4702
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2025/2025-05/defendnot/sigma/win_security_defendnot_updated_scheduled_task.yml",
+    "id": "803a67d4-7945-4cbe-b8cd-ce8c334da4c0",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "TaskContentNew"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4702 AND (TaskContentNew LIKE '%defendnot%' ESCAPE '\\' AND TaskContentNew LIKE '%--from-autorun%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1053.005"
+    ],
+    "title": "Updated Default defendnot Scheduled Task"
+  },
+  {
+    "author": "",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects suspicious Qakbot execution activity, observed on february 2023.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2023/2023-02/2023-02-09-Qakbot-execution.yml",
+    "id": "848b7a9b-e509-4817-bf43-acffa1eec4d2",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (ParentCommandLine LIKE '%exported%' ESCAPE '\\' OR ParentCommandLine LIKE '%open.cmd%' ESCAPE '\\' OR ParentCommandLine LIKE '%GoodOldFile.bat%' ESCAPE '\\') AND Image LIKE '%\\\\powershell.exe' ESCAPE '\\') OR (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND CommandLine LIKE '%ProgramData%' ESCAPE '\\' AND ParentImage LIKE '%\\\\cmd.exe' ESCAPE '\\' AND ParentCommandLine LIKE '%public%' ESCAPE '\\') OR (Image LIKE '%\\\\t.exe' ESCAPE '\\' AND Image LIKE '%Public%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.execution"
+    ],
+    "title": "Suspicious Qakbot Execution (Rundll32/Powershell) - Feb 2023"
+  },
+  {
+    "author": "Huntress Team",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects deployment and execution of Zoho ManageEngine RMM tools (ToolsIQ.exe) following potential SolarWinds Web Help Desk compromise. This legitimate RMM tool has been abused by threat actors for remote control.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Authorized deployment of ManageEngine RMM in the environment",
+      "Legitimate IT support activities"
+    ],
+    "filename": "2026/2026-02/SolarWinds_WHD/solarwinds_web_help_desk_exploitation_zoho_manageengine_rmm_deployment.yml",
+    "id": "9d8e5b3f-4c2a-5e7d-8b9c-3f6e7d8a2c1d",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\ToolsIQ.exe' ESCAPE '\\' OR ((ParentImage LIKE '%\\\\ToolsIQ.exe' ESCAPE '\\' AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\')) AND CommandLine LIKE '%\\\\WebHelpDesk\\\\%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.t1219",
+      "attack.execution"
+    ],
+    "title": "SolarWinds Web Help Desk Exploitation - Zoho ManageEngine RMM Deployment"
+  },
+  {
+    "author": "Huntress DE&TH Team",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "MOVEitTransfer is affected by a critical vulnerability CVE-2023-34362. Exploited hosts show evidence of dynamically compliling a DLL, which then executes a script (file path for this temp file is C:\\Windows\\TEMP\\[random]\\[random].cmdline) to create a webshell that so far has always been named 'human2.aspx'. The filepaths 'c:\\moveittransfer\\wwwroot' and 'C:\\Windows\\Microsoft\\.NET\\Framework64\\v4\\.0\\.30319\\Temporary ASP\\.NET Files\\root' should be investigated for recently modified files. Evidence of exploitation can also be found on the webserver logs for the MOVEit Transfer application.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2023/2023-06/1-MOVEit/sigma/cve_2023_34362_exploitation.yml",
+    "id": "a5d2c153-c3b9-4e95-a611-d54b3c12c16f",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' AND ParentCommandLine LIKE '%moveitdmz pool%' ESCAPE '\\' AND Image LIKE '%\\\\csc.exe' ESCAPE '\\' AND CommandLine LIKE '%Windows\\\\temp\\\\%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1203"
+    ],
+    "title": "MOVEit exploitation CVE-2023-34362"
+  },
+  {
+    "author": "Matt Anderson, Dray Agha, Anna Pham (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects execution of devcon.exe with commands that disable the VMware Virtual Machine Communication Interface (VMCI) device. This can be legitimate during VMware Tools troubleshooting or driver conflicts, but may also indicate malware attempting to hijack communication with the hardware via the VMCI device. This has been used to facilitate VMware ESXi vulnerability exploits to escape VMs and execute code on the ESXi host.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate VMware administration, Tools installation/uninstallation, or troubleshooting driver conflicts",
+      "Automated scripts in virtualized environments for device cleanup"
+    ],
+    "filename": "2026/2026-01/vm_escape/sigma/proc_creation_win_devcon_disable_vmci_driver.yml",
+    "id": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\devcon.exe' ESCAPE '\\' AND CommandLine LIKE '% disable %' ESCAPE '\\' AND (CommandLine LIKE '%15AD&DEV\\_0740%' ESCAPE '\\' OR CommandLine LIKE '%VMWVMCIHOSTDEV%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1543.003",
+      "attack.t1562.001"
+    ],
+    "title": "Devcon Execution Disabling VMware VMCI Device"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the use of a CMSTPLUA elevated COM Interface to execute a system binary that can be used for proxy execution. Using this COM Interface bypasses UAC, and has been used by numerous threat actors to execute ransomware and other malware.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Some legitimate applications may use this occasionally"
+    ],
+    "filename": "2024/2024-11/safepay/sigma/proc_creation_win_proxy_exection_cmstplua_interface.yml",
+    "id": "b77542ea-151a-4c9d-b2eb-8b39adfbadea",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\dllhost.exe' ESCAPE '\\' AND ParentCommandLine LIKE '%Processid:{3E5FC7F9-9A51-4367-9063-A120244FBEC7}%' ESCAPE '\\') AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\' OR Image LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR Image LIKE '%\\\\hh.exe' ESCAPE '\\' OR Image LIKE '%\\\\control.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmstp.exe' ESCAPE '\\' OR Image LIKE '%\\\\installutil.exe' ESCAPE '\\' OR Image LIKE '%\\\\odbcconf.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvcs.exe' ESCAPE '\\' OR Image LIKE '%\\\\regasm.exe' ESCAPE '\\' OR Image LIKE '%\\\\verclsid.exe' ESCAPE '\\' OR Image LIKE '%\\\\mavinject.exe' ESCAPE '\\' OR Image LIKE '%\\\\mmc.exe' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-evasion",
+      "attack.privilege-escalation",
+      "attack.execution",
+      "attack.t1548.002",
+      "attack.t1218",
+      "attack.t1559.001"
+    ],
+    "title": "System Binary Proxy Execution Using CMSTPLUA COM Interface"
+  },
+  {
+    "author": "Matt Anderson, Andrew Schwartz, Tyler Bohlmann",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects image load events (DLLs or modules) by taskmgr.exe (Windows Task Manager) in Sysmon logs from non-standard directories with unsigned modules or invalid signatures, indicating potential malicious activity such as DLL injection.  Used by Defendnot evasion tool that disables Windows Defender.",
+    "eventid": [
+      7
+    ],
+    "falsepositives": [
+      "Legitimate third-party tools or extensions loading unsigned or invalidly signed DLLs from non-standard directories",
+      "Administrative troubleshooting or debugging tools"
+    ],
+    "filename": "2025/2025-05/defendnot/sigma/win_image_load_taskmgr_unsigned.yml",
+    "id": "b8f4e2c1-9a2d-4c7b-a1f8-3e4b7c9d2f3a",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "image_load",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ImageLoaded",
+      "SignatureStatus",
+      "Signed"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=7 AND ((EventID=7 AND Image LIKE '%\\\\taskmgr.exe' ESCAPE '\\') AND (NOT COALESCE((ImageLoaded LIKE 'C:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR ImageLoaded LIKE 'C:\\\\Windows\\\\SysWOW64\\\\%' ESCAPE '\\' OR ImageLoaded LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\' OR ImageLoaded LIKE 'C:\\\\Windows\\\\System32\\\\wbem\\\\%' ESCAPE '\\' OR ImageLoaded LIKE 'C:\\\\Windows\\\\System32\\\\com\\\\%' ESCAPE '\\' OR ImageLoaded LIKE 'C:\\\\Windows\\\\System32\\\\en-US\\\\%' ESCAPE '\\'), 0)) AND ((Signed='false' OR Signed=0) OR (SignatureStatus LIKE '%Invalid%' ESCAPE '\\' OR SignatureStatus LIKE '%UntrustedRoot%' ESCAPE '\\' OR SignatureStatus LIKE '%Expired%' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1055",
+      "attack.t1562.001",
+      "attack.defense-evasion"
+    ],
+    "title": "Suspicious Image Load into taskmgr.exe with Invalid or Unsigned Modules (Sysmon)"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the AhsayCBS backup server service, cbssvcX64.exe or cbssvcX86.exe, spawning a process outside its startup and maintenance baseline. AhsayCBS hosts its Tomcat web app in-process, so commands from an uploaded JSP webshell run as direct children of the service. Treat as webshell execution until disproven.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "AhsayCBS releases that add new startup commands"
+    ],
+    "filename": "2026/2026-10/AhsayCBS_XMRig_Miner/proc_creation_win_susp_ahsaycbs_unexpected_child_process.yml",
+    "id": "c9dd3dd5-c59e-4cdb-a3bc-e17550ff40c0",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\cbssvcX64.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\cbssvcX86.exe' ESCAPE '\\') AND (NOT COALESCE(((Image LIKE '%\\\\7za.exe' ESCAPE '\\' OR Image LIKE '%\\\\rotatelogs.exe' ESCAPE '\\' OR Image LIKE '%\\\\conhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\java.exe' ESCAPE '\\' OR Image LIKE '%\\\\cbssvcX64.exe' ESCAPE '\\' OR Image LIKE '%\\\\cbssvcX86.exe' ESCAPE '\\') OR CommandLine REGEXP '(?i)^(\"?([a-z]:\\\\windows\\\\system32\\\\)?cmd\\.exe\"? /c (ipconfig /all|ver|uname -i)|ipconfig +/all)\\s*$' OR CommandLine REGEXP '(?i)^cmd\\.exe /c bin\\\\MigrateV7\\.bat >\\.\\\\MigrateV7\\.log\\s*$' OR CommandLine REGEXP '(?i)^cmd\\.exe /c \"\"[a-z]:\\\\program files( \\(x86\\))?\\\\ahsaycbs\\\\java\\\\bin\\\\java\" -xm[^&|;]*$'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial_access",
+      "attack.t1190",
+      "attack.persistence",
+      "attack.t1505.003",
+      "attack.execution",
+      "attack.t1059.003"
+    ],
+    "title": "Unexpected Child Process from AhsayCBS Service"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects a cryptominer masquerading as Microsoft Edge, where an Edge-named binary carries the msedge_exe original file name or runs as a background daemon instead of a browser. Check for the MicrosoftEdgeUpdateSvc and EdgeUpdateHelper services and Taskgmr.ps1 in the temp directory.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "None known"
+    ],
+    "filename": "2026/2026-10/AhsayCBS_XMRig_Miner/proc_creation_win_susp_fake_edge_daemonized_miner.yml",
+    "id": "d4842d27-ec2c-43a7-a5d3-e5a174010482",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (OriginalFileName LIKE 'msedge\\_exe' ESCAPE '\\' OR ((Image LIKE '%\\\\edge.exe' ESCAPE '\\' OR Image LIKE '%\\\\msedge.exe' ESCAPE '\\') AND CommandLine LIKE '%--daemonized%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1036.005",
+      "attack.impact",
+      "attack.t1496"
+    ],
+    "title": "Fake Edge Binary Launched with Daemonized Flag"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the use of a CMSTPLUA elevated COM Interface to execute a scripting interpreter to launch scripts or commands. Using this COM Interface bypasses UAC, and has been used by numerous threat actors to execute ransomware and other malware.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Some legitimate applications may use this occasionally"
+    ],
+    "filename": "2024/2024-11/safepay/sigma/proc_creation_win_scripting_interpreter_cmstplua_interface.yml",
+    "id": "d4e9ed08-5356-4cb4-884f-a024d6ac3704",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "OriginalFileName",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\dllhost.exe' ESCAPE '\\' AND ParentCommandLine LIKE '%Processid:{3E5FC7F9-9A51-4367-9063-A120244FBEC7}%' ESCAPE '\\') AND ((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell\\_ise.exe' ESCAPE '\\') OR (OriginalFileName='Cmd.Exe' OR OriginalFileName='PowerShell.EXE' OR OriginalFileName='pwsh.dll' OR OriginalFileName='wscript.exe' OR OriginalFileName LIKE 'powershell\\_ise.EXE' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-evasion",
+      "attack.privilege-escalation",
+      "attack.execution",
+      "attack.t1548.002",
+      "attack.t1218",
+      "attack.t1559.001"
+    ],
+    "title": "Scripting Interpreter Execution Using CMSTPLUA COM Interface"
+  },
+  {
+    "author": "Matt Anderson, Dray Agha, Anna Pham (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects execution of the Kernel Driver Utility (KDU) tool. KDU can be used to bypass driver signature enforcement and load unsigned or malicious drivers into the Windows kernel, potentially allowing for privilege escalation, persistence, or evasion of security controls.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate driver development, testing, or administrative troubleshooting (e.g., enabling/disabling hardware)"
+    ],
+    "filename": "2026/2026-01/vm_escape/sigma/proc_creation_win_kdu_driver_tool_execution.yml",
+    "id": "e76ca062-4de0-4d79-8d90-160a0d335eca",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\kdu.exe' ESCAPE '\\' OR OriginalFileName='hamakaze.exe') AND (CommandLine LIKE '%-map %' ESCAPE '\\' OR CommandLine LIKE '%-prv %' ESCAPE '\\' OR CommandLine LIKE '%-dse %' ESCAPE '\\' OR CommandLine LIKE '%-ps %' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "t1543.003"
+    ],
+    "title": "Kernel Driver Utility Execution"
+  },
+  {
+    "author": "Matt Anderson (Huntress)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects ADNotificationManager.exe (Adobe Notification Manager) running from an unusual or unknown directory, which may be indicative of DLL Side-Loading. This binary has been observed being abused by multiple threat actors including GOLD BLADE to sideload malicious DLLs and deliver C2 payloads such as Havoc.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate usage of ADNotificationManager.exe installed in custom directories"
+    ],
+    "filename": "2026/2026-02/Exorcising_Demons/proc_creation_win_susp_adnotificationmanager_sideloading.yml",
+    "id": "ed26d612-bb1b-46d1-92f5-c7d51dc81080",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((OriginalFileName='ADNotificationManager.exe' AND Image LIKE '%\\\\ADNotificationManager.exe' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%\\\\Acrobat%' ESCAPE '\\' OR Image LIKE '%\\\\Reader%' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1574.002"
+    ],
+    "title": "Possible DLL Side-Loading Using ADNotificationManager.exe"
+  },
+  {
+    "author": "Tanner Filip, Austin Worline, Chad Hudson, Matt Anderson",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects Powershell spawned from Cleo software.  Evidence of unknown threat actor exploiting the CLEO tooling using this pattern observed in Dec 2024.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "2024/2024-12/Cleo/sigma/win_proc_creation_cleo_exploitation_2024.yml",
+    "id": "f007b877-02e3-45b7-8501-1b78c2864029",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\javaw.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%powershell%' ESCAPE '\\' OR CommandLine LIKE '% -NonInteractive%' ESCAPE '\\' OR CommandLine LIKE '% -noni %' ESCAPE '\\' OR CommandLine LIKE '% -enc %' ESCAPE '\\' OR CommandLine LIKE '% -EncodedCommand%' ESCAPE '\\') AND (ParentCommandLine LIKE '%VLTrader%' ESCAPE '\\' OR ParentCommandLine LIKE '%lexicom%' ESCAPE '\\' OR ParentCommandLine LIKE '%Harmony%' ESCAPE '\\' OR ParentCommandLine LIKE '%VersaLex%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [],
+    "title": "Possible Cleo MFT Exploitation 2024"
+  },
+  {
+    "author": "Huntress Team",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects suspicious process execution patterns associated with the exploitation of SolarWinds Web Help Desk (CVE-2025-40551, CVE-2025-40536, CVE-2025-26399). Identifies PowerShell spawned from Java/Tomcat processes in WHD directory executing BITS transfers or suspicious commands.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate administrative activity via SolarWinds WHD (should be rare)",
+      "Authorized software updates or maintenance scripts"
+    ],
+    "filename": "2026/2026-02/SolarWinds_WHD/solarwinds_web_help_desk_exploitation_uncommon_process_activity.yml",
+    "id": "8c7f4a2d-3b9e-4f1c-9a6d-2e8f5c3d9a1b",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\WebHelpDesk\\\\bin\\\\%' ESCAPE '\\' AND (ParentImage LIKE '%\\\\java.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\javaw.exe' ESCAPE '\\') AND ParentCommandLine LIKE '%tomcat%' ESCAPE '\\') AND ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\') AND (CommandLine LIKE '%bitsadmin%' ESCAPE '\\' OR CommandLine LIKE '%Start-BitsTransfer%' ESCAPE '\\' OR CommandLine LIKE '%certutil%' ESCAPE '\\' OR CommandLine LIKE '%Invoke-WebRequest%' ESCAPE '\\' OR CommandLine LIKE '%Invoke-RestMethod%' ESCAPE '\\' OR CommandLine LIKE '%iwr%' ESCAPE '\\' OR CommandLine LIKE '%irm%' ESCAPE '\\' OR CommandLine LIKE '%curl%' ESCAPE '\\' OR CommandLine LIKE '%wget%' ESCAPE '\\' OR CommandLine LIKE '%Net.WebClient%' ESCAPE '\\' OR CommandLine LIKE '%DownloadFile%' ESCAPE '\\' OR CommandLine LIKE '%DownloadString%' ESCAPE '\\' OR CommandLine LIKE '%-EncodedCommand%' ESCAPE '\\' OR CommandLine LIKE '%-Enc%' ESCAPE '\\' OR CommandLine LIKE '%base64%' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "huntress",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.001",
+      "attack.persistence",
+      "attack.t1197",
+      "attack.credential_access",
+      "cve.2025.40551",
+      "cve.2025.40536",
+      "cve.2025.26399"
+    ],
+    "title": "SolarWinds Web Help Desk Exploitation - Uncommon Process Activity"
+  }
+]

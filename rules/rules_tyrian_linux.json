@@ -2,7 +2,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects a rapid sequence of situational-awareness commands from one host. No single one of these is suspicious, which is the point: the signal is the burst. A human landing on an unfamiliar box runs five of them in under a minute, while a legitimate user runs one, occasionally, with a reason.\n",
+    "description": "Detects a rapid sequence of situational-awareness commands from one host. No single one of these is suspicious, which is the point: the signal is the burst. A human landing on an unfamiliar box runs five of them in under a minute, while a legitimate user runs one, occasionally, with a reason.",
     "eventid": [],
     "falsepositives": [
       "Administrators troubleshooting, who legitimately run exactly this sequence",
@@ -38,7 +38,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects insmod/modprobe execution and the init_module syscall. A loadable kernel module runs in ring 0, which puts it beyond the reach of every userland control on the host, including the audit daemon that reported it. Module loads are rare and predictable outside of driver updates, so the baseline is small enough to review by hand.\n",
+    "description": "Detects insmod/modprobe execution and the init_module syscall. A loadable kernel module runs in ring 0, which puts it beyond the reach of every userland control on the host, including the audit daemon that reported it. Module loads are rare and predictable outside of driver updates, so the baseline is small enough to review by hand.",
     "eventid": [],
     "falsepositives": [
       "Driver and kernel package updates",
@@ -74,7 +74,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects the curl-pipe-bash install pattern, where a script is fetched over the network and executed without ever touching disk under a name anyone reviewed. Legitimate installers do this too, which is exactly why attackers can hide in it, so treat a hit as \"what was the URL\" rather than as a verdict.\n",
+    "description": "Detects the curl-pipe-bash install pattern, where a script is fetched over the network and executed without ever touching disk under a name anyone reviewed. Legitimate installers do this too, which is exactly why attackers can hide in it, so treat a hit as \"what was the URL\" rather than as a verdict.",
     "eventid": [],
     "falsepositives": [
       "Genuine vendor install scripts (rustup, nvm, docker convenience script)",
@@ -111,7 +111,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects reads or writes of /etc/shadow and /etc/gshadow by an interactive login. The audit rule that feeds this is already filtered to auid>=1000, so normal authentication by daemons (which run with auid unset) does not reach it. A hit is someone at a keyboard reading the hashes.\n",
+    "description": "Detects reads or writes of /etc/shadow and /etc/gshadow by an interactive login. The audit rule that feeds this is already filtered to auid>=1000, so normal authentication by daemons (which run with auid unset) does not reach it. A hit is someone at a keyboard reading the hashes.",
     "eventid": [],
     "falsepositives": [
       "An administrator running passwd, chage or usermod interactively",
@@ -145,7 +145,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects binaries executed out of /tmp, /var/tmp or /dev/shm. Packages install to /usr and /opt, so sustained execution from a scratch directory is either a careless admin or a payload that landed where any user can write. /dev/shm is the strongest of the three: it is memory-backed and leaves no disk artefact.\n",
+    "description": "Detects binaries executed out of /tmp, /var/tmp or /dev/shm. Packages install to /usr and /opt, so sustained execution from a scratch directory is either a careless admin or a payload that landed where any user can write. /dev/shm is the strongest of the three: it is memory-backed and leaves no disk artefact.",
     "eventid": [],
     "falsepositives": [
       "Package build systems and CI runners that compile and run out of /tmp",
@@ -181,7 +181,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects useradd/adduser execution and usermod adding an account to sudo, wheel, admin or root. Creating a second administrator is how an operator converts a stolen session into an account of their own, one that survives the original credential being reset.\n",
+    "description": "Detects useradd/adduser execution and usermod adding an account to sudo, wheel, admin or root. Creating a second administrator is how an operator converts a stolen session into an account of their own, one that survives the original credential being reset.",
     "eventid": [],
     "falsepositives": [
       "Provisioning and configuration management creating service accounts",
@@ -219,7 +219,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects writes to an authorized_keys file. Appending a public key is the quietest durable backdoor on Linux: it survives reboots and password rotation, needs no malware on disk, and looks like ordinary administration in every log except this one. Pair a hit with \"who owns that key\".\n",
+    "description": "Detects writes to an authorized_keys file. Appending a public key is the quietest durable backdoor on Linux: it survives reboots and password rotation, needs no malware on disk, and looks like ordinary administration in every log except this one. Pair a hit with \"who owns that key\".",
     "eventid": [],
     "falsepositives": [
       "Configuration management (Ansible, Puppet, cloud-init) distributing keys",
@@ -254,7 +254,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects unlink or rename of files under /var/log by an interactive user. The feeding audit rule watches deletion syscalls specifically rather than writes, because a write watch on /var/log fires on every log line and is unusable. An attacker clearing tracks removes or truncates; both show up here.\n",
+    "description": "Detects unlink or rename of files under /var/log by an interactive user. The feeding audit rule watches deletion syscalls specifically rather than writes, because a write watch on /var/log fires on every log line and is unusable. An attacker clearing tracks removes or truncates; both show up here.",
     "eventid": [],
     "falsepositives": [
       "An administrator manually clearing disk space",
@@ -288,7 +288,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects writes to the system cron surfaces: /etc/crontab, the cron.d and cron.<interval> drop-in directories, and the per-user spool. Cron remains the most common Linux persistence mechanism because it is present everywhere and needs no privileges beyond the user's own crontab.\n",
+    "description": "Detects writes to the system cron surfaces: /etc/crontab, the cron.d and cron.<interval> drop-in directories, and the per-user spool. Cron remains the most common Linux persistence mechanism because it is present everywhere and needs no privileges beyond the user's own crontab.",
     "eventid": [],
     "falsepositives": [
       "Package installs that drop a cron.d file (logrotate, certbot, backup agents)",
@@ -323,7 +323,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects changes to /etc/sudoers or a drop-in under /etc/sudoers.d. A single NOPASSWD ALL line converts a foothold into permanent root that survives reboots and looks legitimate to anyone not diffing the file. This is a small, high-value surface: alert on every change and reconcile against your change record.\n",
+    "description": "Detects changes to /etc/sudoers or a drop-in under /etc/sudoers.d. A single NOPASSWD ALL line converts a foothold into permanent root that survives reboots and looks legitimate to anyone not diffing the file. This is a small, high-value surface: alert on every change and reconcile against your change record.",
     "eventid": [],
     "falsepositives": [
       "Configuration management distributing sudo policy",
@@ -358,7 +358,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects writes to systemd unit directories. A unit file gives an attacker root-level execution on every boot with automatic restart, supervised by init itself, which is why it has largely replaced rc.local and init scripts as the Linux persistence of choice.\n",
+    "description": "Detects writes to systemd unit directories. A unit file gives an attacker root-level execution on every boot with automatic restart, supervised by init itself, which is why it has largely replaced rc.local and init scripts as the Linux persistence of choice.",
     "eventid": [],
     "falsepositives": [
       "Package installation and updates, which legitimately write unit files",
@@ -393,7 +393,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects the standard routes out of a container onto its host: nsenter against PID 1's namespaces, a container started with --privileged, and any process handling the Docker socket. A mounted docker.sock is a full host takeover primitive, because whoever can talk to it can start a privileged container.\n",
+    "description": "Detects the standard routes out of a container onto its host: nsenter against PID 1's namespaces, a container started with --privileged, and any process handling the Docker socket. A mounted docker.sock is a full host takeover primitive, because whoever can talk to it can start a privileged container.",
     "eventid": [],
     "falsepositives": [
       "CI runners and build tooling that legitimately need privileged containers",
@@ -430,7 +430,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects the three reverse shells that show up in almost every Linux intrusion: bash writing to /dev/tcp, netcat with command execution, and a Python one-liner that spawns a pty over a socket. auditd records argv split across EXECVE a0..aN, so the payload lands in a2 when the shell is invoked as `sh -c '<payload>'`.\n",
+    "description": "Detects the three reverse shells that show up in almost every Linux intrusion: bash writing to /dev/tcp, netcat with command execution, and a Python one-liner that spawns a pty over a socket. auditd records argv split across EXECVE a0..aN, so the payload lands in a2 when the shell is invoked as `sh -c '<payload>'`.",
     "eventid": [],
     "falsepositives": [
       "Administrators using netcat for legitimate port checks (rarely with -e)",
@@ -467,7 +467,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects writes to /etc/ld.so.preload or the ld.so.conf.d directory. A library listed in ld.so.preload is loaded into every dynamically linked process on the host, which is how most Linux userland rootkits hook libc and hide their own files and connections. This file does not exist on a stock system, so its creation is close to a binary indicator.\n",
+    "description": "Detects writes to /etc/ld.so.preload or the ld.so.conf.d directory. A library listed in ld.so.preload is loaded into every dynamically linked process on the host, which is how most Linux userland rootkits hook libc and hide their own files and connections. This file does not exist on a stock system, so its creation is close to a binary indicator.",
     "eventid": [],
     "falsepositives": [
       "A small number of commercial agents legitimately preload a library",
@@ -503,7 +503,7 @@
   {
     "author": "Tyrian",
     "channel": [],
-    "description": "Detects execution of auditctl or auditd and changes to /etc/audit. Disabling the audit daemon is the natural first move for an attacker who realises they are being recorded, and it blinds every other Linux rule in this pack. Treat a stop or ruleset flush that you cannot tie to a change ticket as an incident.\n",
+    "description": "Detects execution of auditctl or auditd and changes to /etc/audit. Disabling the audit daemon is the natural first move for an attacker who realises they are being recorded, and it blinds every other Linux rule in this pack. Treat a stop or ruleset flush that you cannot tie to a change ticket as an incident.",
     "eventid": [],
     "falsepositives": [
       "Legitimate audit policy deployment by configuration management",

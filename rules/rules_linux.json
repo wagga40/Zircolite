@@ -102,7 +102,7 @@
   {
     "author": "Daniil Yugoslavskiy, oscd.community, CheraghiMilad",
     "channel": [],
-    "description": "Detects usage of system utilities such as \"find\", \"tree\", \"findmnt\", etc, to discover files, directories and network shares.\n",
+    "description": "Detects usage of system utilities such as \"find\", \"tree\", \"findmnt\", etc, to discover files, directories and network shares.",
     "eventid": [],
     "falsepositives": [
       "Legitimate activities"
@@ -237,7 +237,7 @@
   {
     "author": "@kostastsale",
     "channel": [],
-    "description": "Detects the creation of files with unusually long filenames (100 or more characters), which may indicate obfuscation techniques used by malware such as VShell.\nThis is a hunting rule to identify potential threats that use long filenames to evade detection. Keep in mind that on a legitimate system, such long filenames can and are common. Run this detection in the context of threat hunting rather than alerting.\nAdjust the threshold of filename length as needed based on your environment.\n",
+    "description": "Detects the creation of files with unusually long filenames (100 or more characters), which may indicate obfuscation techniques used by malware such as VShell. This is a hunting rule to identify potential threats that use long filenames to evade detection. Keep in mind that on a legitimate system, such long filenames can and are common. Run this detection in the context of threat hunting rather than alerting. Adjust the threshold of filename length as needed based on your environment.",
     "eventid": [],
     "falsepositives": [
       "Legitimate files with long filenames."
@@ -341,7 +341,7 @@
   {
     "author": "Josh Nickels, Qi Nan",
     "channel": [],
-    "description": "Detects the command line executed when TeamViewer starts a session started by a remote host.\nOnce a connection has been started, an investigator can verify the connection details by viewing the \"incoming_connections.txt\" log file in the TeamViewer folder.\n",
+    "description": "Detects the command line executed when TeamViewer starts a session started by a remote host. Once a connection has been started, an investigator can verify the connection details by viewing the \"incoming_connections.txt\" log file in the TeamViewer folder.",
     "eventid": [],
     "falsepositives": [
       "Legitimate usage of TeamViewer"
@@ -377,7 +377,7 @@
   {
     "author": "Pawel Mazur",
     "channel": [],
-    "description": "Detects attempts to collect data stored in the clipboard from users with the usage of xclip tool.\nXclip has to be installed.\nHighly recommended using rule on servers, due to high usage of clipboard utilities on user workstations.\n",
+    "description": "Detects attempts to collect data stored in the clipboard from users with the usage of xclip tool. Xclip has to be installed. Highly recommended using rule on servers, due to high usage of clipboard utilities on user workstations.",
     "eventid": [],
     "falsepositives": [
       "Legitimate usage of xclip tools"
@@ -591,7 +591,7 @@
   {
     "author": "Luc G\u00e9naux",
     "channel": [],
-    "description": "Detects the use of the 'setcap' utility to set the 'setgid' capability (cap_setgid) on a binary file.\nThis capability allows a non privileged process to make arbitrary manipulations of group IDs (GIDs), including setting its current GID to a value that would otherwise be restricted (i.e. GID 0, the root group).\nThis behavior can be used by adversaries to backdoor a binary in order to escalate privileges again in the future if needed.\n",
+    "description": "Detects the use of the 'setcap' utility to set the 'setgid' capability (cap_setgid) on a binary file. This capability allows a non privileged process to make arbitrary manipulations of group IDs (GIDs), including setting its current GID to a value that would otherwise be restricted (i.e. GID 0, the root group). This behavior can be used by adversaries to backdoor a binary in order to escalate privileges again in the future if needed.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -766,7 +766,7 @@
   {
     "author": "Daniil Yugoslavskiy, oscd.community",
     "channel": [],
-    "description": "Detects attempts to discover system network connections via common Linux utilities.\nAdversaries may use tools such as netstat, ss, or lsof to enumerate active connections,\nopen ports, and listening services on a compromised system.\n",
+    "description": "Detects attempts to discover system network connections via common Linux utilities. Adversaries may use tools such as netstat, ss, or lsof to enumerate active connections, open ports, and listening services on a compromised system.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administration activities"
@@ -799,7 +799,7 @@
   {
     "author": "\u00d6mer G\u00fcnal, oscd.community, CheraaghiMilad",
     "channel": [],
-    "description": "Detects process discovery commands. Adversaries may attempt to get information about running processes on a system.\nInformation obtained could be used to gain an understanding of common software/applications running on systems within the network\n",
+    "description": "Detects process discovery commands. Adversaries may attempt to get information about running processes on a system. Information obtained could be used to gain an understanding of common software/applications running on systems within the network",
     "eventid": [],
     "falsepositives": [
       "Legitimate administration activities"
@@ -866,7 +866,7 @@
   {
     "author": "\u00d6mer G\u00fcnal, Alejandro Ortuno, oscd.community",
     "channel": [],
-    "description": "Detects attempts to enumerate local groups and group membership via common Linux utilities and sensitive file access.\nAdversaries may read files such as /etc/group and /etc/gshadow, or use tools like getent and groups to identify\ngroup memberships and privilege assignments on a compromised system.\n",
+    "description": "Detects attempts to enumerate local groups and group membership via common Linux utilities and sensitive file access. Adversaries may read files such as /etc/group and /etc/gshadow, or use tools like getent and groups to identify group memberships and privilege assignments on a compromised system.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administration activities"
@@ -900,7 +900,7 @@
   {
     "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
     "channel": [],
-    "description": "Detects the creation of cron files in Cron directories, which could indicate potential persistence mechanisms being established by an attacker.\nNote that not all cron file creations are malicious - legitimate system administration activities and software installations may also create cron files.\nThis detection should be investigated in context, considering factors such as the user creating the file, the timing of creation, and the contents of the cron job.\nFocus investigation on unexpected cron files created by non-administrative users or during suspicious timeframes.\nAdditionally, it is recommended to review the contents of the newly created cron files to assess their intent.\nFurthermore, it is suggested to baseline normal cron file creation and apply additional filters to reduce false positives based on the specific environment.\n",
+    "description": "Detects the creation of cron files in Cron directories, which could indicate potential persistence mechanisms being established by an attacker. Note that not all cron file creations are malicious - legitimate system administration activities and software installations may also create cron files. This detection should be investigated in context, considering factors such as the user creating the file, the timing of creation, and the contents of the cron job. Focus investigation on unexpected cron files created by non-administrative users or during suspicious timeframes. Additionally, it is recommended to review the contents of the newly created cron files to assess their intent. Furthermore, it is suggested to baseline normal cron file creation and apply additional filters to reduce false positives based on the specific environment.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administrative tasks, package managers, containers, configuration management tools, cloud agents, or system maintenance operations might cause false positives. Apply baselining before deployment."
@@ -935,7 +935,7 @@
   {
     "author": "Milad Cheraghi",
     "channel": [],
-    "description": "Detects usage of the `mknod` syscall to create special files (e.g., character or block devices).\nAttackers or malware might use `mknod` to create fake devices, interact with kernel interfaces,\nor establish covert channels in Linux systems.\nMonitoring the use of `mknod` is important because this syscall is rarely used by legitimate applications,\nand it can be abused to bypass file system restrictions or create backdoors.\n",
+    "description": "Detects usage of the `mknod` syscall to create special files (e.g., character or block devices). Attackers or malware might use `mknod` to create fake devices, interact with kernel interfaces, or establish covert channels in Linux systems. Monitoring the use of `mknod` is important because this syscall is rarely used by legitimate applications, and it can be abused to bypass file system restrictions or create backdoors.",
     "eventid": [],
     "falsepositives": [
       "Device creation by legitimate scripts or init systems (udevadm, MAKEDEV)",
@@ -1140,7 +1140,7 @@
   {
     "author": "Timur Zinniatullin, oscd.community",
     "channel": [],
-    "description": "Detects the execution of host or user discovery utilities such as \"whoami\", \"hostname\", \"id\", etc.\nAdversaries may use the information from System Owner/User Discovery during automated discovery to shape follow-on behaviors, including whether or not the adversary fully infects the target and/or attempts specific actions.\n",
+    "description": "Detects the execution of host or user discovery utilities such as \"whoami\", \"hostname\", \"id\", etc. Adversaries may use the information from System Owner/User Discovery during automated discovery to shape follow-on behaviors, including whether or not the adversary fully infects the target and/or attempts specific actions.",
     "eventid": [],
     "falsepositives": [
       "Admin activity"
@@ -1354,7 +1354,7 @@
   {
     "author": "Milad Cheraghi",
     "channel": [],
-    "description": "Detects use of the sysinfo system call in Linux, which provides a snapshot of key system statistics such as uptime, load averages, memory usage, and the number of running processes.\nMalware or reconnaissance tools might leverage sysinfo to fingerprint the system - gathering data to determine if it's a viable target.\n",
+    "description": "Detects use of the sysinfo system call in Linux, which provides a snapshot of key system statistics such as uptime, load averages, memory usage, and the number of running processes. Malware or reconnaissance tools might leverage sysinfo to fingerprint the system - gathering data to determine if it's a viable target.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administrative activity"
@@ -1390,7 +1390,7 @@
   {
     "author": "Alejandro Ortuno, oscd.community, CheraghiMilad",
     "channel": [],
-    "description": "Detects attempts to enumerate local user accounts via common Linux utilities and sensitive file access.\nAdversaries may read files such as /etc/passwd, /etc/shadow, and /etc/sudoers, or use tools like getent,\nid, who, and finger to identify accounts and privilege levels on a compromised system.\n",
+    "description": "Detects attempts to enumerate local user accounts via common Linux utilities and sensitive file access. Adversaries may read files such as /etc/passwd, /etc/shadow, and /etc/sudoers, or use tools like getent, id, who, and finger to identify accounts and privilege levels on a compromised system.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administration activities"
@@ -1602,7 +1602,7 @@
   {
     "author": "Joseliyo Sanchez, @Joseliyo_Jstnk",
     "channel": [],
-    "description": "Detects the use of grep to identify information about the operating system architecture. Often combined beforehand with the execution of \"uname\" or \"cat /proc/cpuinfo\"\n",
+    "description": "Detects the use of grep to identify information about the operating system architecture. Often combined beforehand with the execution of \"uname\" or \"cat /proc/cpuinfo\"",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -1636,7 +1636,7 @@
   {
     "author": "\u00d6mer G\u00fcnal, oscd.community",
     "channel": [],
-    "description": "Detects the use of at/atd which are utilities that are used to schedule tasks.\nThey are often abused by adversaries to maintain persistence or to perform task scheduling for initial or recurring execution of malicious code\n",
+    "description": "Detects the use of at/atd which are utilities that are used to schedule tasks. They are often abused by adversaries to maintain persistence or to perform task scheduling for initial or recurring execution of malicious code",
     "eventid": [],
     "falsepositives": [
       "Legitimate administration activities"
@@ -1705,7 +1705,7 @@
   {
     "author": "Pawel Mazur",
     "channel": [],
-    "description": "Detects adversary creating screen capture of a desktop with Import Tool.\nHighly recommended using rule on servers, due to high usage of screenshot utilities on user workstations.\nImageMagick must be installed.\n",
+    "description": "Detects adversary creating screen capture of a desktop with Import Tool. Highly recommended using rule on servers, due to high usage of screenshot utilities on user workstations. ImageMagick must be installed.",
     "eventid": [],
     "falsepositives": [
       "Legitimate use of screenshot utility"
@@ -1847,7 +1847,7 @@
   {
     "author": "Pawel Mazur, Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
     "channel": [],
-    "description": "Detects attempts to collect data stored in the clipboard from users with the usage of xclip tool. Xclip has to be installed.\nHighly recommended using rule on servers, due to high usage of clipboard utilities on user workstations.\n",
+    "description": "Detects attempts to collect data stored in the clipboard from users with the usage of xclip tool. Xclip has to be installed. Highly recommended using rule on servers, due to high usage of clipboard utilities on user workstations.",
     "eventid": [],
     "falsepositives": [
       "Legitimate usage of xclip tools."
@@ -1881,7 +1881,7 @@
   {
     "author": "Luc G\u00e9naux",
     "channel": [],
-    "description": "Detects the use of the 'setcap' utility to set the 'setuid' capability (cap_setuid) on a binary file.\nThis capability allows a non privileged process to make arbitrary manipulations of user IDs (UIDs), including setting its current UID to a value that would otherwise be restricted (i.e. UID 0, the root user).\nThis behavior can be used by adversaries to backdoor a binary in order to escalate privileges again in the future if needed.\n",
+    "description": "Detects the use of the 'setcap' utility to set the 'setuid' capability (cap_setuid) on a binary file. This capability allows a non privileged process to make arbitrary manipulations of user IDs (UIDs), including setting its current UID to a value that would otherwise be restricted (i.e. UID 0, the root user). This behavior can be used by adversaries to backdoor a binary in order to escalate privileges again in the future if needed.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -1952,7 +1952,7 @@
   {
     "author": "Pawel Mazur",
     "channel": [],
-    "description": "Detects attempts to collect image data stored in the clipboard from users with the usage of xclip tool.\nXclip has to be installed.\nHighly recommended using rule on servers, due to high usage of clipboard utilities on user workstations.\n",
+    "description": "Detects attempts to collect image data stored in the clipboard from users with the usage of xclip tool. Xclip has to be installed. Highly recommended using rule on servers, due to high usage of clipboard utilities on user workstations.",
     "eventid": [],
     "falsepositives": [
       "Legitimate usage of xclip tools"
@@ -1991,7 +1991,7 @@
   {
     "author": "Swachchhanda Shrawn Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects the execution of 'sudo' command with '--chroot' option, which is used to change the root directory for command execution.\nAttackers may use this technique to evade detection and execute commands in a modified environment.\nThis can be part of a privilege escalation strategy, as it allows the execution of commands with elevated privileges in a controlled environment as seen in CVE-2025-32463.\nWhile investigating, look out for unusual or unexpected use of 'sudo --chroot' in conjunction with other commands or scripts such as execution from temporary directories or unusual user accounts.\n",
+    "description": "Detects the execution of 'sudo' command with '--chroot' option, which is used to change the root directory for command execution. Attackers may use this technique to evade detection and execute commands in a modified environment. This can be part of a privilege escalation strategy, as it allows the execution of commands with elevated privileges in a controlled environment as seen in CVE-2025-32463. While investigating, look out for unusual or unexpected use of 'sudo --chroot' in conjunction with other commands or scripts such as execution from temporary directories or unusual user accounts.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administrative tasks or scripts that use 'sudo --chroot' for containerization, testing, or system management."
@@ -2061,7 +2061,7 @@
   {
     "author": "Timur Zinniatullin, oscd.community",
     "channel": [],
-    "description": "Network sniffing refers to using the network interface on a system to monitor or capture information sent over a wired or wireless connection.\nAn adversary may place a network interface into promiscuous mode to passively access data in transit over the network, or use span ports to capture a larger amount of data.\n",
+    "description": "Network sniffing refers to using the network interface on a system to monitor or capture information sent over a wired or wireless connection. An adversary may place a network interface into promiscuous mode to passively access data in transit over the network, or use span ports to capture a larger amount of data.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administrator or user uses network sniffing tool for legitimate reasons."
@@ -2518,7 +2518,7 @@
   {
     "author": "IAI",
     "channel": [],
-    "description": "Detects the removal of system firewall rules. Adversaries may only delete or modify a specific system firewall rule to bypass controls limiting network usage or access.\nDetection rules that match only on the disabling of firewalls will miss this.\n",
+    "description": "Detects the removal of system firewall rules. Adversaries may only delete or modify a specific system firewall rule to bypass controls limiting network usage or access. Detection rules that match only on the disabling of firewalls will miss this.",
     "eventid": [],
     "falsepositives": [
       "Legitimate admin activity"
@@ -2553,7 +2553,7 @@
   {
     "author": "Milad Cheraghi",
     "channel": [],
-    "description": "Detects attempts of an attacker to enable core dumps for set-user-ID (SUID) processes by modifying the system file /proc/sys/fs/suid_dumpable, typically by setting its value to 1 or 2.\nEnabling this feature allows memory dumps (core dumps) of SUID processes, which usually run with elevated privileges.\nThese dumps may contain sensitive information such as passwords, cryptographic keys or other secrets.\nCVE-2025-5054: Information leak via core dumps from SUID binaries using apport.\nCVE-2025-4598: Information disclosure in systemd-coredump due to insecure handling of SUID process memory dumps.\n",
+    "description": "Detects attempts of an attacker to enable core dumps for set-user-ID (SUID) processes by modifying the system file /proc/sys/fs/suid_dumpable, typically by setting its value to 1 or 2. Enabling this feature allows memory dumps (core dumps) of SUID processes, which usually run with elevated privileges. These dumps may contain sensitive information such as passwords, cryptographic keys or other secrets. CVE-2025-5054: Information leak via core dumps from SUID binaries using apport. CVE-2025-4598: Information disclosure in systemd-coredump due to insecure handling of SUID process memory dumps.",
     "eventid": [],
     "falsepositives": [
       "System administrators enabling debugging temporarily",
@@ -2769,7 +2769,7 @@
   {
     "author": "Mohamed LAKRI",
     "channel": [],
-    "description": "Detects the execution of Python web servers via command line interface (CLI).\nAfter gaining access to target systems, adversaries may use Python's built-in HTTP server modules to quickly establish a web server without requiring additional software.\nThis technique is commonly used in post-exploitation scenarios as it provides a simple method for transferring files between the compromised host and attacker-controlled systems.\n",
+    "description": "Detects the execution of Python web servers via command line interface (CLI). After gaining access to target systems, adversaries may use Python's built-in HTTP server modules to quickly establish a web server without requiring additional software. This technique is commonly used in post-exploitation scenarios as it provides a simple method for transferring files between the compromised host and attacker-controlled systems.",
     "eventid": [],
     "falsepositives": [
       "Testing or development activity"
@@ -2872,7 +2872,7 @@
   {
     "author": "Elastic (idea), Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects the creation of suspicious files (jsp, java, class) in SAP NetWeaver directories,\nwhich may indicate exploitation attempts of vulnerabilities such as CVE-2025-31324.\n",
+    "description": "Detects the creation of suspicious files (jsp, java, class) in SAP NetWeaver directories, which may indicate exploitation attempts of vulnerabilities such as CVE-2025-31324.",
     "eventid": [],
     "falsepositives": [
       "Legitimate creation of jsc or java files in these locations"
@@ -2947,7 +2947,7 @@
   {
     "author": "Christopher Peacock @SecurePeacock, SCYTHE @scythe_io",
     "channel": [],
-    "description": "Detects chmod targeting files in sensitive directory paths on Linux systems.\nAttackers may use chmod to change permissions of files in these directories to maintain persistence, escalate privileges, or disrupt system operations.\n",
+    "description": "Detects chmod targeting files in sensitive directory paths on Linux systems. Attackers may use chmod to change permissions of files in these directories to maintain persistence, escalate privileges, or disrupt system operations.",
     "eventid": [],
     "falsepositives": [
       "Some false positives are to be expected. Apply additional filters as needed before pushing to production."
@@ -3016,7 +3016,7 @@
   {
     "author": "Elastic (idea), Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects suspicious child processes spawned by SAP NetWeaver on Linux systems that could indicate potential\nexploitation of vulnerability that allows arbitrary execution via webshells such as CVE-2025-31324.\n",
+    "description": "Detects suspicious child processes spawned by SAP NetWeaver on Linux systems that could indicate potential exploitation of vulnerability that allows arbitrary execution via webshells such as CVE-2025-31324.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administrative activities such as software updates"
@@ -3227,7 +3227,7 @@
   {
     "author": "\u00d6mer G\u00fcnal, oscd.community",
     "channel": [],
-    "description": "Detects logs clearing attempts on Linux systems via utilities such as 'rm', 'rmdir', 'shred', and 'unlink' targeting log files and directories.\nAdversaries often try to clear logs to cover their tracks after performing malicious activities.\n",
+    "description": "Detects logs clearing attempts on Linux systems via utilities such as 'rm', 'rmdir', 'shred', and 'unlink' targeting log files and directories. Adversaries often try to clear logs to cover their tracks after performing malicious activities.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administration activities"
@@ -3295,7 +3295,7 @@
   {
     "author": "Joseliyo Sanchez, @Joseliyo_Jstnk",
     "channel": [],
-    "description": "Detects attempts to disable the Uncomplicated Firewall (UFW) on Linux systems.\nUFW is a popular firewall management tool that provides an easy-to-use interface for configuring firewall rules.\nDisabling UFW can leave a system vulnerable to attacks, as it may allow unauthorized access to network services and resources.\n",
+    "description": "Detects attempts to disable the Uncomplicated Firewall (UFW) on Linux systems. UFW is a popular firewall management tool that provides an easy-to-use interface for configuring firewall rules. Disabling UFW can leave a system vulnerable to attacks, as it may allow unauthorized access to network services and resources.",
     "eventid": [],
     "falsepositives": [
       "Legitimate actions by system administrators to disable UFW."
@@ -3329,7 +3329,7 @@
   {
     "author": "@d4ns4n_ (Wuerth-Phoenix)",
     "channel": [],
-    "description": "Detects changes of sensitive and critical files. Monitors files that you don't expect to change without planning on Linux system.\nThese files include, but are not limited to, system configuration files, authentication files, and critical application files.\nAttackers often target these files to maintain persistence, escalate privileges, or disrupt system operations.\n",
+    "description": "Detects changes of sensitive and critical files. Monitors files that you don't expect to change without planning on Linux system. These files include, but are not limited to, system configuration files, authentication files, and critical application files. Attackers often target these files to maintain persistence, escalate privileges, or disrupt system operations.",
     "eventid": [],
     "falsepositives": [
       "Some false positives are to be expected on user or administrator machines. Apply additional filters as needed."
@@ -3429,7 +3429,7 @@
   {
     "author": "Jennifer Batina",
     "channel": [],
-    "description": "Detects a system shell interpreter being spawned directly by a Celery worker process.\nThis behavior indicates a Python background task execution framework is evaluating raw string input through a shell execution context,\nwhich is highly indicative of successful command or prompt injection exploitation against an LLM agent task.\n",
+    "description": "Detects a system shell interpreter being spawned directly by a Celery worker process. This behavior indicates a Python background task execution framework is evaluating raw string input through a shell execution context, which is highly indicative of successful command or prompt injection exploitation against an LLM agent task.",
     "eventid": [],
     "falsepositives": [
       "Legacy or custom administrative tasks deliberately hardcoded with shell=True or os.system execution inside Celery task functions.",
@@ -3465,7 +3465,7 @@
   {
     "author": "David Burkett (@signalblur)",
     "channel": [],
-    "description": "Detects command line patterns associated with the use of Pnscan for sending and receiving binary data across the network.\nThis behavior has been identified in a Linux malware campaign targeting Docker, Apache Hadoop, Redis, and Confluence and was previously used by the threat actor known as TeamTNT\n",
+    "description": "Detects command line patterns associated with the use of Pnscan for sending and receiving binary data across the network. This behavior has been identified in a Linux malware campaign targeting Docker, Apache Hadoop, Redis, and Confluence and was previously used by the threat actor known as TeamTNT",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -3531,7 +3531,7 @@
   {
     "author": "Timur Zinniatullin, oscd.community",
     "channel": [],
-    "description": "Masquerading occurs when the name or location of an executable, legitimate or malicious, is manipulated or abused for the sake of evading defenses and observation.\nSeveral different variations of this technique have been observed.\n",
+    "description": "Masquerading occurs when the name or location of an executable, legitimate or malicious, is manipulated or abused for the sake of evading defenses and observation. Several different variations of this technique have been observed.",
     "eventid": [],
     "falsepositives": [],
     "filename": "rules/linux/auditd/execve/lnx_auditd_masquerading_crond.yml",
@@ -3808,7 +3808,7 @@
   {
     "author": "Nasreddine Bencherchali (Nextron Systems)",
     "channel": [],
-    "description": "Detects the use of the \"apt\" and \"apt-get\" commands to execute a shell or proxy commands.\nSuch behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+    "description": "Detects the use of the \"apt\" and \"apt-get\" commands to execute a shell or proxy commands. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -3842,7 +3842,7 @@
   {
     "author": "Nasreddine Bencherchali (Nextron Systems)",
     "channel": [],
-    "description": "Detects usage of the 'crontab' utility to remove the current crontab.\nThis is a common occurrence where cryptocurrency miners compete against each other by removing traces of other miners to hijack the maximum amount of resources possible\n",
+    "description": "Detects usage of the 'crontab' utility to remove the current crontab. This is a common occurrence where cryptocurrency miners compete against each other by removing traces of other miners to hijack the maximum amount of resources possible",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -3875,7 +3875,7 @@
   {
     "author": "Nextron Systems",
     "channel": [],
-    "description": "Detects a python process calling to the PTY module in order to spawn a pretty tty which could be indicative of potential reverse shell activity.\n",
+    "description": "Detects a python process calling to the PTY module in order to spawn a pretty tty which could be indicative of potential reverse shell activity.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -3909,7 +3909,7 @@
   {
     "author": "Pawel Mazur",
     "channel": [],
-    "description": "Detects attempts to post the file with the usage of wget utility.\nThe adversary can bypass the permission restriction with the misconfigured sudo permission for wget utility which could allow them to read files like /etc/shadow.\n",
+    "description": "Detects attempts to post the file with the usage of wget utility. The adversary can bypass the permission restriction with the misconfigured sudo permission for wget utility which could allow them to read files like /etc/shadow.",
     "eventid": [],
     "falsepositives": [
       "Legitimate usage of wget utility to post a file"
@@ -4083,7 +4083,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects execution of TruffleHog, a tool used to search for secrets in different platforms like Git, Jira, Slack, SharePoint, etc. that could be used maliciously.\nWhile it is a legitimate tool, intended for use in CI pipelines and security assessments,\nIt was observed in the Shai-Hulud malware campaign targeting npm packages to steal sensitive information.\n",
+    "description": "Detects execution of TruffleHog, a tool used to search for secrets in different platforms like Git, Jira, Slack, SharePoint, etc. that could be used maliciously. While it is a legitimate tool, intended for use in CI pipelines and security assessments, It was observed in the Shai-Hulud malware campaign targeting npm packages to steal sensitive information.",
     "eventid": [],
     "falsepositives": [
       "Legitimate use of TruffleHog by security teams or developers."
@@ -4119,7 +4119,7 @@
   {
     "author": "Nasreddine Bencherchali (Nextron Systems)",
     "channel": [],
-    "description": "Detects the creation or modification of the main \"/etc/sudoers\" file or files within the \"/etc/sudoers.d/\" directory on Linux systems.\nAdversaries may alter sudoers configuration to execute commands with elevated privileges without supplying a password.\n",
+    "description": "Detects the creation or modification of the main \"/etc/sudoers\" file or files within the \"/etc/sudoers.d/\" directory on Linux systems. Adversaries may alter sudoers configuration to execute commands with elevated privileges without supplying a password.",
     "eventid": [],
     "falsepositives": [
       "Legitimate sudoers changes by administrators or configuration-management tools"
@@ -4154,7 +4154,7 @@
   {
     "author": "Nasreddine Bencherchali (Nextron Systems)",
     "channel": [],
-    "description": "Detects the usage of utilities such as 'systemctl', 'service'...etc to stop or disable tools and services on Linux systems.\nAttackers may stop or disable security tools and services to evade detection, maintain persistence, or disrupt system operations.\n",
+    "description": "Detects the usage of utilities such as 'systemctl', 'service'...etc to stop or disable tools and services on Linux systems. Attackers may stop or disable security tools and services to evade detection, maintain persistence, or disrupt system operations.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administration activities",
@@ -4333,7 +4333,7 @@
   {
     "author": "Milad Cheraghi",
     "channel": [],
-    "description": "Detects the potential abuse of the Linux Magic SysRq (System Request) key by adversaries with root or sufficient privileges\nto silently manipulate or destabilize a system. By writing to /proc/sysrq-trigger, they can crash the system, kill processes,\nor disrupt forensic analysis\u2014all while bypassing standard logging. Though intended for recovery and debugging, SysRq can be\nmisused as a stealthy post-exploitation tool. It is controlled via /proc/sys/kernel/sysrq or permanently through /etc/sysctl.conf.\n",
+    "description": "Detects the potential abuse of the Linux Magic SysRq (System Request) key by adversaries with root or sufficient privileges to silently manipulate or destabilize a system. By writing to /proc/sysrq-trigger, they can crash the system, kill processes, or disrupt forensic analysis\u2014all while bypassing standard logging. Though intended for recovery and debugging, SysRq can be misused as a stealthy post-exploitation tool. It is controlled via /proc/sys/kernel/sysrq or permanently through /etc/sysctl.conf.",
     "eventid": [],
     "falsepositives": [
       "Legitimate administrative activity"
@@ -4406,7 +4406,7 @@
   {
     "author": "Milad Cheraghi",
     "channel": [],
-    "description": "Detects the use of the `syslog` syscall with action code 5 (SYSLOG_ACTION_CLEAR),\n(4 is SYSLOG_ACTION_READ_CLEAR and 6 is SYSLOG_ACTION_CONSOLE_OFF) which clears the kernel\nring buffer (dmesg logs). This can be used by attackers to hide traces after exploitation\nor privilege escalation. A common technique is running `dmesg -c`, which triggers this syscall internally.\n",
+    "description": "Detects the use of the `syslog` syscall with action code 5 (SYSLOG_ACTION_CLEAR), (4 is SYSLOG_ACTION_READ_CLEAR and 6 is SYSLOG_ACTION_CONSOLE_OFF) which clears the kernel ring buffer (dmesg logs). This can be used by attackers to hide traces after exploitation or privilege escalation. A common technique is running `dmesg -c`, which triggers this syscall internally.",
     "eventid": [],
     "falsepositives": [
       "System administrators or scripts that intentionally clear logs",
@@ -4479,7 +4479,7 @@
   {
     "author": "Marie Euler",
     "channel": [],
-    "description": "Detects suspicious activities as declared by Florian Roth in its 'Best Practice Auditd Configuration'.\nThis includes the detection of the following commands; wget, curl, base64, nc, netcat, ncat, ssh, socat, wireshark, rawshark, rdesktop, nmap.\nThese commands match a few techniques from the tactics \"Command and Control\", including not exhaustively the following; Application Layer Protocol (T1071), Non-Application Layer Protocol (T1095), Data Encoding (T1132)\n",
+    "description": "Detects suspicious activities as declared by Florian Roth in its 'Best Practice Auditd Configuration'. This includes the detection of the following commands; wget, curl, base64, nc, netcat, ncat, ssh, socat, wireshark, rawshark, rdesktop, nmap. These commands match a few techniques from the tactics \"Command and Control\", including not exhaustively the following; Application Layer Protocol (T1071), Non-Application Layer Protocol (T1095), Data Encoding (T1132)",
     "eventid": [],
     "falsepositives": [
       "Admin or User activity"
@@ -4580,7 +4580,7 @@
   {
     "author": "Andreas Braathen (mnemonic.io)",
     "channel": [],
-    "description": "Detects creation of a Python path configuration file (.pth) in Python library folders, which can be maliciously abused for code execution and persistence.\nModules referenced by these files are run at every Python startup (v3.5+), regardless of whether the module is imported by the calling script.\nDefault paths are '\\lib\\site-packages\\*.pth' (Windows) and '/lib/pythonX.Y/site-packages/*.pth' (Unix and macOS).\n",
+    "description": "Detects creation of a Python path configuration file (.pth) in Python library folders, which can be maliciously abused for code execution and persistence. Modules referenced by these files are run at every Python startup (v3.5+), regardless of whether the module is imported by the calling script. Default paths are '\\lib\\site-packages\\*.pth' (Windows) and '/lib/pythonX.Y/site-packages/*.pth' (Unix and macOS).",
     "eventid": [],
     "falsepositives": [
       "Although .pth files are discouraged due to potential security implications, these are legitimate files by specification."
@@ -4716,7 +4716,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects the use of the \"nice\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+    "description": "Detects the use of the \"nice\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -4750,7 +4750,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects the Linux-specific execution chain of the plain-crypto-js malicious npm dependency by Axios NPM package, including payload download via curl and detached execution using nohup and python3.\nOn March 30, 2026, malicious versions (1.14.1, 0.30.4) were published to npm, injecting a dependency (plain-crypto-js@4.2.1) that executed a postinstall script as a cross-platform RAT dropper.\nThe dropper contacted a C2 server, delivered platform-specific payloads, deleted itself, and replaced package.json to evade detection.\n",
+    "description": "Detects the Linux-specific execution chain of the plain-crypto-js malicious npm dependency by Axios NPM package, including payload download via curl and detached execution using nohup and python3. On March 30, 2026, malicious versions (1.14.1, 0.30.4) were published to npm, injecting a dependency (plain-crypto-js@4.2.1) that executed a postinstall script as a cross-platform RAT dropper. The dropper contacted a C2 server, delivered platform-specific payloads, deleted itself, and replaced package.json to evade detection.",
     "eventid": [],
     "falsepositives": [
       "Unlikely"
@@ -4863,7 +4863,7 @@
   {
     "author": "Pawel Mazur",
     "channel": [],
-    "description": "Detects loading of kernel modules with insmod command.\nLoadable Kernel Modules (LKMs) are pieces of code that can be loaded and unloaded into the kernel upon demand.\nAdversaries may use LKMs to obtain persistence within the system or elevate the privileges.\n",
+    "description": "Detects loading of kernel modules with insmod command. Loadable Kernel Modules (LKMs) are pieces of code that can be loaded and unloaded into the kernel upon demand. Adversaries may use LKMs to obtain persistence within the system or elevate the privileges.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -4899,7 +4899,7 @@
   {
     "author": "Swachchhanda Shrawn Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects the creation of nsswitch.conf files in non-standard directories, which may indicate exploitation of CVE-2025-32463.\nThis vulnerability requires an attacker to create a nsswitch.conf in a directory that will be used during sudo chroot operations.\nWhen sudo executes, it loads malicious shared libraries from user-controlled locations within the chroot environment,\npotentially leading to arbitrary code execution and privilege escalation.\n",
+    "description": "Detects the creation of nsswitch.conf files in non-standard directories, which may indicate exploitation of CVE-2025-32463. This vulnerability requires an attacker to create a nsswitch.conf in a directory that will be used during sudo chroot operations. When sudo executes, it loads malicious shared libraries from user-controlled locations within the chroot environment, potentially leading to arbitrary code execution and privilege escalation.",
     "eventid": [],
     "falsepositives": [
       "Backup locations"
@@ -4968,7 +4968,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects potential Shai-Hulud malware indicators based on specific command line arguments associated with its execution.\n",
+    "description": "Detects potential Shai-Hulud malware indicators based on specific command line arguments associated with its execution.",
     "eventid": [],
     "falsepositives": [
       "Legitimate software containing similar strings"
@@ -5002,7 +5002,7 @@
   {
     "author": "@kostastsale",
     "channel": [],
-    "description": "Detects files with specially crafted filenames that embed Base64-encoded bash payloads designed to execute when processed by shell scripts.\nThese filenames exploit shell interpretation quirks to trigger hidden commands, a technique observed in VShell malware campaigns.\n",
+    "description": "Detects files with specially crafted filenames that embed Base64-encoded bash payloads designed to execute when processed by shell scripts. These filenames exploit shell interpretation quirks to trigger hidden commands, a technique observed in VShell malware campaigns.",
     "eventid": [],
     "falsepositives": [
       "Legitimate files with similar naming patterns (very unlikely)."
@@ -5111,7 +5111,7 @@
   {
     "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
     "channel": [],
-    "description": "Rule to detect the use of the SCX RunAsProvider Invoke_ExecuteShellCommand to execute any UNIX/Linux command using the /bin/sh shell.\nSCXcore, started as the Microsoft Operations Manager UNIX/Linux Agent, is now used in a host of products including\nMicrosoft Operations Manager, Microsoft Azure, and Microsoft Operations Management Suite.\n",
+    "description": "Rule to detect the use of the SCX RunAsProvider Invoke_ExecuteShellCommand to execute any UNIX/Linux command using the /bin/sh shell. SCXcore, started as the Microsoft Operations Manager UNIX/Linux Agent, is now used in a host of products including Microsoft Operations Manager, Microsoft Azure, and Microsoft Operations Management Suite.",
     "eventid": [],
     "falsepositives": [
       "Legitimate use of SCX RunAsProvider Invoke_ExecuteShellCommand."
@@ -5253,7 +5253,7 @@
   {
     "author": "Florian Roth",
     "channel": [],
-    "description": "Detects the execution of a shell as sub process of \"rsync\" without the expected command line flag \"-e\" being used, which could be an indication of exploitation as described in CVE-2024-12084. This behavior is commonly associated with attempts to execute arbitrary commands or escalate privileges, potentially leading to unauthorized access or further exploitation.\n",
+    "description": "Detects the execution of a shell as sub process of \"rsync\" without the expected command line flag \"-e\" being used, which could be an indication of exploitation as described in CVE-2024-12084. This behavior is commonly associated with attempts to execute arbitrary commands or escalate privileges, potentially leading to unauthorized access or further exploitation.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -5289,7 +5289,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects execution of inline Python code via the \"-c\" in order to call the \"system\" function from the \"os\" library, and spawn a shell.\n",
+    "description": "Detects execution of inline Python code via the \"-c\" in order to call the \"system\" function from the \"os\" library, and spawn a shell.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -5356,7 +5356,7 @@
   {
     "author": "@d4ns4n_, Nasreddine Bencherchali (Nextron Systems)",
     "channel": [],
-    "description": "Detects the execution of python with calls to the socket and pty module in order to connect and spawn a potential reverse shell.\n",
+    "description": "Detects the execution of python with calls to the socket and pty module in order to connect and spawn a potential reverse shell.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -5389,7 +5389,7 @@
   {
     "author": "Milad Cheraghi",
     "channel": [],
-    "description": "Detects execution of the Kaspersky init.d stop script on Linux systems either directly or via systemctl.\nThis activity may indicate a manual interruption of the antivirus service by an administrator, or it could be a sign of potential tampering or evasion attempts by malicious actors.\n",
+    "description": "Detects execution of the Kaspersky init.d stop script on Linux systems either directly or via systemctl. This activity may indicate a manual interruption of the antivirus service by an administrator, or it could be a sign of potential tampering or evasion attempts by malicious actors.",
     "eventid": [],
     "falsepositives": [
       "System administrator manually stopping Kaspersky services"
@@ -5424,7 +5424,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects process executions related to the backdoored versions of LiteLLM (v1.82.7 or v1.82.8).\nIn March 2026, a supply chain attack was discovered involving the popular open-source LLM framework LiteLLM by Threat Actor TeamPCP.\nThe malicious package harvests every credential on the system, encrypts and exfiltrates them, and installs a persistent C2 backdoor.\n",
+    "description": "Detects process executions related to the backdoored versions of LiteLLM (v1.82.7 or v1.82.8). In March 2026, a supply chain attack was discovered involving the popular open-source LLM framework LiteLLM by Threat Actor TeamPCP. The malicious package harvests every credential on the system, encrypts and exfiltrates them, and installs a persistent C2 backdoor.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -5465,7 +5465,7 @@
   {
     "author": "Leonardo Gasparini",
     "channel": [],
-    "description": "Detects process execution indicators associated with the Mini Shai-Hulud supply-chain campaign targeting TanStack npm packages and others such as mistralai and uipath reported on early May 2026.\nThe preinstall hook runs setup.mjs, which downloads a platform-specific Bun runtime.\n",
+    "description": "Detects process execution indicators associated with the Mini Shai-Hulud supply-chain campaign targeting TanStack npm packages and others such as mistralai and uipath reported on early May 2026. The preinstall hook runs setup.mjs, which downloads a platform-specific Bun runtime.",
     "eventid": [],
     "falsepositives": [
       "Unlikely"
@@ -5502,7 +5502,7 @@
   {
     "author": "Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
     "channel": [],
-    "description": "Detects specific commands commonly used to remove or empty the syslog. Which is a technique often used by attacker as a method to hide their tracks\n",
+    "description": "Detects specific commands commonly used to remove or empty the syslog. Which is a technique often used by attacker as a method to hide their tracks",
     "eventid": [],
     "falsepositives": [
       "Log rotation.",
@@ -5570,7 +5570,7 @@
   {
     "author": "Gene Kazimiarovich",
     "channel": [],
-    "description": "Detects creation of AF_ALG (Address Family 38) sockets via the socket() syscall.\nAF_ALG is the Linux kernel crypto API interface. It is exploited in CVE-2026-31431\nto achieve local privilege escalation via a buffer overflow in the AF_ALG AEAD\nsplice path that corrupts the page cache of SUID binaries.\nLegitimate AF_ALG usage is rare and confined to specific crypto utilities and VPN\ndaemons using non-default kernel offload configurations.\n",
+    "description": "Detects creation of AF_ALG (Address Family 38) sockets via the socket() syscall. AF_ALG is the Linux kernel crypto API interface. It is exploited in CVE-2026-31431 to achieve local privilege escalation via a buffer overflow in the AF_ALG AEAD splice path that corrupts the page cache of SUID binaries. Legitimate AF_ALG usage is rare and confined to specific crypto utilities and VPN daemons using non-default kernel offload configurations.",
     "eventid": [],
     "falsepositives": [
       "Disk encryption utilities using kernel crypto offload (cryptsetup with --use-kernel-crypto)",
@@ -5610,7 +5610,7 @@
   {
     "author": "Gene Kazimiarovich",
     "channel": [],
-    "description": "Detects kernel auto-loading of the authencesn crypto module via modprobe\nThis occurs when user-space code creates an AF_ALG socket and binds the authencesn AEAD cipher\n(e.g., authencesn(hmac(sha256),cbc(aes))). The kernel invokes modprobe to load the\ncrypto module. This is a key indicator of CVE-2026-31431 (Copy Fail) exploitation,\nwhere the authencesn cipher is used to trigger a buffer overflow in the AF_ALG AEAD splice path,\ncorrupting the page cache of SUID binaries for local privilege escalation.\n\nOn Linux systems, modprobe is typically a symlink to kmod, so the process image will be /usr/bin/kmod (or /bin/kmod)\nwith 'modprobe' appearing in the command line.\n",
+    "description": "Detects kernel auto-loading of the authencesn crypto module via modprobe This occurs when user-space code creates an AF_ALG socket and binds the authencesn AEAD cipher (e.g., authencesn(hmac(sha256),cbc(aes))). The kernel invokes modprobe to load the crypto module. This is a key indicator of CVE-2026-31431 (Copy Fail) exploitation, where the authencesn cipher is used to trigger a buffer overflow in the AF_ALG AEAD splice path, corrupting the page cache of SUID binaries for local privilege escalation. On Linux systems, modprobe is typically a symlink to kmod, so the process image will be /usr/bin/kmod (or /bin/kmod) with 'modprobe' appearing in the command line.",
     "eventid": [],
     "falsepositives": [
       "Legitimate manual loading of the authencesn module by administrators for kernel crypto benchmarking or IPsec configuration (near-zero in production)"
@@ -5648,7 +5648,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects the use of the \"git\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+    "description": "Detects the use of the \"git\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -5719,7 +5719,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects the use of the \"flock\" command to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+    "description": "Detects the use of the \"flock\" command to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -5790,7 +5790,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects the command-line installation of specific malicious npm packages and versions associated with the Shai-Hulud 2.0 supply chain attack.\n",
+    "description": "Detects the command-line installation of specific malicious npm packages and versions associated with the Shai-Hulud 2.0 supply chain attack.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -5860,7 +5860,7 @@
   {
     "author": "Hugh Ryan (HueCodes), Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects the use of Python's base64 decoding functions in command line executions on Linux systems.\nMalicious scripts often use python one-liners to decode and execute base64-encoded payloads, which is a common technique for obfuscation and evasion.\n",
+    "description": "Detects the use of Python's base64 decoding functions in command line executions on Linux systems. Malicious scripts often use python one-liners to decode and execute base64-encoded payloads, which is a common technique for obfuscation and evasion.",
     "eventid": [],
     "falsepositives": [
       "Legitimate use of Python for decoding data, which is uncommon in typical enterprise environments but possible in development or data analysis contexts."
@@ -5931,7 +5931,7 @@
   {
     "author": "Stan Beukers",
     "channel": [],
-    "description": "Detects the execution of a binary from the Linux shared memory directory /dev/shm.\nThis directory is a tmpfs mount backed entirely by RAM and is abused by attackers for fileless malware staging because files written there never touch physical disk and may evade disk-based detection.\n",
+    "description": "Detects the execution of a binary from the Linux shared memory directory /dev/shm. This directory is a tmpfs mount backed entirely by RAM and is abused by attackers for fileless malware staging because files written there never touch physical disk and may evade disk-based detection.",
     "eventid": [],
     "falsepositives": [
       "Unlikely in production environments; some container runtimes or IPC frameworks may use /dev/shm for inter-process communication but should not spawn executables."
@@ -6035,7 +6035,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects the use of the find command to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or exploitation attempt.\n",
+    "description": "Detects the use of the find command to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or exploitation attempt.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -6069,7 +6069,7 @@
   {
     "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
     "channel": [],
-    "description": "Rule to detect the use of the SCX RunAsProvider ExecuteScript to execute any UNIX/Linux script using the /bin/sh shell.\nScript being executed gets created as a temp file in /tmp folder with a scx* prefix.\nThen it is invoked from the following directory /etc/opt/microsoft/scx/conf/tmpdir/.\nThe file in that directory has the same prefix scx*. SCXcore, started as the Microsoft Operations Manager UNIX/Linux Agent, is now used in a host of products including\nMicrosoft Operations Manager, Microsoft Azure, and Microsoft Operations Management Suite.\n",
+    "description": "Rule to detect the use of the SCX RunAsProvider ExecuteScript to execute any UNIX/Linux script using the /bin/sh shell. Script being executed gets created as a temp file in /tmp folder with a scx* prefix. Then it is invoked from the following directory /etc/opt/microsoft/scx/conf/tmpdir/. The file in that directory has the same prefix scx*. SCXcore, started as the Microsoft Operations Manager UNIX/Linux Agent, is now used in a host of products including Microsoft Operations Manager, Microsoft Azure, and Microsoft Operations Management Suite.",
     "eventid": [],
     "falsepositives": [
       "Legitimate use of SCX RunAsProvider ExecuteScript."
@@ -6109,7 +6109,7 @@
   {
     "author": "Nasreddine Bencherchali (Nextron Systems), Luc G\u00e9naux",
     "channel": [],
-    "description": "Detects the use of \"vim\" and it's siblings commands to execute a shell or proxy commands.\nSuch behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+    "description": "Detects the use of \"vim\" and it's siblings commands to execute a shell or proxy commands. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -6145,7 +6145,7 @@
   {
     "author": "@d4ns4n_, Nasreddine Bencherchali (Nextron Systems)",
     "channel": [],
-    "description": "Detects execution of netcat with the \"-e\" or \"-c\" flags followed by common shells, which are commonly used to spawn reverse shells.\n",
+    "description": "Detects execution of netcat with the \"-e\" or \"-c\" flags followed by common shells, which are commonly used to spawn reverse shells.",
     "eventid": [],
     "falsepositives": [
       "Unlikely"
@@ -6288,7 +6288,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects the creation of specific persistence files as observed in the LiteLLM PyPI supply chain attack.\nIn March 2026, a supply chain attack was discovered involving the popular open-source LLM framework LiteLLM by Threat Actor TeamPCP.\nThe malicious package harvests every credential on the system, encrypts and exfiltrates them, and installs a persistent C2 backdoor.\n",
+    "description": "Detects the creation of specific persistence files as observed in the LiteLLM PyPI supply chain attack. In March 2026, a supply chain attack was discovered involving the popular open-source LLM framework LiteLLM by Threat Actor TeamPCP. The malicious package harvests every credential on the system, encrypts and exfiltrates them, and installs a persistent C2 backdoor.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -6326,7 +6326,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects the use of the \"ssh\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+    "description": "Detects the use of the \"ssh\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -6360,7 +6360,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects the execution of \"awk\" or it's sibling commands, to invoke a shell using the system() function.\nThis behavior is commonly associated with attempts to execute arbitrary commands or escalate privileges, potentially leading to unauthorized access or further exploitation.\n",
+    "description": "Detects the execution of \"awk\" or it's sibling commands, to invoke a shell using the system() function. This behavior is commonly associated with attempts to execute arbitrary commands or escalate privileges, potentially leading to unauthorized access or further exploitation.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -6498,7 +6498,7 @@
   {
     "author": "Arnim Rupp, Nasreddine Bencherchali, Thomas Patzke",
     "channel": [],
-    "description": "Detects potentially suspicious child process of SSH process (sshd) with a specific execution user. This could be a sign of potential exploitation of CVE-2024-3094.\n",
+    "description": "Detects potentially suspicious child process of SSH process (sshd) with a specific execution user. This could be a sign of potential exploitation of CVE-2024-3094.",
     "eventid": [],
     "falsepositives": [
       "Administrative activity directly with root authentication might trigger this rule if it's unnecessarily prefixed with \"sh -c\" or \"bash -c\""
@@ -6534,7 +6534,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects the use of the \"gcc\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+    "description": "Detects the use of the \"gcc\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -6602,7 +6602,7 @@
   {
     "author": "Aayush Gupta",
     "channel": [],
-    "description": "Detects suspicious use of command-line tools such as curl or wget to download remote\ncontent - particularly scripts - into temporary directories (e.g., /dev/shm, /tmp), followed by\nimmediate execution, indicating potential malicious activity. This pattern is commonly used\nby malicious scripts, stagers, or downloaders in fileless or multi-stage Linux attacks.\n",
+    "description": "Detects suspicious use of command-line tools such as curl or wget to download remote content - particularly scripts - into temporary directories (e.g., /dev/shm, /tmp), followed by immediate execution, indicating potential malicious activity. This pattern is commonly used by malicious scripts, stagers, or downloaders in fileless or multi-stage Linux attacks.",
     "eventid": [],
     "falsepositives": [
       "System update scripts using temporary files",
@@ -6670,7 +6670,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects file creation events linked to the Axios NPM supply chain compromise. Axios is a popular JavaScript HTTP client.\nOn March 30, 2026, malicious versions (1.14.1, 0.30.4) were published to npm, injecting a dependency (plain-crypto-js@4.2.1) that executed a postinstall script as a cross-platform RAT dropper.\n",
+    "description": "Detects file creation events linked to the Axios NPM supply chain compromise. Axios is a popular JavaScript HTTP client. On March 30, 2026, malicious versions (1.14.1, 0.30.4) were published to npm, injecting a dependency (plain-crypto-js@4.2.1) that executed a postinstall script as a cross-platform RAT dropper.",
     "eventid": [],
     "falsepositives": [
       "Highly unlikely"
@@ -6707,7 +6707,7 @@
   {
     "author": "Mohamed LAKRI",
     "channel": [],
-    "description": "Detects the execution of 'auditctl' with the '-D' command line parameter, which deletes all configured audit rules and watches on Linux systems.\nThis technique is commonly used by attackers to disable audit logging and cover their tracks by removing monitoring capabilities.\nRemoval of audit rules can significantly impair detection of malicious activities on the affected system.\n",
+    "description": "Detects the execution of 'auditctl' with the '-D' command line parameter, which deletes all configured audit rules and watches on Linux systems. This technique is commonly used by attackers to disable audit logging and cover their tracks by removing monitoring capabilities. Removal of audit rules can significantly impair detection of malicious activities on the affected system.",
     "eventid": [],
     "falsepositives": [
       "An administrator troubleshooting. Investigate all attempts."
@@ -6741,7 +6741,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects the use of the env command to invoke a shell. This may indicate an attempt to bypass restricted environments, escalate privileges, or execute arbitrary commands.\n",
+    "description": "Detects the use of the env command to invoke a shell. This may indicate an attempt to bypass restricted environments, escalate privileges, or execute arbitrary commands.",
     "eventid": [],
     "falsepositives": [
       "Github operations such as ghe-backup"
@@ -6807,7 +6807,7 @@
   {
     "author": "Milad Cheraghi, Nasreddine Bencherchali",
     "channel": [],
-    "description": "Detects the use of systemctl mask to disable system power management targets such as suspend, hibernate, or hybrid sleep.\nAdversaries may mask these targets to prevent a system from entering sleep or shutdown states, ensuring their malicious processes remain active and uninterrupted.\nThis behavior can be associated with persistence or defense evasion, as it impairs normal system power operations to maintain long-term access or avoid termination of malicious activity.\n",
+    "description": "Detects the use of systemctl mask to disable system power management targets such as suspend, hibernate, or hybrid sleep. Adversaries may mask these targets to prevent a system from entering sleep or shutdown states, ensuring their malicious processes remain active and uninterrupted. This behavior can be associated with persistence or defense evasion, as it impairs normal system power operations to maintain long-term access or avoid termination of malicious activity.",
     "eventid": [],
     "falsepositives": [
       "Unlikely"
@@ -6842,7 +6842,7 @@
   {
     "author": "Andreas Braathen (mnemonic.io)",
     "channel": [],
-    "description": "Detects an executable initiating a network connection to \"LocaltoNet\" tunneling sub-domains.\nLocaltoNet is a reverse proxy that enables localhost services to be exposed to the Internet.\nAttackers have been seen to use this service for command-and-control activities to bypass MFA and perimeter controls.\n",
+    "description": "Detects an executable initiating a network connection to \"LocaltoNet\" tunneling sub-domains. LocaltoNet is a reverse proxy that enables localhost services to be exposed to the Internet. Attackers have been seen to use this service for command-and-control activities to bypass MFA and perimeter controls.",
     "eventid": [],
     "falsepositives": [
       "Legitimate use of the LocaltoNet service."
@@ -6878,7 +6878,7 @@
   {
     "author": "@d4ns4n_",
     "channel": [],
-    "description": "Detects usage of the PHP CLI with the \"-r\" flag which allows it to run inline PHP code. The rule looks for calls to the \"fsockopen\" function which allows the creation of sockets.\nAttackers often leverage this in combination with functions such as \"exec\" or \"fopen\" to initiate a reverse shell connection.\n",
+    "description": "Detects usage of the PHP CLI with the \"-r\" flag which allows it to run inline PHP code. The rule looks for calls to the \"fsockopen\" function which allows the creation of sockets. Attackers often leverage this in combination with functions such as \"exec\" or \"fopen\" to initiate a reverse shell connection.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -6911,7 +6911,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems), Nasreddine Bencherchali",
     "channel": [],
-    "description": "Detects suspicious child processes spawned from Node.js server processes on Linux systems, potentially indicating remote code execution exploitation such as CVE-2025-55182 (React2Shell).\nThis rule particularly looks for exploitation of vulnerability on Node.js Servers where attackers abuse Node.js child_process module to execute arbitrary system commands.\nWhen execSync() or exec() is used, the command line often includes a shell invocation followed by suspicious commands or scripts (e.g., /bin/sh -c <malicious-command>).\nFor other methods, the Image field will show the spawned process directly.\n",
+    "description": "Detects suspicious child processes spawned from Node.js server processes on Linux systems, potentially indicating remote code execution exploitation such as CVE-2025-55182 (React2Shell). This rule particularly looks for exploitation of vulnerability on Node.js Servers where attackers abuse Node.js child_process module to execute arbitrary system commands. When execSync() or exec() is used, the command line often includes a shell invocation followed by suspicious commands or scripts (e.g., /bin/sh -c <malicious-command>). For other methods, the Image field will show the spawned process directly.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -7055,7 +7055,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
     "channel": [],
-    "description": "Detects the use of the \"capsh\" utility to invoke a shell.\n",
+    "description": "Detects the use of the \"capsh\" utility to invoke a shell.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -7089,7 +7089,7 @@
   {
     "author": "hasselj",
     "channel": [],
-    "description": "Detects programs that connect to known malware callback ports based on threat intelligence reports.\n",
+    "description": "Detects programs that connect to known malware callback ports based on threat intelligence reports.",
     "eventid": [],
     "falsepositives": [
       "Unknown"
@@ -7109,7 +7109,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Initiated='true' AND (DestinationPort=888 OR DestinationPort=999 OR DestinationPort=2200 OR DestinationPort=2222 OR DestinationPort=4000 OR DestinationPort=4444 OR DestinationPort=6789 OR DestinationPort=8531 OR DestinationPort=50501 OR DestinationPort=51820)) AND (NOT COALESCE((DestinationIp LIKE '127.%' ESCAPE '\\' OR DestinationIp LIKE '10.%' ESCAPE '\\' OR DestinationIp LIKE '172.16.%' ESCAPE '\\' OR DestinationIp LIKE '172.17.%' ESCAPE '\\' OR DestinationIp LIKE '172.18.%' ESCAPE '\\' OR DestinationIp LIKE '172.19.%' ESCAPE '\\' OR DestinationIp LIKE '172.20.%' ESCAPE '\\' OR DestinationIp LIKE '172.21.%' ESCAPE '\\' OR DestinationIp LIKE '172.22.%' ESCAPE '\\' OR DestinationIp LIKE '172.23.%' ESCAPE '\\' OR DestinationIp LIKE '172.24.%' ESCAPE '\\' OR DestinationIp LIKE '172.25.%' ESCAPE '\\' OR DestinationIp LIKE '172.26.%' ESCAPE '\\' OR DestinationIp LIKE '172.27.%' ESCAPE '\\' OR DestinationIp LIKE '172.28.%' ESCAPE '\\' OR DestinationIp LIKE '172.29.%' ESCAPE '\\' OR DestinationIp LIKE '172.30.%' ESCAPE '\\' OR DestinationIp LIKE '172.31.%' ESCAPE '\\' OR DestinationIp LIKE '192.168.%' ESCAPE '\\' OR DestinationIp LIKE '169.254.%' ESCAPE '\\' OR DestinationIp='::1' OR DestinationIp LIKE 'fe8_:%' ESCAPE '\\' OR DestinationIp LIKE 'fe9_:%' ESCAPE '\\' OR DestinationIp LIKE 'fea_:%' ESCAPE '\\' OR DestinationIp LIKE 'feb_:%' ESCAPE '\\' OR DestinationIp LIKE 'fc__:%' ESCAPE '\\' OR DestinationIp LIKE 'fd__:%' ESCAPE '\\'), 0))"
+      "SELECT * FROM logs WHERE (Initiated='true' AND (DestinationPort=888 OR DestinationPort=999 OR DestinationPort=2200 OR DestinationPort=2222 OR DestinationPort=4000 OR DestinationPort=4444 OR DestinationPort=6789 OR DestinationPort=8531 OR DestinationPort=50501 OR DestinationPort=51820)) AND (NOT COALESCE((DestinationIp LIKE '127.%' ESCAPE '\\' OR DestinationIp LIKE '10.%' ESCAPE '\\' OR DestinationIp LIKE '172.16.%' ESCAPE '\\' OR DestinationIp LIKE '172.17.%' ESCAPE '\\' OR DestinationIp LIKE '172.18.%' ESCAPE '\\' OR DestinationIp LIKE '172.19.%' ESCAPE '\\' OR DestinationIp LIKE '172.20.%' ESCAPE '\\' OR DestinationIp LIKE '172.21.%' ESCAPE '\\' OR DestinationIp LIKE '172.22.%' ESCAPE '\\' OR DestinationIp LIKE '172.23.%' ESCAPE '\\' OR DestinationIp LIKE '172.24.%' ESCAPE '\\' OR DestinationIp LIKE '172.25.%' ESCAPE '\\' OR DestinationIp LIKE '172.26.%' ESCAPE '\\' OR DestinationIp LIKE '172.27.%' ESCAPE '\\' OR DestinationIp LIKE '172.28.%' ESCAPE '\\' OR DestinationIp LIKE '172.29.%' ESCAPE '\\' OR DestinationIp LIKE '172.30.%' ESCAPE '\\' OR DestinationIp LIKE '172.31.%' ESCAPE '\\' OR DestinationIp LIKE '192.168.%' ESCAPE '\\' OR DestinationIp LIKE '169.254.%' ESCAPE '\\' OR DestinationIp='::1' OR DestinationIp='0:0:0:0:0:0:0:1' OR DestinationIp LIKE 'fe8_:%' ESCAPE '\\' OR DestinationIp LIKE 'fe9_:%' ESCAPE '\\' OR DestinationIp LIKE 'fea_:%' ESCAPE '\\' OR DestinationIp LIKE 'feb_:%' ESCAPE '\\' OR DestinationIp LIKE 'fc__:%' ESCAPE '\\' OR DestinationIp LIKE 'fd__:%' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -7125,7 +7125,7 @@
   {
     "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.), Florian Roth",
     "channel": [],
-    "description": "Detects the use of the \"rsync\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+    "description": "Detects the use of the \"rsync\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.",
     "eventid": [],
     "falsepositives": [
       "Legitimate cases in which \"rsync\" is used to execute a shell"
@@ -7193,7 +7193,7 @@
   {
     "author": "Milad Cheraghi",
     "channel": [],
-    "description": "Detects actions that disable Address Space Layout Randomization (ASLR) in Linux, including:\n  - Use of the `personality` syscall with the ADDR_NO_RANDOMIZE flag (0x0040000)\n  - Modification of the /proc/sys/kernel/randomize_va_space file\n  - Execution of the `sysctl` command to set `kernel.randomize_va_space=0`\nDisabling ASLR is often used by attackers during exploit development or to bypass memory protection mechanisms.\nA successful use of these methods can reduce the effectiveness of ASLR and make memory corruption attacks more reliable.\n",
+    "description": "Detects actions that disable Address Space Layout Randomization (ASLR) in Linux, including: - Use of the `personality` syscall with the ADDR_NO_RANDOMIZE flag (0x0040000) - Modification of the /proc/sys/kernel/randomize_va_space file - Execution of the `sysctl` command to set `kernel.randomize_va_space=0` Disabling ASLR is often used by attackers during exploit development or to bypass memory protection mechanisms. A successful use of these methods can reduce the effectiveness of ASLR and make memory corruption attacks more reliable.",
     "eventid": [],
     "falsepositives": [
       "Debugging or legitimate software testing"
@@ -7233,7 +7233,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects the execution of `bun_environment.js` via the Bun runtime, a behavior associated with the Shai-Hulud \"Second Coming\" NPM supply chain attack.\nThe malware uses a `setup_bun.js` script to install the Bun runtime if not present, and then executes the malicious `bun_environment.js` payload.\n",
+    "description": "Detects the execution of `bun_environment.js` via the Bun runtime, a behavior associated with the Shai-Hulud \"Second Coming\" NPM supply chain attack. The malware uses a `setup_bun.js` script to install the Bun runtime if not present, and then executes the malicious `bun_environment.js` payload.",
     "eventid": [],
     "falsepositives": [
       "Legitimate but uncommon use of files named `bun_environment.js` could trigger this rule."
@@ -7308,7 +7308,7 @@
   {
     "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
     "channel": [],
-    "description": "Detects a script interpreter process (like node.js or bun) spawning a known credential scanning tool (e.g., trufflehog, gitleaks).\nThis behavior is indicative of an attempt to find and steal secrets, as seen in the \"Shai-Hulud: The Second Coming\" campaign.\n",
+    "description": "Detects a script interpreter process (like node.js or bun) spawning a known credential scanning tool (e.g., trufflehog, gitleaks). This behavior is indicative of an attempt to find and steal secrets, as seen in the \"Shai-Hulud: The Second Coming\" campaign.",
     "eventid": [],
     "falsepositives": [
       "Legitimate pre-commit hooks or CI/CD pipeline jobs that use a script to run a credential scanner as part of a security check."
@@ -7383,7 +7383,7 @@
   {
     "author": "Andreas Braathen (mnemonic.io)",
     "channel": [],
-    "description": "Detects exploitation attempt of CVE-2023-22518 (Confluence Data Center / Confluence Server), where an attacker can exploit vulnerable endpoints to e.g. create admin accounts and execute arbitrary commands.\n",
+    "description": "Detects exploitation attempt of CVE-2023-22518 (Confluence Data Center / Confluence Server), where an attacker can exploit vulnerable endpoints to e.g. create admin accounts and execute arbitrary commands.",
     "eventid": [],
     "falsepositives": [
       "Unlikely"
