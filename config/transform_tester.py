@@ -36,8 +36,8 @@ Available in transforms:
       functions only; `import re` (etc.) returns the same stand-in
     - dict/list/set writes: d[key] = value
     - augmented assignments: x += 1, s += "text"
-    - safe Python builtins (len, str, int, range, min, sum, etc.), but not
-      bytes, sorted, tuple or zip: decode hex with base64.b16decode()
+    - safe Python builtins (len, str, int, range, tuple, min, sum, etc.), but
+      not bytes, sorted or zip: decode hex with base64.b16decode()
     - NOT available: file I/O, other imports, exec, eval, os, sys, subprocess
 """
 
