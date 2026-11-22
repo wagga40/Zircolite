@@ -1153,6 +1153,50 @@ level: high
         assert alert["metric_value"] < 0
         assert alert["group_keys"] == {"Image": "=calc.exe"}
 
+    def test_widening_adds_no_function_names_as_columns(self, field_mappings_file, tmp_path, test_logger):
+        """A rule naming an absent field widens logs with that field, not CAST or char.
+
+        pySigma-backend-sqlite 2.2 wraps numeric comparisons in CASTs and char(0)
+        checks, and |fieldref escapes with REPLACE. Read as columns, they became
+        NULL columns of logs and headings of the CSV report.
+        """
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=ProcessingConfig(csv_mode=True, disable_progress=True),
+            logger=test_logger,
+        )
+        zircore.create_db("'Image' TEXT COLLATE NOCASE,\n")
+        zircore.db_connection.execute("INSERT INTO logs (Image) VALUES ('a.exe')")
+        zircore.db_connection.commit()
+        numeric = (
+            "(CASE WHEN (typeof(DestinationPort) != 'text' OR instr(DestinationPort, char(0)) = 0) "
+            "AND +DestinationPort = CAST(DestinationPort AS NUMERIC) "
+            "AND CAST(DestinationPort AS NUMERIC) > -1e999 AND CAST(DestinationPort AS NUMERIC) < 1e999 "
+            "THEN CAST(DestinationPort AS NUMERIC) END) >= 30000"
+        )
+        zircore.load_ruleset_from_var([{
+            "title": "Port", "id": "p-1", "level": "high", "tags": [],
+            "rule": [f"SELECT * FROM logs WHERE Image='a.exe' OR {numeric}"],
+        }, {
+            "title": "Fieldref", "id": "f-1", "level": "high", "tags": [],
+            "rule": ["SELECT * FROM logs WHERE Image LIKE REPLACE(REPLACE(REPLACE(ParentImage, '\\', '\\\\'), "
+                     "'%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'"],
+            "required_fields": ["Image", "ParentImage"],
+        }])
+        output_file = tmp_path / "output.csv"
+        try:
+            zircore.execute_ruleset(str(output_file), write_mode="w", last_ruleset=True)
+            columns = {name.lower() for name in zircore._get_table_columns()}
+        finally:
+            zircore.close()
+
+        assert {"destinationport", "parentimage"} <= columns
+        assert not columns & {"cast", "char", "replace", "e999"}
+        with output_file.open(encoding="utf-8", newline="") as handle:
+            header = next(csv.reader(handle, delimiter=";"))
+        assert not {name.lower() for name in header} & {"cast", "char", "replace", "e999"}
+        assert "DestinationPort" in header
+
     def test_execute_ruleset_csv_header_covers_every_event_column(
         self, field_mappings_file, tmp_path, test_logger
     ):

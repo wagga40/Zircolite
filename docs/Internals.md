@@ -99,9 +99,11 @@ detection:
 That rule's metadata says `eventid: [4624]`, the one ID it excludes. A channel stays
 unbounded (every EventID kept) when a rule on it constrains `EventID` under a `NOT`, has an
 `OR` branch without an `EventID` constraint, constrains it in a form the scan cannot read
-(`BETWEEN`, `>`, `LIKE`), or does not mention it. A rule constraining EventIDs but no
-channel switches the filter to two global axes, each filtering only when every rule
-constrains it. Any correlation turns the filter off for the run: a backend-2 plan, or a
+(`BETWEEN`, `>`, `LIKE`), or does not mention it. Any other expression, such as a `CASE`
+or the backend's numeric and `|week` tests, constrains nothing itself: the conditions
+`AND`ed with it still bound the rule, and nothing inside it is read. A rule constraining
+EventIDs but no channel switches the filter to two global axes, each filtering only when
+every rule constrains it. Any correlation turns the filter off for the run: a backend-2 plan, or a
 legacy (backend 1) correlation with no channel in its SQL.
 
 The filter reads its values from the raw event, before flattening, through the compiled

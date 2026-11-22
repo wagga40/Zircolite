@@ -1250,6 +1250,31 @@ class TestBoundsComeFromRuleSql:
     eventIDs the rule excludes and drops the ones it wants.
     """
 
+    def test_one_backend_numeric_rule_keeps_the_filter_per_channel(self):
+        """pySigma-backend-sqlite 2.2 writes |gte as a CASE compared afterwards.
+
+        Read as unbounded, that one rule switched the filter off for the run.
+        """
+        numeric = (
+            "(CASE WHEN (typeof(DestinationPort) != 'text' OR instr(DestinationPort, char(0)) = 0) "
+            "AND +DestinationPort = CAST(DestinationPort AS NUMERIC) "
+            "AND CAST(DestinationPort AS NUMERIC) > -1e999 AND CAST(DestinationPort AS NUMERIC) < 1e999 "
+            "THEN CAST(DestinationPort AS NUMERIC) END) >= 30000"
+        )
+        week = "(1 + (CAST(strftime('%j', SystemTime, '-3 days', 'weekday 4') AS INTEGER) - 1) / 7)=5"
+        rulesets = [
+            {"title": "Port", "rule": [f"SELECT * FROM logs WHERE Channel='Security' AND EventID=5156 AND {numeric}"]},
+            {"title": "Week", "rule": [f"SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND {week}"]},
+            {"title": "Plain", "rule": ["SELECT * FROM logs WHERE Channel='System' AND EventID=7045"]},
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter._channel_filter
+        assert event_filter.should_process_event("Security", 5156)
+        assert event_filter.should_process_event("Security", 4624)
+        assert not event_filter.should_process_event("Security", 4688)
+        assert not event_filter.should_process_event("Application", 5156)
+
     def test_eventid_only_in_a_negated_filter_does_not_bound_the_channel(self):
         rulesets = [
             {

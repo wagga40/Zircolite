@@ -149,6 +149,14 @@ def iter_tokens(sql: str) -> Iterator[TokenSpan]:
             j = i + 1
             while j < n and (sql[j].isdigit() or sql[j] == "."):
                 j += 1
+            # 1e999, the backend's bound on finite numbers, is one number:
+            # split, its "e999" would read as a name.
+            if j < n and sql[j] in "eE":
+                k = j + 1 + (j + 1 < n and sql[j + 1] in "+-")
+                if k < n and sql[k].isdigit():
+                    j = k + 1
+                    while j < n and sql[j].isdigit():
+                        j += 1
             yield ("number", i, j)
             i = j
             continue
@@ -391,18 +399,26 @@ def _column_names(tokens: list[tuple[str, str]]) -> frozenset[str]:
     so the rule returns nothing and records no error -- and so does every later
     rule using the same alias. SQLite names are case-insensitive, and so is the
     comparison.
+
+    A name followed by ``(`` calls a function: ``x = CAST(x AS NUMERIC)`` and
+    ``instr(x, char(0)) = 0`` compare no column called CAST or char. The
+    arguments are still read, and the last name before a comparison still
+    counts, so ``lower(Image) = 'a'`` keeps pointing at Image.
     """
     names: set[str] = set()
     aliases: set[str] = set()
     previous: str | None = None
     expect_operand = False
     after_as = False
-    for kind, text in tokens:
+    for i, (kind, text) in enumerate(tokens):
         if after_as and (
             kind == "name" or (kind == "word" and text.lower() not in SQL_RESERVED_WORDS)
         ):
             aliases.add(text.lower())
         after_as = kind == "word" and text.upper() == "AS"
+        calls = tokens[i + 1:i + 2] == [("punct", "(")]
+        if kind == "name" and calls:
+            continue
         if kind == "name":
             if expect_operand:
                 names.add(text)
@@ -420,6 +436,8 @@ def _column_names(tokens: list[tuple[str, str]]) -> frozenset[str]:
             elif text.lower() in SQL_RESERVED_WORDS:
                 previous = None
                 expect_operand = False
+            elif calls:
+                continue
             else:
                 if expect_operand:
                     names.add(text)
@@ -535,6 +553,10 @@ class _FieldReader:
 
         ``x BETWEEN a AND b`` is cut at its AND, leaving two atoms that each pin
         down nothing. The answer is then None, which is the safe one.
+
+        ``CASE ... END`` nests like a parenthesis: the ANDs and ORs of its WHEN
+        clauses belong to the expression, so the whole CASE stays in one atom
+        and nothing inside it is read as a bound.
         """
         start, depth = pos, 0
         while pos < len(tokens):
@@ -546,15 +568,43 @@ class _FieldReader:
                     if depth == 0:
                         break
                     depth -= 1
-            elif kind == "word" and depth == 0 and text.upper() in ("AND", "OR"):
-                break
+            elif kind == "word":
+                upper = text.upper()
+                if upper == "CASE":
+                    depth += 1
+                elif upper == "END" and depth:
+                    depth -= 1
+                elif depth == 0 and upper in ("AND", "OR"):
+                    break
             pos += 1
         return self._atom_values(tokens[start:pos]), pos
+
+    @staticmethod
+    def _operand_group(tokens: list[tuple[str, str]], pos: int) -> bool:
+        """Whether the group opening at ``pos`` is an operand rather than a condition.
+
+        ``(1 + (CAST(...) - 1) / 7)=5``, the backend's ISO-week test, and
+        ``(CASE ... END) >= 3``, its numeric comparison, are compared after
+        they close; a condition group is followed by a connective or nothing.
+        """
+        depth = 0
+        for i in range(pos, len(tokens)):
+            if tokens[i] == ("punct", "("):
+                depth += 1
+            elif tokens[i] == ("punct", ")"):
+                depth -= 1
+                if depth == 0:
+                    after = _peek(tokens, i + 1)
+                    return not (after in (("end", ""), ("punct", ")"))
+                                or _peek_word(tokens, i + 1) in ("AND", "OR"))
+        return False
 
     def _primary(
         self, tokens: list[tuple[str, str]], pos: int
     ) -> tuple[set | None, int]:
         if _peek(tokens, pos) == ("punct", "("):
+            if self._operand_group(tokens, pos):
+                return self._atom(tokens, pos)
             value, pos = self._or(tokens, pos + 1)
             if _peek(tokens, pos) != ("punct", ")"):
                 raise _Unsupported("unbalanced parentheses")
@@ -650,7 +700,7 @@ def scan_query(sql: str, *, tokenize: Tokenizer | None = None) -> QueryScan:
             return None
         words = [text.upper() for kind, text in tokens if kind == "word"]
         if any(word in words for word in
-                (*_COMPOUND_KEYWORDS, "WITH", "JOIN", "CASE", "BETWEEN")):
+                (*_COMPOUND_KEYWORDS, "WITH", "JOIN", "BETWEEN")):
             return None
         # GROUP/ORDER/etc. do not constrain the input. Stop at the first tail
         # clause; require the boolean reader to consume the entire predicate.

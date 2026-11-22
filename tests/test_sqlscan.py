@@ -185,6 +185,16 @@ class TestRebalanceRefusesNonBooleanParens:
         assert rebalance_sql(_chain(512)) != _chain(512)
 
 
+# pySigma-backend-sqlite 2.2.0 output for DestinationPort|gte: 30000 and SystemTime|week: 5
+NUMERIC_GTE = (
+    "(CASE WHEN (typeof(DestinationPort) != 'text' OR instr(DestinationPort, char(0)) = 0) AND "
+    "+DestinationPort = CAST(DestinationPort AS NUMERIC) AND "
+    "CAST(DestinationPort AS NUMERIC) > -1e999 AND CAST(DestinationPort AS NUMERIC) < 1e999 "
+    "THEN CAST(DestinationPort AS NUMERIC) END) >= 30000"
+)
+ISO_WEEK = "(1 + (CAST(strftime('%j', SystemTime, '-3 days', 'weekday 4') AS INTEGER) - 1) / 7)=5"
+
+
 class TestColumnRefs:
     """Column extraction has to respect SQL quoting."""
 
@@ -234,6 +244,26 @@ class TestColumnRefs:
         )
 
         assert column_refs(query) == {"EventID"}
+
+    @pytest.mark.parametrize("where,expected", [
+        # pySigma-backend-sqlite 2.2 numeric comparison (|gte)
+        (f"Channel='S' AND {NUMERIC_GTE}", {"Channel", "DestinationPort"}),
+        # 2.2 ISO week (|week)
+        (f"Channel='S' AND {ISO_WEEK}", {"Channel"}),
+        # |fieldref|startswith escapes the second field with REPLACE
+        ("TargetUserName LIKE REPLACE(REPLACE(REPLACE(SubjectUserName, '\\', '\\\\'), "
+         "'%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'", {"TargetUserName"}),
+        ("lower(Image) = 'a'", {"Image"}),
+        ('"AND"(n) = 1', {"n"}),
+    ])
+    def test_function_names_are_not_columns(self, where, expected):
+        """CAST, char and REPLACE were widened into logs and printed in CSV headers."""
+        assert column_refs(f"SELECT * FROM logs WHERE {where}") == expected
+
+    def test_exponent_numbers_are_one_token(self):
+        """Split, 1e999 left a word "e999" that read as a name."""
+        assert column_refs("SELECT * FROM logs WHERE 1e999 > x AND y < 1E+5") == {"x", "y"}
+        assert column_refs("SELECT * FROM logs WHERE 1e AND e999 = 2") == {"e999"}
 
 
 class TestNullSafeNegation:
@@ -369,10 +399,27 @@ class TestEventIdConstraints:
             ("Channel='S'", None),
             ("EventID BETWEEN 1 AND 5", None),
             ("EventID > 100", None),
+            # Backend 2.2 numeric and ISO-week tests are operands, not conditions
+            (f"Channel='S' AND EventID=3 AND {NUMERIC_GTE}", {3}),
+            (f"Channel='S' AND EventID=3 AND {ISO_WEEK}", {3}),
+            # Nothing inside a CASE is a bound
+            ("CASE WHEN EventID=1 THEN 1 ELSE 0 END", None),
+            ("Channel='S' AND CASE WHEN EventID=1 THEN 1 END", None),
+            ("EventID=2 AND (CASE WHEN EventID=1 OR x=1 THEN 1 END)", {2}),
+            ("EventID=2 OR (CASE WHEN x=1 THEN 1 END) >= 3", None),
+            # A group compared afterwards is a value: (EventID=1) = 0 excludes 1
+            ("(EventID=1) = 0", None),
+            ("(EventID=1) = 0 AND EventID=4", {4}),
         ],
     )
     def test_reads_the_bound_or_gives_up(self, where, expected):
         assert eventid_constraints([f"SELECT * FROM logs WHERE {where}"]) == expected
+
+    def test_channel_is_read_beside_backend_numeric_tests(self):
+        query = f"SELECT * FROM logs WHERE Channel='Security' AND EventID=5156 AND {NUMERIC_GTE}"
+
+        assert channel_constraints([query]) == {"Security"}
+        assert channel_constraints([f"SELECT * FROM logs WHERE (Channel='A') = 0 AND {ISO_WEEK}"]) is None
 
     def test_one_unbounded_statement_unbounds_the_rule(self):
         queries = [
