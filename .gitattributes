@@ -1,0 +1,2 @@
+# Forgejo pre-flight CI: kept out of source archives, which GitHub builds with git archive.
+/.forgejo export-ignore
