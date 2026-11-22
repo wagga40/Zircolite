@@ -717,6 +717,58 @@ level: high
 
 
 @pytest.mark.requires_sigma
+class TestSigmaMetadataLineBreaks:
+    """pySigma deletes control characters from rule metadata, gluing lines together."""
+
+    RULE = """
+title: "Line\\nbreaks"
+id: dddddddd-dddd-dddd-dddd-dddddddddddd
+description: |
+  First line.
+  Second line.
+falsepositives:
+  - "Admin\\r\\ntools"
+  - Plain
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4624
+  condition: selection
+level: high
+"""
+
+    def test_breaks_fold_to_single_spaces(self, tmp_path, test_logger):
+        """Folded as Zircolite-Rules-v2 does, so native and published rules read alike."""
+        rule_file = tmp_path / "breaks.yml"
+        rule_file.write_text(self.RULE)
+
+        handler = RulesetHandler(
+            ruleset_config=RulesetConfig(ruleset=[str(rule_file)], pipeline=[]),
+            logger=test_logger,
+        )
+
+        rule = handler.rulesets[0]
+        assert rule["description"] == "First line. Second line."
+        assert rule["falsepositives"] == ["Admin tools", "Plain"]
+        assert rule["title"] == "Line breaks"
+
+    @pytest.mark.parametrize(("value", "folded"), [
+        ("one\ntwo", "one two"),
+        ("one  \r\n\t two", "one two"),
+        ("\n edge \n", "edge"),
+        ("one\u2028two\x85three", "one two three"),
+        (["a\nb", "c"], ["a b", "c"]),
+        (7, 7),
+    ])
+    def test_fold_breaks(self, value, folded):
+        from zircolite.rules import fold_breaks
+
+        assert fold_breaks(value) == folded
+
+
+@pytest.mark.requires_sigma
 class TestSigmaCorrelationConversion:
     """End-to-end conversion of multi-document Sigma rules with correlation."""
 

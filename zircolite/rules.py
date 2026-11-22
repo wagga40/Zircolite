@@ -55,6 +55,31 @@ if TYPE_CHECKING:
 # marks rules that need captured source-value text. Unversioned rules are v1.
 RULESET_SCHEMA_VERSION = 3
 
+# pySigma deletes control characters from these fields, so "one\ntwo" would
+# become "onetwo". Folding the breaks to spaces first keeps the words apart, and
+# matches the published rulesets, which Zircolite-Rules-v2 folds the same way.
+_METADATA_FIELDS = ("title", "name", "taxonomy", "description", "license", "references", "author",
+                    "fields", "falsepositives", "scope")
+_BREAKS = "\t\n\x0b\x0c\r\x85\u2028\u2029"
+_EDGE_BREAKS = re.compile(rf"^\s*[{_BREAKS}]\s*|\s*[{_BREAKS}]\s*$")
+_INNER_BREAKS = re.compile(rf"\s*[{_BREAKS}]\s*")
+
+
+def fold_breaks(value: Any) -> Any:
+    """``value`` with each run of line breaks, and the spaces around it, as one space."""
+    if isinstance(value, str):
+        return _INNER_BREAKS.sub(" ", _EDGE_BREAKS.sub("", value))
+    if isinstance(value, list):
+        return [fold_breaks(item) for item in value]
+    return value
+
+
+def _fold_metadata(doc: Any) -> Any:
+    """A copy of a Sigma document whose metadata line breaks are single spaces."""
+    if not isinstance(doc, dict):
+        return doc
+    return {key: fold_breaks(value) if key in _METADATA_FIELDS else value for key, value in doc.items()}
+
 
 def _is_sigma_document(doc: Any) -> bool:
     if not isinstance(doc, dict):
@@ -786,7 +811,7 @@ class RulesetHandler:
                     # from_yaml uses PyYAML's Python loader; reuse the documents
                     # already checked above, parsed with our safe C-loader fallback.
                     documents.append(SigmaCollection.from_dicts(
-                        docs, source=SigmaRuleLocation(file),
+                        [_fold_metadata(doc) for doc in docs], source=SigmaRuleLocation(file),
                         collect_filters=True, resolve_references=False,
                     ))
                 except Exception as e:

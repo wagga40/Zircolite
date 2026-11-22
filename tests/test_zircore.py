@@ -864,33 +864,41 @@ class TestZircoliteCoreRuleExecution:
 
         zircore.close()
 
-    def test_execute_rule_csv_mode(self, field_mappings_file, test_logger):
-        """Test rule execution in CSV mode cleans values."""
-        proc_config = ProcessingConfig(csv_mode=True)
+    def test_csv_description_line_breaks_become_spaces(self, field_mappings_file, tmp_path, test_logger):
+        """A rule description is a CSV cell like the others: each break is one space.
+
+        Deleting the breaks glued "Test\\ndescription" into "Testdescription".
+        """
         zircore = ZircoliteCore(
             config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
+            processing_config=ProcessingConfig(csv_mode=True, disable_progress=True),
+            logger=test_logger,
         )
-
-        field_stmt = "'CommandLine' TEXT COLLATE NOCASE,\n'Description' TEXT COLLATE NOCASE,\n"
-        zircore.create_db(field_stmt)
-        zircore.db_connection.execute("INSERT INTO logs (CommandLine, Description) VALUES ('test.exe', 'Line1\nLine2')")
+        zircore.create_db("'CommandLine' TEXT COLLATE NOCASE,\n")
+        zircore.db_connection.execute("INSERT INTO logs (CommandLine) VALUES ('test.exe')")
         zircore.db_connection.commit()
+        zircore.load_ruleset_from_var([{
+            "title": "Test Rule", "id": "test-001", "level": "high", "tags": [],
+            "description": "Test\ndescription,\r\nsecond line\rthird",
+            "rule": ["SELECT * FROM logs"],
+        }, {
+            "title": "Formula", "id": "test-002", "level": "high", "tags": [],
+            "description": "=HYPERLINK(1)",
+            "rule": ["SELECT * FROM logs"],
+        }])
+        output_file = tmp_path / "output.csv"
+        try:
+            zircore.execute_ruleset(str(output_file), write_mode="w", last_ruleset=True)
+        finally:
+            zircore.close()
 
-        rule = {
-            "title": "Test Rule",
-            "id": "test-001",
-            "description": "Test\ndescription",
-            "rule": ["SELECT * FROM logs"]
+        with output_file.open(encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle, delimiter=";"))
+        descriptions = {row["rule_title"]: row["rule_description"] for row in rows}
+        assert descriptions == {
+            "Test Rule": "Test description, second line third",
+            "Formula": "'=HYPERLINK(1)",
         }
-
-        results = zircore.execute_rule(rule)
-
-        # CSV mode should strip newlines from description
-        assert "\n" not in results["description"]
-
-        zircore.close()
 
     def test_execute_rule_removes_none_values(self, field_mappings_file, test_logger):
         """Test rule execution removes None values in normal mode."""

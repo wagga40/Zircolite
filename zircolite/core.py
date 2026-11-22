@@ -88,10 +88,12 @@ from .streaming import (
     StreamingEventProcessor,
     StrictParseError,
 )
-from .utils import rounded_integer_warning, sanitize_row_for_csv, write_csv_header
-
-# Translation table for stripping newline characters from CSV descriptions.
-_NEWLINE_TRANSLATE = str.maketrans("", "", "\n\r")
+from .utils import (
+    rounded_integer_warning,
+    sanitize_row_for_csv,
+    sanitize_value_for_csv,
+    write_csv_header,
+)
 
 # SQLite reports one missing column at a time, quoted or bare.
 _MISSING_COLUMN_RE = re.compile(r"no such column", re.IGNORECASE)
@@ -1308,11 +1310,10 @@ class ZircoliteCore:
 
     def _rule_result(self, rule: dict[str, Any], **counts: Any) -> dict[str, Any]:
         """A rule's result metadata; the caller adds its matches last."""
-        description = rule.get("description", "")
         return {
             "title": rule.get("title", "Unnamed Rule"),
             "id": rule.get("id", ""),
-            "description": description.translate(_NEWLINE_TRANSLATE) if self.csv_mode else description,
+            "description": rule.get("description", ""),
             "sigmafile": rule.get("filename", ""),
             "sigma": rule.get("rule"),
             "rule_level": rule.get("level", "unknown"),
@@ -1471,7 +1472,8 @@ class ZircoliteCore:
                     self._csv_header_written = True
             # Write matches to CSV - pre-compute common values
             title = rule_results["title"]
-            description = rule_results["description"]
+            # Newlines become spaces, as in every other CSV cell (docs/Usage.md)
+            description = sanitize_value_for_csv(rule_results["description"])
             level = rule_results["rule_level"]
             count = rule_results["count"]
             # Rewritten here and not in the results: result sinks, such as the
