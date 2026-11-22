@@ -1218,6 +1218,50 @@
     "channel": [
       "Security"
     ],
+    "description": "Detects a successfully issued machine certificate whose AD CS chase attributes direct identity resolution to an IP address, matching the public Certighost exploit. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'\u00e9mission r\u00e9ussie d'un certificat machine dont les attributs de chase AD CS contiennent cdc et rmd, avec une adresse IP litt\u00e9rale dans cdc. Cette combinaison correspond au PoC public Certighost, qui dirige la recherche d'identit\u00e9 de la CA vers un serveur LDAP/SMB contr\u00f4l\u00e9 par l'attaquant avant d'usurper un contr\u00f4leur de domaine. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [
+      4887
+    ],
+    "falsepositives": [
+      "Authorized AD CS compatibility testing that deliberately uses an IP address in the cdc request attribute",
+      "Rare legacy or cross-forest enrollment workflows using an IP address instead of an Active Directory server FQDN"
+    ],
+    "filename": "CVE-2026-54121_ADCS_Certighost/rules/windows_adcs_certighost_certificate_issuance_cve_2026_54121_strict.yml",
+    "id": "22ee2d59-12df-4876-b70c-9881e24469e2",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Attributes",
+      "Channel",
+      "EventID",
+      "Requester"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4887 AND (Attributes LIKE '%cdc:%' ESCAPE '\\' AND Attributes LIKE '%rmd:%' ESCAPE '\\') AND Attributes REGEXP '(?i)cdc:\\s*(?:[0-9]{1,3}\\.){3}[0-9]{1,3}' AND (Attributes LIKE '%CertificateTemplate:Machine%' ESCAPE '\\' OR Attributes LIKE '%CertificateTemplate:Computer%' ESCAPE '\\' OR Attributes LIKE '%CertificateTemplate:DomainController%' ESCAPE '\\' OR Attributes LIKE '%CertificateTemplate:DomainControllerAuthentication%' ESCAPE '\\' OR Attributes LIKE '%CertificateTemplate:KerberosAuthentication%' ESCAPE '\\') AND Requester LIKE '%$' ESCAPE '\\') AND (NOT COALESCE((Requester LIKE 'LAB\\\\PKI-VALIDATION$' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege-escalation",
+      "attack.credential-access",
+      "attack.t1649",
+      "attack.t1558",
+      "cve.2026-54121"
+    ],
+    "title": "AD CS Certighost Certificate Issuance With IP-Based Chase - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [
+      "Security"
+    ],
     "description": "Step 1 of correlated infostealer detection: suspicious LOLBin or loader execution from user-writable paths. Use this rule as the first stage for correlation with credential-store access (step 2) and external egress (step 3). Alert alone has moderate confidence; chain all three for high-confidence infostealer confirmation.\n",
     "eventid": [
       4688
@@ -1799,7 +1843,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((ParentProcessName LIKE '%\\\\php-cgi.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\php-fpm.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\httpd.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\apache.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\nginx.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\w3wp.exe' ESCAPE '\\') AND (NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\cscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\certutil.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\curl.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\') AND (CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%systeminfo%' ESCAPE '\\' OR CommandLine LIKE '%cmd /c%' ESCAPE '\\' OR CommandLine LIKE '%powershell -%' ESCAPE '\\' OR CommandLine LIKE '% -enc %' ESCAPE '\\' OR CommandLine LIKE '% -e %' ESCAPE '\\' OR CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%certutil -urlcache%' ESCAPE '\\' OR CommandLine LIKE '%bitsadmin /transfer%' ESCAPE '\\' OR CommandLine LIKE '%AppData\\\\Local\\\\Temp%' ESCAPE '\\' OR CommandLine LIKE '%Windows\\\\Temp%' ESCAPE '\\') AND (NOT COALESCE((CommandLine LIKE '%\\\\monitoring\\\\php-healthcheck.cmd%' ESCAPE '\\' OR CommandLine LIKE '%\\\\monitoring\\\\php-healthcheck.ps1%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((ParentProcessName LIKE '%\\\\php-cgi.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\php-fpm.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\httpd.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\apache.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\nginx.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\w3wp.exe' ESCAPE '\\') AND (NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\cscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\certutil.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\curl.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\python.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\python3.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\perl.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\php.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\whoami.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\systeminfo.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\net.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\nltest.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wsl.exe' ESCAPE '\\') AND ((CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%systeminfo%' ESCAPE '\\' OR CommandLine LIKE '%cmd /c%' ESCAPE '\\' OR CommandLine LIKE '%powershell -%' ESCAPE '\\' OR CommandLine LIKE '% -enc %' ESCAPE '\\' OR CommandLine LIKE '% -e %' ESCAPE '\\' OR CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%certutil -urlcache%' ESCAPE '\\' OR CommandLine LIKE '%bitsadmin /transfer%' ESCAPE '\\' OR CommandLine LIKE '%AppData\\\\Local\\\\Temp%' ESCAPE '\\' OR CommandLine LIKE '%Windows\\\\Temp%' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\ProgramData\\\\%' ESCAPE '\\')) AND (NOT COALESCE((CommandLine LIKE '%\\\\monitoring\\\\php-healthcheck.cmd%' ESCAPE '\\' OR CommandLine LIKE '%\\\\monitoring\\\\php-healthcheck.ps1%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "hatchepsoute",
@@ -1811,7 +1855,13 @@
       "attack.t1059.001",
       "attack.t1505.003",
       "cve.2026-109618",
-      "cve.2026-109619"
+      "cve.2026-109619",
+      "cve.2026-115560",
+      "cve.2026-126714",
+      "cve.2026-129182",
+      "cve.2026-129474",
+      "cve.2026-129481",
+      "cve.2026-129496"
     ],
     "title": "Windows PHP Worker Spawns Suspicious Child Process After PHP2Shell Activity - STRICT"
   },
@@ -2039,6 +2089,51 @@
     "status": "experimental",
     "tags": [],
     "title": "High-confidence security tool disable via command line"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects an Exchange IIS worker process spawning a shell or scripting interpreter. This is consistent with webshell activity or other server-side execution, but this event-level rule does not perform temporal correlation with a ProxyLogon or ProxyShell request; SOC L1 should correlate the host and time window, then confirm any webshell file, source request, and administrator activity.\nD\u00e9tecte le lancement d\u2019un shell ou d\u2019un interpr\u00e9teur par le processus IIS Exchange. Cela est compatible avec une activit\u00e9 de webshell ou une autre ex\u00e9cution c\u00f4t\u00e9 serveur, mais cette r\u00e8gle \u00e9v\u00e9nementielle ne r\u00e9alise pas de corr\u00e9lation temporelle avec une requ\u00eate ProxyLogon ou ProxyShell ; le SOC L1 doit corr\u00e9ler l\u2019h\u00f4te et la fen\u00eatre temporelle, puis confirmer tout webshell, la requ\u00eate source et l\u2019activit\u00e9 d\u2019administration.\n",
+    "eventid": [
+      4688
+    ],
+    "falsepositives": [
+      "Exchange maintenance and compilation activity",
+      "Authorized web application deployment"
+    ],
+    "filename": "CVE-2021-Exchange_ProxyLogon_ProxyShell/rules/windows_exchange_webshell_after_proxy_exploit_cve_2021_chain_strict.yml",
+    "id": "7f2c9a61-4d85-4b30-ae12-6c7502020202",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "NewProcessName",
+      "ParentProcessName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((ParentProcessName LIKE '%\\\\w3wp.exe' ESCAPE '\\' OR ParentProcessName LIKE '%/w3wp.exe' ESCAPE '\\') AND (NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\cscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\csc.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\python.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\perl.exe' ESCAPE '\\' OR NewProcessName LIKE '%/bin/sh' ESCAPE '\\' OR NewProcessName LIKE '%/bin/bash' ESCAPE '\\' OR NewProcessName LIKE '%/pwsh' ESCAPE '\\' OR NewProcessName LIKE '%/cscript' ESCAPE '\\' OR NewProcessName LIKE '%/wscript' ESCAPE '\\' OR NewProcessName LIKE '%/mshta' ESCAPE '\\' OR NewProcessName LIKE '%/regsvr32' ESCAPE '\\' OR NewProcessName LIKE '%/python' ESCAPE '\\' OR NewProcessName LIKE '%/perl' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1505.003",
+      "attack.execution",
+      "attack.t1059",
+      "cve.2021-26855",
+      "cve.2021-34473"
+    ],
+    "title": "Microsoft Exchange IIS Worker Child Shell - STRICT"
   },
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
@@ -2468,6 +2563,52 @@
     "title": "RRAS svchost spawning LOLBin with suspicious command line (CVE-2025-62549)"
   },
   {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects shell file triggers causing external NTLM authentication consistent with CVE-2025-24054. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un fichier d\u00e9clencheur qui am\u00e8ne un h\u00f4te Windows \u00e0 initier une authentification NTLM externe, compatible avec la coercition de la CVE-2025-24054. L\u2019\u00e9v\u00e9nement ne prouve pas qu\u2019un hash a \u00e9t\u00e9 captur\u00e9. Le SOC L1 doit v\u00e9rifier le chemin du fichier, le processus cr\u00e9ateur, l\u2019utilisateur, la destination, les \u00e9v\u00e9nements NTLM et toute sortie ult\u00e9rieure.\n",
+    "eventid": [
+      4648
+    ],
+    "falsepositives": [
+      "Users accessing legitimate external NTLM-protected services (rare in modern environments)",
+      "SSO federation edge cases with NTLM fallback to external partner servers",
+      "SearchProtocolHost accessing network shares during Windows Search indexing"
+    ],
+    "filename": "CVE-2025-24054_Windows_NTLM_Hash_Leak/rules/windows_ntlm_coercion_file_trigger_strict.yml",
+    "id": "ad6fcbd0-db6c-4e53-8b04-c125f66a2246",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ProcessName",
+      "TargetServerName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((((EventID=4648 AND (TargetServerName LIKE '%.com%' ESCAPE '\\' OR TargetServerName LIKE '%.net%' ESCAPE '\\' OR TargetServerName LIKE '%.org%' ESCAPE '\\' OR TargetServerName LIKE '%.io%' ESCAPE '\\' OR TargetServerName LIKE '%.ru%' ESCAPE '\\' OR TargetServerName LIKE '%.cn%' ESCAPE '\\' OR TargetServerName LIKE '%.xyz%' ESCAPE '\\' OR TargetServerName LIKE '%.top%' ESCAPE '\\' OR TargetServerName LIKE '%.info%' ESCAPE '\\')) OR ((EventID=4648 AND TargetServerName REGEXP '^[0-9]{1,3}(\\.[0-9]{1,3}){3}$') AND (NOT COALESCE((TargetServerName LIKE '10.%' ESCAPE '\\' OR TargetServerName LIKE '172.16.%' ESCAPE '\\' OR TargetServerName LIKE '172.17.%' ESCAPE '\\' OR TargetServerName LIKE '172.18.%' ESCAPE '\\' OR TargetServerName LIKE '172.19.%' ESCAPE '\\' OR TargetServerName LIKE '172.20.%' ESCAPE '\\' OR TargetServerName LIKE '172.21.%' ESCAPE '\\' OR TargetServerName LIKE '172.22.%' ESCAPE '\\' OR TargetServerName LIKE '172.23.%' ESCAPE '\\' OR TargetServerName LIKE '172.24.%' ESCAPE '\\' OR TargetServerName LIKE '172.25.%' ESCAPE '\\' OR TargetServerName LIKE '172.26.%' ESCAPE '\\' OR TargetServerName LIKE '172.27.%' ESCAPE '\\' OR TargetServerName LIKE '172.28.%' ESCAPE '\\' OR TargetServerName LIKE '172.29.%' ESCAPE '\\' OR TargetServerName LIKE '172.30.%' ESCAPE '\\' OR TargetServerName LIKE '172.31.%' ESCAPE '\\' OR TargetServerName LIKE '192.168.%' ESCAPE '\\' OR TargetServerName LIKE '127.%' ESCAPE '\\' OR TargetServerName LIKE '0.%' ESCAPE '\\' OR TargetServerName LIKE '169.254.%' ESCAPE '\\'), 0)))) OR (EventID=4648 AND TargetServerName REGEXP '^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.)[0-9]' AND (ProcessName LIKE '%\\\\explorer.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\SearchProtocolHost.exe' ESCAPE '\\' OR ProcessName LIKE '%\\\\SearchFilterHost.exe' ESCAPE '\\'))) AND (NOT COALESCE(((TargetServerName LIKE '%microsoft.com%' ESCAPE '\\' OR TargetServerName LIKE '%office.com%' ESCAPE '\\' OR TargetServerName LIKE '%windows.net%' ESCAPE '\\' OR TargetServerName LIKE '%sharepoint.com%' ESCAPE '\\' OR TargetServerName LIKE '%live.com%' ESCAPE '\\' OR TargetServerName LIKE '%outlook.com%' ESCAPE '\\') OR (TargetServerName LIKE '127.%' ESCAPE '\\' OR TargetServerName LIKE 'localhost%' ESCAPE '\\' OR TargetServerName LIKE '::1%' ESCAPE '\\')), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.credential-access",
+      "attack.t1187",
+      "attack.t1557.001",
+      "attack.t1566.001",
+      "attack.t1566.002",
+      "cve.2025-24054"
+    ],
+    "title": "High Confidence CVE-2025-24054 NTLM Coercion - Shell File Triggering External NTLM Auth (STRICT)"
+  },
+  {
     "author": "ASSIONGBON Adama SOC & CTI Consultant | https://www.linkedin.com/in/adama-assiongbon-9029893a/",
     "channel": [
       "Security"
@@ -2791,6 +2932,53 @@
       "cve.2025-30397"
     ],
     "title": "CVE-2025-30397 MSHTML Edge IE Mode - LOLBin with Download or Encoded Payload (STRICT)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects Azure Monitor Agent spawning LOLBin with malicious command-line patterns. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tection haute confiance d'une exploitation possible de CVE-2025-62550 : parent AMA, LOLBin enfant et ligne de commande malveillante confirm\u00e9e. Les URLs Azure Blob Storage ne sont pas exclues car elles peuvent h\u00e9berger des charges utiles adverses. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [
+      4688
+    ],
+    "falsepositives": [
+      "Rare legitimate Azure troubleshooting that invokes script interpreters with encoded/obfuscated parameters",
+      "Authorized incident response scripts launched under SYSTEM by monitoring/management tooling (verify allow-list)",
+      "Azure Blob Storage URLs (*.blob.core.windows.net) are intentionally NOT excluded, verify if triggered"
+    ],
+    "filename": "CVE-2025-62550_AzurMonitorAgent/rules/cve_2025_62550_azure_monitor_agent_lolbin_download_execute_strict.yml",
+    "id": "2d9c1d3b-0e6d-41e8-9a49-7f5d8d7f7c19",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "NewProcessName",
+      "ParentProcessName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((ParentProcessName REGEXP '^[A-Z]:\\\\Program Files\\\\Azure Monitor Agent\\\\[^\\\\]+\\.exe$' OR ParentProcessName REGEXP '^[A-Z]:\\\\Packages\\\\Plugins\\\\Microsoft\\.Azure\\.Monitor\\.AzureMonitorWindowsAgent\\\\[^\\\\]+\\\\[^\\\\]+\\.exe$') AND (NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\cscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msiexec.exe' ESCAPE '\\') AND (CommandLine REGEXP '(?i)-enc[ =][A-Za-z0-9+/=]{20,}' OR CommandLine REGEXP '(?i)FromBase64String\\([^)]{20,}\\)' OR CommandLine REGEXP '(?i)\\b(IEX|Invoke-Expression|Invoke-Command)\\b.*https?://' OR CommandLine REGEXP '(?i)\\b(Start-Process|\\.Invoke\\(\\)|\\.CreateInstance\\()\\b' OR CommandLine REGEXP '(?i)\\b(iwr|curl|wget|Invoke-WebRequest)\\b.*https?://' OR CommandLine REGEXP '(?i)\\bbitsadmin\\b.*\\/transfer.*https?://' OR CommandLine REGEXP '(?i)\\bcertutil\\b.*-urlcache.*https?://' OR CommandLine REGEXP '(?i)-WindowStyle\\s+hidden\\b' OR CommandLine REGEXP '(?i)-ExecutionPolicy\\s+bypass\\b' OR CommandLine REGEXP '(?i)\\$ExecutionContext\\.InvokeCommand\\.NewScriptBlock' OR CommandLine REGEXP '(?i)https?://[^ ]+\\.(exe|dll|ps1|vbs|js)\\b') AND (NOT COALESCE(((CommandLine LIKE '%Get-AzMonitorLog%' ESCAPE '\\' OR CommandLine LIKE '%Set-AzMonitorDiagnosticSetting%' ESCAPE '\\' OR CommandLine LIKE '%AzureMonitorAgent%' ESCAPE '\\' OR CommandLine LIKE '%Microsoft Monitoring Agent%' ESCAPE '\\' OR CommandLine LIKE '%diagnostic%' ESCAPE '\\' OR CommandLine LIKE '%troubleshoot%' ESCAPE '\\') OR CommandLine REGEXP '(?i)^cmd\\.exe\\s+/c\\s+(dir|echo|ping|ipconfig)\\b' OR (CommandLine LIKE '%Microsoft.PowerShell%' ESCAPE '\\' AND CommandLine LIKE '%.psd1%' ESCAPE '\\') OR (CommandLine LIKE '%microsoft.com%' ESCAPE '\\' OR CommandLine LIKE '%windowsupdate.com%' ESCAPE '\\' OR CommandLine LIKE '%download.windows.net%' ESCAPE '\\' OR CommandLine LIKE '%update.microsoft.com%' ESCAPE '\\')), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.001",
+      "attack.t1059.003",
+      "attack.t1105",
+      "attack.t1027",
+      "cve.2025-62550"
+    ],
+    "title": "Azure Monitor Agent spawning LOLBin with malicious patterns (CVE-2025-62550)"
   },
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",

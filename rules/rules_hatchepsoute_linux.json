@@ -227,6 +227,51 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
+    "description": "Detects a PHP runtime or PHP-FPM worker crash, abort, or restart message that may follow a suspicious multipart request. This is an early-warning signal for PHP2Shell-like memory corruption, but it does not prove exploitation because malformed uploads, resource exhaustion, and ordinary service failures can produce the same messages. SOC L1 should correlate the event with web requests, PHP version, worker reuse, process creation, and outbound connections.\nD\u00e9tecte un crash, un abandon ou un red\u00e9marrage d\u2019un runtime PHP ou d\u2019un worker PHP-FPM pouvant suivre une requ\u00eate multipart suspecte. Il s\u2019agit d\u2019un signal d\u2019alerte pr\u00e9coce compatible avec une corruption m\u00e9moire de type PHP2Shell, mais il ne prouve pas une exploitation, car des uploads malform\u00e9s, une saturation de ressources ou une panne ordinaire peuvent produire les m\u00eames messages. Le SOC L1 doit corr\u00e9ler l\u2019\u00e9v\u00e9nement avec les requ\u00eates web, la version de PHP, la r\u00e9utilisation du worker, la cr\u00e9ation de processus et les connexions sortantes.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Planned PHP service maintenance or package upgrades",
+      "Resource exhaustion caused by legitimate large uploads",
+      "Existing PHP application or extension crashes"
+    ],
+    "filename": "CVE-2026-109618_109619_PHP2Shell/rules/linux_php_worker_crash_restart_php2shell_broad.yml",
+    "id": "7e2b4c91-6d35-4f80-a1b9-8c3e5d7f2046",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "linux",
+      "service": "syslog"
+    },
+    "required_fields": [
+      "message",
+      "process.name",
+      "service.name"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((message LIKE '%php-fpm%' ESCAPE '\\' OR message LIKE '%php-cgi%' ESCAPE '\\' OR message LIKE '%php worker%' ESCAPE '\\' OR message LIKE '%php-fpm: pool%' ESCAPE '\\') OR (`process.name` LIKE '%php-fpm%' ESCAPE '\\' OR `process.name` LIKE '%php-cgi%' ESCAPE '\\') OR (`service.name` LIKE '%php-fpm%' ESCAPE '\\' OR `service.name` LIKE '%php%' ESCAPE '\\')) AND (message LIKE '%child exited on signal%' ESCAPE '\\' OR message LIKE '%SIGSEGV%' ESCAPE '\\' OR message LIKE '%segmentation fault%' ESCAPE '\\' OR message LIKE '%core dumped%' ESCAPE '\\' OR message LIKE '%worker exited%' ESCAPE '\\' OR message LIKE '%restarting%' ESCAPE '\\' OR message LIKE '%respawn%' ESCAPE '\\' OR message LIKE '%failed to start%' ESCAPE '\\') AND (NOT COALESCE((message LIKE '%planned maintenance%' ESCAPE '\\' OR message LIKE '%configuration reload%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.t1190",
+      "cve.2026-109618",
+      "cve.2026-109619",
+      "cve.2026-115560",
+      "cve.2026-126714",
+      "cve.2026-129182",
+      "cve.2026-129474",
+      "cve.2026-129481",
+      "cve.2026-129496"
+    ],
+    "title": "PHP Worker Crash or Restart After Suspicious Web Request - BROAD"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
     "description": "Detects local compilation or execution of libssh2 CVE-2026-55200 exploit probes, including public C PoC staging patterns. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte la compilation ou l execution locale d outillage CVE-2026-55200 contre libssh2. Le challenge du PoC 0xBlackash montre qu une fois compile et renomme, le binaire peut ne garder aucun argument CVE visible. Cette regle BROAD couvre donc les artefacts de staging observables : noms de fichiers CVE, constantes du code C, compilation avec pthread/socket server, longueur 0xffffffff/4294967295 et bannieres SSH malveillantes lorsque ces chaines apparaissent dans les commandes de build, grep, strings, tests ou harness. Les shells generiques sont exclus du scope BROAD afin d eviter de doublonner ou bruiter les alertes post-exploitation. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
     "eventid": [],
     "falsepositives": [
@@ -265,6 +310,45 @@
       "cve.2026-55200"
     ],
     "title": "Potential libssh2 CVE-2026-55200 Exploit Tooling Or Probe Execution - BROAD"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a PHP or web-server worker writing a PHP session file in a standard session directory. This may be consistent with session upload-progress or partial-session-file abuse associated with CVE-2026-115560 and CVE-2026-126714, but normal session creation also matches; SOC L1 should correlate the event with an unusual multipart request, session serializer settings, worker errors, and child-process or webshell activity.\nD\u00e9tecte un worker PHP ou un serveur web qui \u00e9crit un fichier de session PHP dans un r\u00e9pertoire de sessions standard. Cela peut \u00eatre compatible avec un abus de session upload-progress ou de fichier de session partiellement \u00e9crit associ\u00e9 \u00e0 CVE-2026-115560 et CVE-2026-126714, mais la cr\u00e9ation normale de sessions correspond aussi ; le SOC L1 doit corr\u00e9ler l\u2019\u00e9v\u00e9nement avec une requ\u00eate multipart inhabituelle, la configuration du s\u00e9rialiseur, les erreurs du worker et une activit\u00e9 de processus enfant ou de webshell.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Normal PHP session creation and rotation",
+      "Applications that use a documented shared file-session directory",
+      "Authorized testing of session upload-progress functionality"
+    ],
+    "filename": "CVE-2026-109618_109619_PHP2Shell/rules/linux_php_session_file_write_recent_php_broad.yml",
+    "id": "8b5f1d2c-6a74-4e90-b3c1-9d27f4a81652",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Action",
+      "Image",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Image LIKE '%/php-fpm%' ESCAPE '\\' OR Image LIKE '%/php-cgi%' ESCAPE '\\' OR Image LIKE '%/apache2%' ESCAPE '\\' OR Image LIKE '%/httpd%' ESCAPE '\\' OR Image LIKE '%/lsphp%' ESCAPE '\\') AND (TargetFilename LIKE '%/var/lib/php/sessions/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/lib/php/session/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/cache/php/session/%' ESCAPE '\\' OR TargetFilename LIKE '%/run/php/sessions/%' ESCAPE '\\' OR TargetFilename LIKE '%/run/php/session/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/local/var/sessions/%' ESCAPE '\\' OR TargetFilename LIKE '%/tmp/sess\\_%' ESCAPE '\\' OR TargetFilename LIKE '%/var/tmp/sess\\_%' ESCAPE '\\') AND (`Action`='created' OR `Action`='modified' OR `Action`='write' OR `Action`='renamed')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1505.003",
+      "cve.2026-115560",
+      "cve.2026-126714"
+    ],
+    "title": "Potential PHP Session File Write by Web Worker - BROAD (CVE-2026-115560 / CVE-2026-126714)"
   },
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
@@ -525,6 +609,46 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
+    "description": "Detects a PHP or web-server runtime launching a shell or interpreter from a WordPress wp-content/upgrade staging path. The combination is highly consistent with post-exploitation of CVE-2026-119977, but process telemetry alone cannot establish the triggering request; SOC L1 should correlate the process tree with web access logs, file integrity events, outbound connections, and the installed WordPress version.\nD\u00e9tecte l\u2019ex\u00e9cution d\u2019un shell ou d\u2019un interpr\u00e9teur par un runtime PHP ou serveur web depuis un chemin de staging WordPress wp-content/upgrade. Cette combinaison est fortement coh\u00e9rente avec une post-exploitation de CVE-2026-119977, mais la t\u00e9l\u00e9m\u00e9trie processus seule ne permet pas d\u2019\u00e9tablir la requ\u00eate d\u00e9clenchante ; le SOC L1 doit corr\u00e9ler l\u2019arbre de processus avec les journaux web, les \u00e9v\u00e9nements d\u2019int\u00e9grit\u00e9 fichiers, les connexions sortantes et la version WordPress install\u00e9e.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized WordPress upgrade validation on a disposable test host",
+      "A documented maintenance script that executes from the staging tree; allowlist the exact process lineage and change ticket"
+    ],
+    "filename": "CVE-2026-119977_WordPress_Core_Upgrade_RCE/rules/linux_wordpress_upgrade_staging_php_child_process_cve_2026_119977_strict.yml",
+    "id": "3d6f5d1e-cb6c-46e4-b2db-6a1f1c9e1199",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/php-fpm' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.0' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.1' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.2' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.3' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.4' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\') AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\') AND (ParentCommandLine LIKE '%/wp-content/upgrade/%' ESCAPE '\\' OR CommandLine LIKE '%/wp-content/upgrade/%' ESCAPE '\\') AND (CommandLine LIKE '%id%' ESCAPE '\\' OR CommandLine LIKE '%uname%' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%base64%' ESCAPE '\\' OR CommandLine LIKE '%chmod %' ESCAPE '\\' OR CommandLine LIKE '%nc %' ESCAPE '\\' OR CommandLine LIKE '%bash -c%' ESCAPE '\\' OR CommandLine LIKE '%sh -c%' ESCAPE '\\' OR CommandLine LIKE '%-c %' ESCAPE '\\' OR CommandLine LIKE '%-r %' ESCAPE '\\' OR CommandLine LIKE '%wp-config.php%' ESCAPE '\\' OR CommandLine LIKE '%touch %' ESCAPE '\\' OR CommandLine LIKE '%printf %' ESCAPE '\\' OR CommandLine LIKE '%echo %' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1505.003",
+      "cve.2026-119977"
+    ],
+    "title": "WordPress Upgrade Staging PHP Child Process - CVE-2026-119977 - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
     "description": "Detects a PHP or web-server worker spawning a shell, interpreter, downloader, or discovery utility with an execution-oriented command line. This is a high-confidence post-exploitation signal consistent with PHP2Shell but is not specific to one CVE; SOC L1 should verify the full parent chain, the originating web requests, the worker account, and any files or network connections created nearby.\nD\u00e9tecte un worker PHP ou un serveur web qui lance un shell, un interpr\u00e9teur, un outil de t\u00e9l\u00e9chargement ou un utilitaire de reconnaissance avec une ligne de commande orient\u00e9e ex\u00e9cution. Il s\u2019agit d\u2019un signal post-exploitation \u00e0 haute confiance, coh\u00e9rent avec PHP2Shell mais non sp\u00e9cifique \u00e0 un seul CVE ; le SOC L1 doit v\u00e9rifier la cha\u00eene compl\u00e8te des processus parents, les requ\u00eates web d\u2019origine, le compte du worker et les fichiers ou connexions r\u00e9seau cr\u00e9\u00e9s \u00e0 proximit\u00e9.\n",
     "eventid": [],
     "falsepositives": [
@@ -546,7 +670,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (ParentImage LIKE '%/php-fpm%' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi%' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8%' ESCAPE '\\' OR ParentImage LIKE '%/lsphp%' ESCAPE '\\' OR ParentImage LIKE '%/apache2%' ESCAPE '\\' OR ParentImage LIKE '%/httpd%' ESCAPE '\\' OR ParentImage LIKE '%/nginx%' ESCAPE '\\') AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\') AND ((CommandLine LIKE '% -c %' ESCAPE '\\' OR CommandLine LIKE '% -lc %' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%id%' ESCAPE '\\' OR CommandLine LIKE '%uname%' ESCAPE '\\' OR CommandLine LIKE '%curl http%' ESCAPE '\\' OR CommandLine LIKE '%wget http%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/shadow%' ESCAPE '\\' OR CommandLine LIKE '%php -r%' ESCAPE '\\' OR CommandLine LIKE '%sh</%' ESCAPE '\\' OR CommandLine LIKE '%bash</%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%/var/tmp/%' ESCAPE '\\') OR (Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\')) AND (NOT COALESCE((CommandLine LIKE '%/usr/local/bin/php-fpm-healthcheck%' ESCAPE '\\' OR CommandLine LIKE '%/opt/monitoring/php-healthcheck%' ESCAPE '\\'), 0))"
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/php-fpm%' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi%' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8%' ESCAPE '\\' OR ParentImage LIKE '%/lsphp%' ESCAPE '\\' OR ParentImage LIKE '%/apache2%' ESCAPE '\\' OR ParentImage LIKE '%/httpd%' ESCAPE '\\' OR ParentImage LIKE '%/nginx%' ESCAPE '\\') AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/ftp' ESCAPE '\\' OR Image LIKE '%/openssl' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\') AND ((CommandLine LIKE '% -c %' ESCAPE '\\' OR CommandLine LIKE '% -lc %' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%id%' ESCAPE '\\' OR CommandLine LIKE '%uname%' ESCAPE '\\' OR CommandLine LIKE '%curl http%' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%wget http%' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%nc %' ESCAPE '\\' OR CommandLine LIKE '%ncat %' ESCAPE '\\' OR CommandLine LIKE '%python -c%' ESCAPE '\\' OR CommandLine LIKE '%python3 -c%' ESCAPE '\\' OR CommandLine LIKE '%perl -e%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/shadow%' ESCAPE '\\' OR CommandLine LIKE '%php -r%' ESCAPE '\\' OR CommandLine LIKE '%sh</%' ESCAPE '\\' OR CommandLine LIKE '%bash</%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%/var/tmp/%' ESCAPE '\\') OR (Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\')) AND (NOT COALESCE((CommandLine LIKE '%/usr/local/bin/php-fpm-healthcheck%' ESCAPE '\\' OR CommandLine LIKE '%/opt/monitoring/php-healthcheck%' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
     "source": "hatchepsoute",
@@ -558,7 +682,13 @@
       "attack.t1059.004",
       "attack.t1505.003",
       "cve.2026-109618",
-      "cve.2026-109619"
+      "cve.2026-109619",
+      "cve.2026-115560",
+      "cve.2026-126714",
+      "cve.2026-129182",
+      "cve.2026-129474",
+      "cve.2026-129481",
+      "cve.2026-129496"
     ],
     "title": "PHP Worker Spawns Suspicious Child Process After PHP2Shell Exploitation - STRICT"
   },
@@ -603,6 +733,44 @@
       "cve.2026-55200"
     ],
     "title": "Suspicious Malicious SSH PoC Server Listening For libssh2 CVE-2026-55200 - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a Magento or Adobe Commerce web worker spawning a shell or network utility. In the context of a suspicious GraphQL template injection or dangerous upload, this is a high-confidence post-exploitation signal, but the process event alone does not identify the CVE; SOC L1 should correlate the host, HTTP request, file creation, source, and patch state.\nD\u00e9tecte un worker web Magento ou Adobe Commerce qui lance un shell ou un outil r\u00e9seau. Dans le contexte d\u2019une injection de template GraphQL ou d\u2019un upload dangereux, il s\u2019agit d\u2019un signal de post-exploitation \u00e0 haute confiance, mais l\u2019\u00e9v\u00e9nement de processus seul n\u2019identifie pas la CVE ; le SOC L1 doit corr\u00e9ler l\u2019h\u00f4te, la requ\u00eate HTTP, la cr\u00e9ation de fichier, la source et le niveau de correctif.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized Magento maintenance or deployment scripts",
+      "EDR or monitoring actions launched by a web worker in a controlled environment"
+    ],
+    "filename": "CVE-2026-75650_48356_Adobe_Commerce_Magento/rules/linux_magento_webworker_shell_spawn_cve_2026_75650_48356_strict.yml",
+    "id": "4b6cad32-8e53-4fb4-c794-a06e03030303",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/php-fpm' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.1' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.2' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.3' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\') AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/nc.openbsd' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/openssl' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\' OR Image LIKE '%/php-cgi' ESCAPE '\\' OR Image LIKE '%/telnet' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1105",
+      "cve.2026-75650",
+      "cve.2026-48356"
+    ],
+    "title": "Magento Web Worker Spawning Shell or Network Tool - STRICT (CVE-2026-75650 / CVE-2026-48356)"
   },
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
@@ -711,12 +879,11 @@
     },
     "required_fields": [
       "Image",
-      "TargetFilename",
-      "User"
+      "TargetFilename"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Image LIKE '%/php-fpm%' ESCAPE '\\' OR Image LIKE '%/php-cgi%' ESCAPE '\\' OR Image LIKE '%/apache2%' ESCAPE '\\' OR Image LIKE '%/httpd%' ESCAPE '\\' OR Image LIKE '%/nginx%' ESCAPE '\\' OR Image LIKE '%/lsphp%' ESCAPE '\\') AND (TargetFilename LIKE '%.php' ESCAPE '\\' OR TargetFilename LIKE '%.php3' ESCAPE '\\' OR TargetFilename LIKE '%.php4' ESCAPE '\\' OR TargetFilename LIKE '%.php5' ESCAPE '\\' OR TargetFilename LIKE '%.php7' ESCAPE '\\' OR TargetFilename LIKE '%.php8' ESCAPE '\\' OR TargetFilename LIKE '%.phtml' ESCAPE '\\' OR TargetFilename LIKE '%.phar' ESCAPE '\\') AND ((TargetFilename LIKE '%/var/www/%' ESCAPE '\\' OR TargetFilename LIKE '%/srv/www/%' ESCAPE '\\' OR TargetFilename LIKE '%/htdocs/%' ESCAPE '\\' OR TargetFilename LIKE '%/public\\_html/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/share/nginx/html/%' ESCAPE '\\') OR (TargetFilename LIKE '%/tmp/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/tmp/%' ESCAPE '\\' OR TargetFilename LIKE '%/dev/shm/%' ESCAPE '\\')) AND (NOT COALESCE((User LIKE '%deploy%' ESCAPE '\\' OR User LIKE '%www-deploy%' ESCAPE '\\'), 0))"
+      "SELECT * FROM logs WHERE (Image LIKE '%/php-fpm%' ESCAPE '\\' OR Image LIKE '%/php-cgi%' ESCAPE '\\' OR Image LIKE '%/apache2%' ESCAPE '\\' OR Image LIKE '%/httpd%' ESCAPE '\\' OR Image LIKE '%/nginx%' ESCAPE '\\' OR Image LIKE '%/lsphp%' ESCAPE '\\') AND (TargetFilename LIKE '%.php' ESCAPE '\\' OR TargetFilename LIKE '%.php3' ESCAPE '\\' OR TargetFilename LIKE '%.php4' ESCAPE '\\' OR TargetFilename LIKE '%.php5' ESCAPE '\\' OR TargetFilename LIKE '%.php7' ESCAPE '\\' OR TargetFilename LIKE '%.php8' ESCAPE '\\' OR TargetFilename LIKE '%.phtml' ESCAPE '\\' OR TargetFilename LIKE '%.phar' ESCAPE '\\') AND ((TargetFilename LIKE '%/var/www/%' ESCAPE '\\' OR TargetFilename LIKE '%/srv/www/%' ESCAPE '\\' OR TargetFilename LIKE '%/htdocs/%' ESCAPE '\\' OR TargetFilename LIKE '%/public\\_html/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/share/nginx/html/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/www/html/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/www/vhosts/%' ESCAPE '\\' OR TargetFilename LIKE '%wp-content/uploads/%' ESCAPE '\\') OR (TargetFilename LIKE '%/tmp/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/tmp/%' ESCAPE '\\' OR TargetFilename LIKE '%/dev/shm/%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "hatchepsoute",
@@ -727,7 +894,9 @@
       "attack.t1505.003",
       "attack.execution",
       "cve.2026-109618",
-      "cve.2026-109619"
+      "cve.2026-109619",
+      "cve.2026-115560",
+      "cve.2026-126714"
     ],
     "title": "PHP Worker Creates Web Executable File After PHP2Shell Activity - STRICT"
   },
@@ -1874,7 +2043,7 @@
   {
     "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
     "channel": [],
-    "description": "Detects the exact sudo indicator published by Cisco for CVE-2026-20316 exploitation, the low-privilege www account invoking package_info.pl as root against license.tmp on a Secure Firewall Management Center appliance. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte l'indicateur sudo exact publie par Cisco pour l'exploitation de CVE-2026-20316 : le compte bas-privilege www qui invoque package_info.pl en tant que root avec /var/tmp/license.tmp sur une appliance Secure Firewall Management Center. Cisco presente cette combinaison directement comme un indicateur de compromission dans son avis officiel : sa presence dans /var/log/messages ne correspond a aucun usage legitime documente. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "description": "Detects the exact sudo indicator published by Cisco for active exploitation of CVE-2026-20079 and CVE-2026-20316: the low-privilege www account invoking package_info.pl as root against license.tmp on a Secure Firewall Management Center appliance. Cisco presents this combination as a compromise indicator; SOC L1 should verify the affected host, timestamp, FMC version, surrounding activity, and downstream managed-device exposure.\nD\u00e9tecte l\u2019indicateur sudo exact publi\u00e9 par Cisco pour l\u2019exploitation active de CVE-2026-20079 et CVE-2026-20316 : le compte bas-privil\u00e8ge www qui invoque package_info.pl en tant que root avec license.tmp sur une appliance Secure Firewall Management Center. Cisco pr\u00e9sente cette combinaison comme un indicateur de compromission ; le SOC L1 doit v\u00e9rifier l\u2019h\u00f4te affect\u00e9, l\u2019horodatage, la version FMC, les activit\u00e9s voisines et l\u2019exposition des \u00e9quipements g\u00e9r\u00e9s en aval.\n",
     "eventid": [],
     "falsepositives": [
       "None documented by Cisco; this exact command and account combination is presented in the vendor advisory as a compromise indicator rather than a normal administrative operation"
@@ -1906,8 +2075,9 @@
       "attack.privilege-escalation",
       "attack.t1078",
       "attack.t1548",
-      "cve.2026-20316"
+      "cve.2026-20316",
+      "cve.2026-20079"
     ],
-    "title": "Cisco FMC package_info.pl Root Execution Via license.tmp - STRICT"
+    "title": "Cisco FMC package_info.pl Root Execution Via license.tmp - STRICT (CVE-2026-20079 / CVE-2026-20316)"
   }
 ]
