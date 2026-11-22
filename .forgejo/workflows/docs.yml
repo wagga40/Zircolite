@@ -1,0 +1,28 @@
+name: docs
+
+# Forgejo's counterpart of GitHub Pages, which serves docs/ from master with no
+# workflow. docsify renders the Markdown in the browser, so publishing is a copy
+# into the directory the runner host's web server exposes, one per repository.
+
+on:
+  push:
+    branches: [master]
+    paths: ['docs/**', '.forgejo/workflows/docs.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    # Host executor: the destination is on the runner host itself.
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      # Swapped in whole so the site never serves a half-copied tree.
+      - name: Publish
+        run: |
+          dest=/srv/docs/${GITHUB_REPOSITORY#*/}
+          rm -rf "$dest.new" && cp -r docs "$dest.new"
+          rm -rf "$dest" && mv "$dest.new" "$dest"
