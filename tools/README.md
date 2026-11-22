@@ -2,9 +2,8 @@
 
 Scripts for packaging, benchmarking, Sigma regression tests and the docs pictures and tour.
 
-`tests/test_tools.py` runs the benchmark and regression tools over tracked fixtures, and
-`tests/test_compact_storage_benchmark.py` the storage experiment. Release-script unit tests
-use temporary checkouts; end-to-end validation requires a PyInstaller build or a Windows
+`tests/test_tools.py` runs the benchmark and regression tools over tracked fixtures.
+Release-script unit tests use temporary checkouts; end-to-end validation requires a PyInstaller build or a Windows
 ARM64 host. `process_tree.py` is a shared helper, not a script: it enumerates a process's
 descendants for `throughput-benchmark.py` and `tests/test_frozen_binary.py`.
 
@@ -133,37 +132,6 @@ It runs, and prints, these steps:
 `[tool.uv] exclude-newer` from rejecting versions the lock already pins. Leaving jq out
 is safe: pySigma imports it only in its jq transformation, which Zircolite never uses.
 The same reason lets `package-release.py` accept its absence on `windows-arm64`.
-
-## compact_storage_benchmark.py
-
-This opt-in storage experiment compares a complete in-memory SQLite working table with a projected table and a compressed evidence file. Run it from the repository root with the installed project environment.
-
-```sh
-python tools/compact_storage_benchmark.py \
-  --events tests/fixtures/sample_bitsadmin.evtx \
-  --ruleset rules/rules_windows_merged.json --rows-per-file 0
-```
-
-Pass one or more real EVTX paths after `--events`. By default the tool reads the first 10,000 committed events per file. Use `--rows-per-file 0` for complete files, `--repeat 2` to alternate worker order and `--scratch-dir DIR` to select an existing volume. The temporary canonical database and evidence file share a 2,048 MiB SQLite page budget, configurable with `--disk-mib`. Allocation checks reserve 64 MiB of free space. The harness removes its private temporary directory on exit.
-
-The standard EVTX parser uses one reader thread and the normal field mappings and 250-row insertion batches to produce a common canonical SQLite stage. The reference worker copies it into memory. The compact worker keeps values used by eligible predicates for each channel and EventID. SQLite resolves the fields and functions during preparation and evaluates the normalized predicates against the original column affinities and collations. Every projected block and its evidence commit together. The block carries at most 512 rows and 1 MiB of serialized evidence before compression. A hit retrieves its full event by part and committed row ID, including its stored types and original field spellings. A sequential reader also supplies every event in package input order.
-
-The JSON report lists separate staging, working-table build/index, query/hydration and full-replay measurements. The optional `--detector sql` includes ANALYZE in the build interval and checks individual normalized statements with literal prefiltering disabled. Query time includes a multiset digest of their complete matches. Full replay and its digest run separately. Each worker records its OS peak resident memory. The harness verifies both digests and counts, including duplicates, sparse row IDs and unmatched evidence. Fresh workers share only the stage on disk. The stage and detection workers run sequentially. The supervising benchmark process stays alive during both measurements and is outside their reported RSS.
-
-The experiment accepts freshly ingested EVTX files and supported converted event rules. An ambiguous statement, correlation, keyword query, unusable schema or oversized evidence row ends the experiment. The normal detector handles those workloads. The default `--detector auto` compares the production rule executor on both layouts. Its build interval covers the wide copy or compact projection, compressed evidence and standard indexes. The subsequent interval covers ruleset preparation, ANALYZE, source census, automatic literal prefiltering, final SQLite checks, rule-result assembly, projected-row hydration and the result digest. This mode compares the complete public metadata and typed evidence for each matched rule, including statement overlap removal. Both workers must also agree on rule errors, regex timeouts, correlation diagnostics and the number of pruned rules. CLI output files and package export are measured separately by the complete CLI throughput benchmark.
-
-An isolated macOS arm64 `--detector sql` probe combined the first 5,000 rows each from a T001 forwarded-events archive, T001 Sysmon and HANCITOR PC1. All 4,538 default statements agreed on 14,400 matches and all 15,000 complete events. The initial prototype narrowed EventID for native integers. Its build plus query, hydration and digest took 10.28 s with 189.75 MiB sampled peak worker RSS. The reference took 11.02 s with 183.72 MiB. The shared stage took 1.03 s. The probe sampled RSS every 10 ms. Current workers report the OS high-water mark and can also narrow ASCII decimal text EventIDs.
-
-A complete-file comparison used all 142,737 events in T001 `ForwardedEvents.evtx` and all 4,538 shipped Windows merged statements. Each mode ran once on a shared macOS arm64 host with Python 3.14.10 and SQLite 3.54.1. Other CLI benchmarks and project checks ran concurrently. The times below start from the committed stage and end after matching, hydration and digesting. Peak RSS is for each fresh worker through full replay.
-
-| Detector | Wide build and matching | Compact build and matching | Wide peak RSS | Compact peak RSS |
-| --- | ---: | ---: | ---: | ---: |
-| `--detector auto` | 7.28 s | 17.94 s | 762.23 MiB | 486.95 MiB |
-| `--detector sql` | 1,061.40 s | 1,108.84 s | 843.34 MiB | 501.08 MiB |
-
-Both layouts reproduced every event and the same 6,268 matches. The automatic executor reported 11 matching rules, 2,812 pruned rules and zero rule errors or regex timeouts on both. The shared stage took 8.76 s in the automatic comparison. The wide copy and standard indexes took 0.30 s. Building and indexing the compact table and writing 30.90 MiB of compressed evidence took 10.23 s, exceeding the wide worker's complete 7.28 s build-and-match interval. The compact layout remains an experimental tool.
-
-To reproduce the complete input, pass `--events /path/to/T001-04062021/ForwardedEvents.evtx --rows-per-file 0 --ruleset rules/rules_windows_merged.json`. Add `--detector sql` for the unaccelerated comparison.
 
 ## throughput-benchmark.py
 

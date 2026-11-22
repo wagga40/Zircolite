@@ -1,6 +1,7 @@
 """Big EVTX files split into slices, each read as a working database of its own."""
 
 import json
+import logging
 import pickle
 import sqlite3
 import struct
@@ -26,6 +27,7 @@ from zircolite.evtx_slices import (
 )
 from zircolite.processing import ProcessingContext, process_parallel_streaming
 from zircolite.results import RowSpool, merge_result_spools, write_result_json
+from zircolite.sqlscan import is_per_row
 from zircolite.streaming import StreamingEventProcessor
 from zircolite.utils import MemoryTracker
 
@@ -219,7 +221,7 @@ class TestRowIds:
 
 RULES = [
     {"title": "Every event", "id": "all", "level": "low", "tags": [], "filename": "all.yml",
-     "description": "", "rule": ["SELECT * FROM logs"]},
+     "description": "", "rule": ["SELECT * FROM logs WHERE 1 = 1"]},
     {"title": "Bitsadmin", "id": "bits", "level": "high", "tags": [], "filename": "bits.yml",
      "description": "", "rule": ["SELECT * FROM logs WHERE OriginalLogfile LIKE '%.evtx'"]},
 ]
@@ -246,6 +248,8 @@ def _run(tmp_path, field_mappings_file, test_logger, default_args_config, files,
 def test_a_sliced_file_reports_as_one(tmp_path, monkeypatch, field_mappings_file, test_logger,
                                       default_args_config, executor):
     """One entry per rule per file, the counts of an unsliced run, and row IDs unique per file."""
+    # A bare SELECT * FROM logs is not per-row to the scanner, and would keep every file whole.
+    assert all(is_per_row(sql) for rule in RULES for sql in rule["rule"])
     big = _evtx(tmp_path / "big.evtx", [None] * 7)
     small = tmp_path / "small.evtx"
     small.write_bytes(FIXTURE.read_bytes())
@@ -270,6 +274,32 @@ def test_a_sliced_file_reports_as_one(tmp_path, monkeypatch, field_mappings_file
         assert all({k: v for k, v in match.items() if k != "row_id"}
                    == {k: v for k, v in result["matches"][0].items() if k != "row_id"}
                    for match in result["matches"])
+
+
+def test_the_run_says_how_many_workers_and_slices_it_starts(tmp_path, monkeypatch, field_mappings_file,
+                                                            test_logger, default_args_config):
+    """The mode banner counts whole files before the ruleset allows slices."""
+    big = _evtx(tmp_path / "big.evtx", [None] * 7)
+    small = tmp_path / "small.evtx"
+    small.write_bytes(FIXTURE.read_bytes())
+    lines: list[str] = []
+    handler = logging.Handler()
+    handler.emit = lambda record: lines.append(record.getMessage())
+    test_logger.addHandler(handler)
+    try:
+        monkeypatch.setattr(processing, "plan_slices", lambda path: [])
+        _run(tmp_path, field_mappings_file, test_logger, default_args_config, [big, small], "thread", "whole")
+        assert not [line for line in lines if "Workers:" in line], "nothing to add to the banner's count"
+
+        monkeypatch.setattr(processing, "plan_slices", partial(plan_slices, records=2))
+        _run(tmp_path, field_mappings_file, test_logger, default_args_config, [big, small], "thread", "sliced")
+    finally:
+        test_logger.removeHandler(handler)
+    slices = len(plan_slices(big, records=2))
+    assert slices > 1
+    assert [line for line in lines if "Workers:" in line] == [
+        f"[+] [cyan]Workers:[/] [yellow]2[/] (1 EVTX file(s) cut into {slices} slices)"
+    ]
 
 
 def test_slicing_stays_off_where_a_database_boundary_shows(field_mappings_file, test_logger):
