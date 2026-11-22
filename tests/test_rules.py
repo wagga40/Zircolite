@@ -1064,6 +1064,39 @@ level: medium
                 f"(still has the temporary sentinel value 0)"
             )
 
+    PROCESS_CREATION = """
+title: Cmd
+id: 0d7c7c2a-6a4e-4d0a-9a53-2f1d1b8f3c03
+status: test
+logsource:
+    product: windows
+    category: process_creation
+detection:
+    selection:
+        Image|endswith: '\\\\cmd.exe'
+    condition: selection
+level: medium
+"""
+
+    @pytest.mark.parametrize(("pipelines", "channel"), [
+        # sysmon (priority 5) runs before windows-logsources (10) either way
+        ([["sysmon"], ["windows-logsources"]], "Microsoft-Windows-Sysmon/Operational"),
+        ([["windows-logsources"], ["sysmon"]], "Microsoft-Windows-Sysmon/Operational"),
+        # Both at priority 10: the command-line order decides, as documented
+        ([["windows-audit"], ["windows-logsources"]], "Security"),
+    ])
+    def test_pipelines_run_by_priority_then_as_given(self, tmp_path, test_logger, pipelines, channel):
+        """Applied out of order, windows-logsources finds no log source to add a Channel to."""
+        rule = tmp_path / "cmd.yml"
+        rule.write_text(self.PROCESS_CREATION)
+
+        handler = RulesetHandler(
+            ruleset_config=RulesetConfig(ruleset=[str(rule)], pipeline=pipelines),
+            logger=test_logger,
+        )
+
+        assert f"Channel='{channel}'" in handler.rulesets[0]["rule"][0]
+
 
 class TestRulesUpdater:
     """Tests for RulesUpdater (download, unzip, checkIfNewerAndMove, clean, run)."""

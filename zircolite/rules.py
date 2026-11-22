@@ -693,23 +693,26 @@ class RulesetHandler:
             return None
 
     def _sigma_backend(self, pipelines: list[Any]) -> Any:
-        """The SQLite backend, with the pipelines applied in the order given."""
+        """The SQLite backend, with the pipelines applied by priority, then in the order given."""
         from sigma.backends.sqlite import sqlite
         from sigma.processing.resolver import ProcessingPipelineResolver
 
         pipeline_resolver = ProcessingPipelineResolver()
-        # Preserve user order: pySigma's resolve() sorts by (priority, path).
-        # When priorities are equal it uses pipeline name, so e.g. "Add Channel..."
-        # runs before "Generic Log Sources..." and Channel is never set for Sysmon.
-        # Temporarily set priority to index so user order is respected.
+        # pySigma's resolve() sorts by (priority, name). The priority is the
+        # pipeline's own claim to run first: sysmon (5) must turn generic log
+        # sources into Sysmon ones before windows-logsources (10) adds their
+        # Channel, whichever comes first on the command line. Equal priorities
+        # would fall back to the display name, and "Add Channel condition..."
+        # would then run before "Map generic log sources..." (windows-audit) and
+        # leave Security rules without a Channel, so ties keep the user's order.
         original_priorities = [p.priority for p in pipelines]
+        order = sorted(range(len(pipelines)), key=lambda i: (original_priorities[i], i))
         try:
-            for i, pipeline in enumerate(pipelines):
-                pipeline.priority = i
+            for rank, index in enumerate(order):
+                pipelines[index].priority = rank
             for pipeline in pipelines:
                 pipeline_resolver.add_pipeline_class(pipeline)
-            # Resolve using pipeline names in user order (lower priority = earlier)
-            combined_pipeline = pipeline_resolver.resolve([p.name for p in pipelines])
+            combined_pipeline = pipeline_resolver.resolve([pipelines[i].name for i in order])
         finally:
             for pipeline, orig in zip(pipelines, original_priorities, strict=True):
                 pipeline.priority = orig

@@ -278,8 +278,10 @@ python3 zircolite.py -pl
 python3 zircolite.py --events sample.evtx -r schtasks.yml -p sysmon -p windows-logsources
 ```
 
-Every pipeline applies to the whole conversion, not to one ruleset. An unknown name exits
-`2` before any rule is converted. Add others with `pdm add pysigma-pipeline-<name>` (or
+Every pipeline applies to the whole conversion, not to one ruleset. Pipelines run in order of
+their priority (`sysmon` before `windows-logsources`, whichever you name first), and those
+of equal priority in the order given: name `windows-audit` before `windows-logsources`. An
+unknown name exits `2` before any rule is converted. Add others with `pdm add pysigma-pipeline-<name>` (or
 `uv add`).
 
 ### Sigma correlation rules
