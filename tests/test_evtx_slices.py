@@ -26,6 +26,7 @@ from zircolite.evtx_slices import (
 )
 from zircolite.processing import ProcessingContext, process_parallel_streaming
 from zircolite.results import RowSpool, merge_result_spools, write_result_json
+from zircolite.sqlscan import is_per_row
 from zircolite.streaming import StreamingEventProcessor
 from zircolite.utils import MemoryTracker
 
@@ -219,7 +220,7 @@ class TestRowIds:
 
 RULES = [
     {"title": "Every event", "id": "all", "level": "low", "tags": [], "filename": "all.yml",
-     "description": "", "rule": ["SELECT * FROM logs"]},
+     "description": "", "rule": ["SELECT * FROM logs WHERE 1 = 1"]},
     {"title": "Bitsadmin", "id": "bits", "level": "high", "tags": [], "filename": "bits.yml",
      "description": "", "rule": ["SELECT * FROM logs WHERE OriginalLogfile LIKE '%.evtx'"]},
 ]
@@ -246,6 +247,8 @@ def _run(tmp_path, field_mappings_file, test_logger, default_args_config, files,
 def test_a_sliced_file_reports_as_one(tmp_path, monkeypatch, field_mappings_file, test_logger,
                                       default_args_config, executor):
     """One entry per rule per file, the counts of an unsliced run, and row IDs unique per file."""
+    # A bare SELECT * FROM logs is not per-row to the scanner, and would keep every file whole.
+    assert all(is_per_row(sql) for rule in RULES for sql in rule["rule"])
     big = _evtx(tmp_path / "big.evtx", [None] * 7)
     small = tmp_path / "small.evtx"
     small.write_bytes(FIXTURE.read_bytes())
