@@ -370,6 +370,21 @@ class TestToolBenchmarkEndToEnd:
         assert (tools["chainsaw"]["version"], tools["chainsaw"]["rules_loaded"]) == ("2.16.0", {"loaded": 3524})
         assert "| chainsaw | 2.16.0 | 3,524 |" in capsys.readouterr().out
 
+    def test_the_zircolite_version_probe_writes_no_log(self, tool_benchmark, monkeypatch):
+        """`-v` alone leaves a zircolite.log in the checkout, or beside the binary under test."""
+        from types import SimpleNamespace
+
+        seen = {}
+
+        def run(command, **kwargs):
+            seen["command"] = command
+            return subprocess.CompletedProcess(command, 0, stdout="Zircolite - v9.9.9", stderr="")
+
+        monkeypatch.setattr(tool_benchmark.subprocess, "run", run)
+
+        assert tool_benchmark.tool_version("zircolite", SimpleNamespace(zircolite=None)) == "9.9.9"
+        assert seen["command"][-3:] == ["-v", "-l", os.devnull]
+
     def test_a_failing_tool_stops_the_benchmark(self, tool_benchmark, setup):
         _, argv, chainsaw = setup
         write_fake_tool(chainsaw, FAKE_CHAINSAW.replace('print("[!] Loaded', 'raise SystemExit(3)\nprint("'))

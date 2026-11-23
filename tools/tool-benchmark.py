@@ -130,7 +130,9 @@ def rules_loaded(tool, text):
 def tool_version(tool, args):
     if tool == "zircolite":
         prefix, cwd = zircolite_prefix(args)
-        command = [*prefix, "-v"]
+        # Without -l the probe leaves a zircolite.log in cwd: the checkout, or
+        # the directory of the binary under test.
+        command = [*prefix, "-v", "-l", os.devnull]
     elif tool == "hayabusa":
         command, cwd = [str(args.hayabusa), "help"], args.hayabusa.parent
     else:
