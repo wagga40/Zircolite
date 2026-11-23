@@ -1160,6 +1160,7 @@ class TestCsvKeepsFieldsFromEveryFile:
             "--csv",
             "--no-auto-mode",
             "-o", str(out),
+            "-l", str(tmp_path / "zircolite.log"),
             "--quiet",
             *mode_flags,
         ]
@@ -1271,7 +1272,7 @@ def test_cli_rejects_output_aliasing_an_input(tmp_path, field_mappings_file, mod
         sys.executable, str(ROOT / "zircolite.py"), "-e", str(inputs),
         "-r", str(rules), "-c", field_mappings_file, "-o", str(output),
         "-l", str(tmp_path / "run.log"), "--quiet", *options,
-    ], cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    ], cwd=tmp_path, capture_output=True, text=True, timeout=120)
     assert result.returncode == 2, result.stdout + result.stderr
     assert source.read_bytes() == original
     assert "output" in (result.stdout + result.stderr).lower()
@@ -1335,7 +1336,7 @@ def run_cli(tmp_path, source, rules, *options):
         [sys.executable, str(ROOT / 'zircolite.py'), '-e', str(source),
          '-r', str(rules), '-o', str(output), '-l', str(tmp_path / 'run.log'),
          '--quiet', *map(str, options)],
-        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+        cwd=tmp_path, capture_output=True, text=True, timeout=120,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return json.loads(output.read_text())
@@ -1390,7 +1391,7 @@ class TestCsvHeaderIsSanitised:
         ruleset.write_text(json.dumps(self.RULE), encoding="utf-8")
         out = tmp_path / "out.csv"
         argv = ["zircolite.py", "--ruleset", str(ruleset), "--csv", "-o", str(out),
-                "--quiet", *argv_tail]
+                "-l", str(tmp_path / "zircolite.log"), "--quiet", *argv_tail]
         with patch.object(sys, "argv", argv):
             zircolite.cli.main()
         rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines(), delimiter=";"))

@@ -45,7 +45,12 @@ pdm run pytest tests/test_zircore.py::TestZircoliteCoreInit::test_init_creates_i
 pdm run pytest -k "event_filter"                          # by name
 pdm run pytest -m "not slow"                              # skip slow tests
 pdm run pytest --cov=zircolite --cov-report=term-missing   # with coverage
+pdm run pytest -n 0 tests/test_zircore.py                 # in one process, for a debugger
 ```
+
+The suite runs on every logical CPU through pytest-xdist (`-n logical` in `pytest.ini`).
+Tests share the working directory, so write output under `tmp_path`, never into it.
+Pass `-n 0` to run the suite in a single process.
 
 Markers: `slow`, `integration`, `requires_lxml`, `requires_sigma`,
 `requires_py7zr`.

@@ -1515,7 +1515,7 @@ def run_case(tmp_path, events, query, config=None, options=()):
         sys.executable, str(ROOT / 'zircolite.py'), '-e', str(source),
         '-r', str(rules), '-c', str(mapping), '-o', str(output),
         '-l', str(tmp_path / 'run.log'), '-j', '--quiet', *options,
-    ], cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    ], cwd=tmp_path, capture_output=True, text=True, timeout=120)
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return json.loads(output.read_text())
 
@@ -1566,7 +1566,7 @@ def run_cli(tmp_path, source, rules, *options):
         [sys.executable, str(ROOT / 'zircolite.py'), '-e', str(source),
          '-r', str(rules), '-o', str(output), '-l', str(tmp_path / 'run.log'),
          '--quiet', *map(str, options)],
-        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+        cwd=tmp_path, capture_output=True, text=True, timeout=120,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return json.loads(output.read_text())
