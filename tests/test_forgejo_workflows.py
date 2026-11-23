@@ -55,7 +55,8 @@ LOAD_BEARING_COMMANDS = {
         'npm run smoke -- "$RUNNER_TEMP/package/unpacked"',
         'npm run e2e -- "$RUNNER_TEMP/package/unpacked"',
         'npm run views -- "$RUNNER_TEMP/package/unpacked"',
-        "npx playwright install --with-deps chromium firefox webkit",
+        # One browser per job: the matrix sets ZL_BROWSERS, which the scripts read too.
+        'npx playwright install --with-deps "$ZL_BROWSERS"',
     ],
     "external_tests.yml": [
         "tests/external/run_external_tests.py --build --parallel 4",
@@ -203,6 +204,23 @@ def test_both_forges_drive_the_viewer_on_the_same_corpus():
             f"{directory.parent.name}/workflows/tests.yml no longer fetches the corpus at "
             f"{VIEWER_CORPUS_COMMIT}; bump it on both forges and here together"
         )
+
+
+def _browser_matrix(path: Path) -> list[str]:
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    job = (document.get("jobs") or {}).get("viewer-browsers") or {}
+    return list(((job.get("strategy") or {}).get("matrix") or {}).get("browser") or [])
+
+
+def test_both_forges_drive_the_same_browsers():
+    """The browser list lives in each forge's matrix, which the command pins do not see."""
+    github = _browser_matrix(GITHUB_WORKFLOWS / "tests.yml")
+    forgejo = _browser_matrix(FORGEJO_WORKFLOWS / "tests.yml")
+
+    assert github, ".github/workflows/tests.yml has no viewer-browsers matrix of browsers"
+    assert forgejo == github, (
+        f".forgejo drives {forgejo} but .github drives {github}; the mirror has drifted"
+    )
 
 
 def test_the_mirror_builds_in_the_same_linux_image():

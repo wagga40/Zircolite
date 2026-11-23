@@ -1,4 +1,4 @@
-// Opens an unpacked package from file:// in Chromium, Firefox and WebKit and
+// Opens an unpacked package from file:// in each browser (see browsers.mjs) and
 // checks that the query engine holds the events the manifest lists, with no
 // network request and no page error. Usage: npm run smoke -- <unpacked package dir>
 import path from 'node:path';

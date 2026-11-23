@@ -1,4 +1,4 @@
-// Drives Explore on an unpacked package from file:// in Chromium, Firefox and WebKit. The
+// Drives Explore on an unpacked package from file:// in each browser (browsers.mjs). The
 // checks are cross-checks: a search and its negation must add up to every event, a facet's
 // count must equal what filtering by it lists, an export must hold one row per result.
 // Usage: npm run e2e -- <unpacked package dir>

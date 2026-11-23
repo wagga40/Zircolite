@@ -6,8 +6,8 @@ and open `index.html`: the Zircolite Viewer runs in the browser, offline, with n
 install and no network request (its content security policy forbids them). Whoever receives
 the zip can search the events and move between detections, hosts, accounts and processes.
 
-The viewer is tested in current Chromium, Firefox and WebKit. On large packages, Chromium
-browsers and Safari answer faster than Firefox.
+The viewer is tested in current Chromium and Firefox. On large packages, Chromium browsers
+and Safari answer faster than Firefox.
 
 ![The Overview of a package](pics/viewer-overview.webp)
 
@@ -379,11 +379,12 @@ ORDER BY e._zl_time
   `npm run check`, `npm test` and `npm run build`; commit `gui/viewer/` with any source
   change. CI fails when a rebuild differs from it by a single byte.
 - The scripts in `gui/source/e2e/` drive an extracted package from `file://`:
-  `npm run smoke -- <dir>` (opens it in Chromium, Firefox and WebKit), `npm run e2e -- <dir>`
+  `npm run smoke -- <dir>` (opens it in Chromium and Firefox), `npm run e2e -- <dir>`
   and `npm run views -- <dir>` (cross-check Explore and every view), `npm run perf -- <dir>`
-  and `npm run shot -- <dir> <out.png>`. They need `npx playwright install chromium firefox webkit`.
-  `smoke`, `e2e` and `views` drive the three browsers at the same time:
-  `ZL_BROWSERS=chromium,webkit` picks fewer, and `ZL_BROWSER_JOBS=1` runs them one after another.
+  and `npm run shot -- <dir> <out.png>`. They need `npx playwright install chromium firefox`.
+  `smoke`, `e2e` and `views` drive both browsers at the same time. `ZL_BROWSERS=firefox`
+  picks one, `ZL_BROWSERS=webkit` adds WebKit (which CI does not drive), and
+  `ZL_BROWSER_JOBS=1` runs them one after another. CI gives each browser a job of its own.
 - `npm run wasm-pivots -- <dir> [--full]` checks and times an Explore-index package in
   Node's DuckDB-WASM, without a browser.
 - The ATT&CK catalogue is MITRE ATT&CK Enterprise 19.2; MITRE's notice travels in every
