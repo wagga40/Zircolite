@@ -26,10 +26,14 @@ jobs:
     # label is a Debian image; this one is Ubuntu, as on GitHub.
     container:
       image: ghcr.io/catthehacker/ubuntu:act-24.04
+    # A leg takes about four minutes. A hang, or a dependency that starts
+    # building from source (duckdb did on 3.11, for 12 minutes here), fails the
+    # run instead of holding it.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.14"]
+        python-version: ["3.12", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -6,6 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push supersedes a pull request or branch run. The event name keeps a
+# manual run out of the pushes' group, so a push never cancels one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch') }}
+
 # Windows defaults to cp1252, and the suite reads Zircolite's UTF-8 output --
 # the emoji in the argparse group names alone are enough to break it. Zircolite
 # itself never relies on the platform default: every open() in the package names
@@ -18,11 +24,15 @@ env:
 jobs:
   tests:
     runs-on: ${{ matrix.os }}
+    # A leg takes about four minutes. A hang, or a dependency that starts
+    # building from source (duckdb did on 3.11, for 50 minutes on Windows),
+    # fails the run here instead of holding it.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.11", "3.14"]
+        python-version: ["3.12", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

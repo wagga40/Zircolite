@@ -11,6 +11,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push supersedes a pull request or branch run. The event name keeps a
+# manual run out of the pushes' group, so a push never cancels one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch') }}
+
 jobs:
   external_tests:
     runs-on: ubuntu-latest
