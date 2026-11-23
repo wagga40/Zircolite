@@ -1160,6 +1160,7 @@ class TestCsvKeepsFieldsFromEveryFile:
             "--csv",
             "--no-auto-mode",
             "-o", str(out),
+            "-l", str(tmp_path / "zircolite.log"),
             "--quiet",
             *mode_flags,
         ]
@@ -1390,7 +1391,7 @@ class TestCsvHeaderIsSanitised:
         ruleset.write_text(json.dumps(self.RULE), encoding="utf-8")
         out = tmp_path / "out.csv"
         argv = ["zircolite.py", "--ruleset", str(ruleset), "--csv", "-o", str(out),
-                "--quiet", *argv_tail]
+                "-l", str(tmp_path / "zircolite.log"), "--quiet", *argv_tail]
         with patch.object(sys, "argv", argv):
             zircolite.cli.main()
         rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines(), delimiter=";"))

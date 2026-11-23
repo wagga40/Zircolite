@@ -59,6 +59,17 @@ def get_log_arg(tmp_path):
     return ['-l', str(tmp_path / "test.log")]
 
 
+@pytest.fixture
+def in_tmp_cwd(tmp_path, monkeypatch):
+    """Run from tmp_path, so the default zircolite.log stays out of the repository.
+
+    The CLI finds its config and rules beside the package when the working
+    directory has none.
+    """
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
 @pytest.mark.parametrize("template_name,custom", [
     ("exportSummaryCSV.tmpl", False), ("exportForAttackNavigator.tmpl", False),
     ("exportSummaryCSV.tmpl", True),
@@ -116,6 +127,7 @@ def _matched_command_lines(output_file):
 class TestCLIArgumentParsing:
     """Tests for CLI argument parsing."""
 
+    @pytest.mark.usefixtures("in_tmp_cwd")
     def test_version_flag(self, capsys):
         """Test --version flag displays version and exits."""
         with pytest.raises(SystemExit) as exc_info:
@@ -125,6 +137,7 @@ class TestCLIArgumentParsing:
         # Should exit with code 0
         assert exc_info.value.code == 0
 
+    @pytest.mark.usefixtures("in_tmp_cwd")
     def test_version_short_flag(self, capsys):
         """Test -v flag displays version and exits."""
         with pytest.raises(SystemExit) as exc_info:
@@ -281,6 +294,7 @@ class TestCLITransformOptions:
             args = zircolite_script.parse_arguments()
         assert args.remove_index == [['idx_channel']]
 
+    @pytest.mark.usefixtures("in_tmp_cwd")
     def test_transform_list_flag_exits(self, tmp_path):
         """Test that --transform-list flag triggers listing and exits."""
         config_file = tmp_path / "config.yaml"
@@ -896,6 +910,7 @@ class TestTimelineOptions:
             assert self._exit_code(self._argv(tmp_path, "--timeline", str(tmp_path / name))) == 2
         rulesets.assert_not_called()
 
+    @pytest.mark.usefixtures("in_tmp_cwd")
     def test_the_pipeline_list_ignores_timeline_settings(self, tmp_path):
         settings = tmp_path / "run.yaml"
         settings.write_text("output:\n  timeline: timeline.json\n")
@@ -2377,14 +2392,14 @@ class TestCLISubprocessExecution:
         assert 'usage:' in result.stdout.lower() or 'Usage:' in result.stdout
         assert '--evtx' in result.stdout or '-e' in result.stdout
 
-    def test_version_output(self):
+    def test_version_output(self, tmp_path):
         """Test -v displays version."""
         result = subprocess.run(
-            [sys.executable, 'zircolite.py', '-v'],
+            [sys.executable, str(WORKSPACE_ROOT / 'zircolite.py'), '-v'],
             capture_output=True,
             text=True,
             encoding="utf-8",
-            cwd=str(Path(__file__).parent.parent)
+            cwd=str(tmp_path)
         )
 
         assert result.returncode == 0
@@ -2403,14 +2418,14 @@ class TestCLISubprocessExecution:
 
         assert result.returncode == 2
 
-    def test_pipeline_list_exits_zero(self):
+    def test_pipeline_list_exits_zero(self, tmp_path):
         """Test -pl / --pipeline-list exits 0 and prints pipeline info."""
         result = subprocess.run(
-            [sys.executable, 'zircolite.py', '--pipeline-list'],
+            [sys.executable, str(WORKSPACE_ROOT / 'zircolite.py'), '--pipeline-list'],
             capture_output=True,
             text=True,
             encoding="utf-8",
-            cwd=str(WORKSPACE_ROOT)
+            cwd=str(tmp_path)
         )
         assert result.returncode == 0
         out = result.stdout + result.stderr
@@ -4221,7 +4236,7 @@ class TestFlagsThatMustNotChangeDetections:
         assert "Zircolite" not in capsys.readouterr().out
 
 
-def test_version_has_a_single_source():
+def test_version_has_a_single_source(tmp_path):
     """The Taskfile greps zircolite/__init__.py, so nothing may duplicate it."""
     from zircolite import __version__
 
@@ -4241,7 +4256,7 @@ def test_version_has_a_single_source():
 
     result = subprocess.run(
         [sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-v"],
-        capture_output=True, text=True, encoding="utf-8", cwd=str(WORKSPACE_ROOT),
+        capture_output=True, text=True, encoding="utf-8", cwd=str(tmp_path),
     )
     assert __version__ in result.stdout
 
@@ -4639,6 +4654,7 @@ class TestTimestampFormatOption:
 
 class TestUpdateRulesExitStatus:
     @pytest.mark.parametrize("installed,code", [(True, 0), (False, 1)])
+    @pytest.mark.usefixtures("in_tmp_cwd")
     def test_a_failed_update_fails_the_command(self, installed, code):
         """An image build running -U must not ship stale rulesets quietly."""
         with patch("sys.argv", ["zircolite.py", "-U"]), \
