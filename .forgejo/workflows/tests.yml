@@ -83,20 +83,28 @@ jobs:
           git status --short --ignored -- gui/viewer
           test -z "$(git ls-files --others --ignored --exclude-standard -- gui/viewer)"
 
-  # Drives a real package in each browser in a job of its own, as on GitHub.
+  # Drives a real package in each browser in a job of its own, as on GitHub,
+  # but in Playwright's image, which already holds the browsers and every
+  # library they load: installing them in the Ubuntu container meant about 70 s
+  # of apt downloads per job from this host. The tag must name the Playwright
+  # version in gui/source/package-lock.json, or the scripts look for browser
+  # builds the image does not have; tests/test_forgejo_workflows.py checks it.
   # The package carries the committed gui/viewer, which the viewer job checks.
   viewer-browsers:
     runs-on: ubuntu-latest
     # A browser that hangs on a package must fail the run, not hold the runner.
     timeout-minutes: 30
     container:
-      image: ghcr.io/catthehacker/ubuntu:act-24.04
+      image: mcr.microsoft.com/playwright:v1.62.0-noble
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox]
     env:
       ZL_BROWSERS: ${{ matrix.browser }}
+      # The image has no C compiler, so this package is built with the Python
+      # flattening kernel. The tests and build jobs still require the compiled one.
+      ZIRCOLITE_REQUIRE_NATIVE: "0"
     steps:
       - uses: actions/checkout@v4
       # actions/checkout resolves `repository:` against this Forgejo instance,
@@ -120,24 +128,16 @@ jobs:
         run: python -m pip install --upgrade --quiet pip pdm
       - name: Install dependencies
         run: pdm install --dev
+      # The image has no unzip; Python's zipfile extracts the same tree.
       - name: Build a package
         run: |
           mkdir -p "$RUNNER_TEMP/package"
           pdm run python zircolite.py --evtx EVTX-ATTACK-SAMPLES -r rules/rules_windows_merged.json \
             --package --package-dir "$RUNNER_TEMP/package" -o "$RUNNER_TEMP/package/detections.json" -l "$RUNNER_TEMP/package/zircolite.log" -q
-          unzip -q "$RUNNER_TEMP"/package/zircolite-package-*.zip -d "$RUNNER_TEMP/package/unpacked"
-      # The lock pins Playwright, and each Playwright release pins its browser
-      # builds, so the lock keys the download.
-      - name: Cache the browser
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ matrix.browser }}-${{ hashFiles('gui/source/package-lock.json') }}
-      - name: Install the browser
+          python -m zipfile -e "$RUNNER_TEMP"/package/zircolite-package-*.zip "$RUNNER_TEMP/package/unpacked"
+      - name: Install the viewer's npm packages
         working-directory: gui/source
-        run: |
-          npm ci
-          npx playwright install --with-deps "$ZL_BROWSERS"
+        run: npm ci
       - name: Drive the package
         working-directory: gui/source
         run: |

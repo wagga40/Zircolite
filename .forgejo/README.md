@@ -16,7 +16,7 @@ The mirror runs on one x86_64 Linux runner:
 | `tests` | {ubuntu, windows, macos} × {3.12, 3.14} | ubuntu × {3.12, 3.14} — 2 of 6 legs |
 | `external_tests` | ubuntu-latest | same, on the host label; push and manual runs only, no `pull_request` |
 | `tests` (`viewer` job) | ubuntu-latest | same, in the Ubuntu job container |
-| `tests` (`viewer-browsers` job) | ubuntu-latest × {chromium, firefox} | same, in the Ubuntu job container |
+| `tests` (`viewer-browsers` job) | ubuntu-latest × {chromium, firefox} | same browsers, in Playwright's image |
 | `build_pyinstaller` | linux x64/arm64, windows x64/arm64, macOS arm64; verify on clean runners and older distributions; release | linux x64 build, binary tests and package smoke in one job — 1 of 5 legs, no release |
 | `docs` | none: Pages serves `docs/` from master | copies `docs/` from master to the runner host's web root, on the host label |
 
@@ -45,13 +45,21 @@ that the tags agree.
 **The `tests` workflow's `viewer-browsers` job fetches its corpus with `git fetch`, not
 `actions/checkout`.** `repository:` resolves against this Forgejo instance, which
 does not hold `sbousseaden/EVTX-ATTACK-SAMPLES`, so the job fetches the same
-pinned commit from github.com by hand. It and the `viewer` job also run in the
-Ubuntu job container, like `tests`, and install pdm with pip.
-`npx playwright install --with-deps` runs unchanged, because that container's
-user is root and can use apt. Both forges drive the same browsers, Chromium and
-Firefox, one per job; `tests/test_forgejo_workflows.py` checks that the matrices
-agree. The browser download is cached as on GitHub; its system libraries are
-installed again in every job.
+pinned commit from github.com by hand. The `viewer` job runs in the Ubuntu job
+container, like `tests`; both viewer jobs install pdm with pip.
+
+**`viewer-browsers` runs in `mcr.microsoft.com/playwright`, not the Ubuntu
+container, and installs no browser.** The image already holds the browsers and
+every library they load. In the Ubuntu container, `npx playwright install
+--with-deps` spent about 70 s per job on apt downloads from this host, so that
+command and GitHub's browser cache exist on GitHub only. Both forges drive the
+same browsers, Chromium and Firefox, one per job. The image tag must name the
+Playwright version in `gui/source/package-lock.json`, because each release looks
+for its own browser builds: bump them together. `tests/test_forgejo_workflows.py`
+checks both the matrices and the tag. The image has no C compiler and no
+`unzip`. That job's package is therefore built with the Python flattening kernel
+(`ZIRCOLITE_REQUIRE_NATIVE=0` for that job only; `tests` and `build_pyinstaller`
+still require the compiled one) and extracted with `python -m zipfile`.
 
 **`external_tests` runs on the `self-hosted` (host) label, not in a container.**
 See the comment at the top of `external_tests.yml` — the harness computes its
@@ -108,7 +116,7 @@ includes the event name, as on GitHub, so a push does not cancel a manual run.
 ## Runner requirements
 
 The `ubuntu-latest` jobs need nothing beyond a working Docker-backed runner
-that can pull from `ghcr.io` and `quay.io`; `build_pyinstaller` also reaches the
+that can pull from `ghcr.io`, `quay.io` and `mcr.microsoft.com`; `build_pyinstaller` also reaches the
 AlmaLinux mirrors for node.
 The `external_tests` and `docs` jobs run directly on the runner host; `docs` needs
 only `node` and write access to `/srv/docs`. `external_tests` needs:

@@ -13,6 +13,7 @@ are documented in ``.forgejo/README.md``; the commands under test are not, and
 neither is the image the release binaries are built in.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -55,8 +56,6 @@ LOAD_BEARING_COMMANDS = {
         'npm run smoke -- "$RUNNER_TEMP/package/unpacked"',
         'npm run e2e -- "$RUNNER_TEMP/package/unpacked"',
         'npm run views -- "$RUNNER_TEMP/package/unpacked"',
-        # One browser per job: the matrix sets ZL_BROWSERS, which the scripts read too.
-        'npx playwright install --with-deps "$ZL_BROWSERS"',
     ],
     "external_tests.yml": [
         "tests/external/run_external_tests.py --build --parallel 4",
@@ -220,6 +219,34 @@ def test_both_forges_drive_the_same_browsers():
     assert github, ".github/workflows/tests.yml has no viewer-browsers matrix of browsers"
     assert forgejo == github, (
         f".forgejo drives {forgejo} but .github drives {github}; the mirror has drifted"
+    )
+
+
+# GitHub installs the browser in each job. Forgejo runs those jobs in
+# Playwright's image instead, whose tag must name the Playwright the lock pins:
+# each Playwright release looks for its own browser builds.
+GITHUB_BROWSER_INSTALL = 'npx playwright install --with-deps "$ZL_BROWSERS"'
+PLAYWRIGHT_IMAGE = "mcr.microsoft.com/playwright:v{version}-noble"
+VIEWER_LOCK = WORKSPACE_ROOT / "gui" / "source" / "package-lock.json"
+
+
+def test_github_installs_the_browser_it_drives():
+    """One browser per job: the matrix sets ZL_BROWSERS, which the scripts read too."""
+    assert _ends_a_command_line(_run_script(GITHUB_WORKFLOWS / "tests.yml"), GITHUB_BROWSER_INSTALL), (
+        f"no command in .github/workflows/tests.yml ends with {GITHUB_BROWSER_INSTALL!r}"
+    )
+
+
+def test_forgejo_drives_the_browsers_in_the_playwright_image_the_lock_pins():
+    lock = json.loads(VIEWER_LOCK.read_text(encoding="utf-8"))
+    expected = PLAYWRIGHT_IMAGE.format(version=lock["packages"]["node_modules/playwright"]["version"])
+    document = yaml.safe_load((FORGEJO_WORKFLOWS / "tests.yml").read_text(encoding="utf-8"))
+    container = document["jobs"]["viewer-browsers"].get("container") or {}
+    image = container.get("image") if isinstance(container, dict) else container
+
+    assert image == expected, (
+        f".forgejo viewer-browsers runs in {image!r}, but gui/source/package-lock.json pins "
+        f"Playwright for {expected!r}; bump the image tag with the lock"
     )
 
 
