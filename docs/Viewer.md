@@ -382,6 +382,8 @@ ORDER BY e._zl_time
   `npm run smoke -- <dir>` (opens it in Chromium, Firefox and WebKit), `npm run e2e -- <dir>`
   and `npm run views -- <dir>` (cross-check Explore and every view), `npm run perf -- <dir>`
   and `npm run shot -- <dir> <out.png>`. They need `npx playwright install chromium firefox webkit`.
+  `smoke`, `e2e` and `views` drive the three browsers at the same time:
+  `ZL_BROWSERS=chromium,webkit` picks fewer, and `ZL_BROWSER_JOBS=1` runs them one after another.
 - `npm run wasm-pivots -- <dir> [--full]` checks and times an Explore-index package in
   Node's DuckDB-WASM, without a browser.
 - The ATT&CK catalogue is MITRE ATT&CK Enterprise 19.2; MITRE's notice travels in every
