@@ -146,6 +146,9 @@ ignore_errors = true
 dev = [
     "pytest>=9.0.2",
     "pytest-timeout>=2.4.0",
+    # pytest.ini runs the suite on every logical CPU; `pytest -n 0` runs it in
+    # one process, for a debugger or a clean traceback.
+    "pytest-xdist>=3.8.0",
     # Coverage is opt-in: `pdm run pytest --cov=zircolite`. CI does not
     # collect it, so nothing here forces it on a plain `pytest` run.
     "pytest-cov>=7.0.0",

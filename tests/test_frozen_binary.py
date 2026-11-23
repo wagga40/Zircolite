@@ -52,9 +52,12 @@ FIXTURES = WORKSPACE_ROOT / "tests" / "fixtures"
 SIGMA_FIXTURES = FIXTURES / "sigma"
 BINARY_ENV = os.environ.get("ZIRCOLITE_BINARY")
 
-pytestmark = pytest.mark.skipif(
-    not BINARY_ENV, reason="Set ZIRCOLITE_BINARY to test a built binary"
-)
+pytestmark = [
+    pytest.mark.skipif(not BINARY_ENV, reason="Set ZIRCOLITE_BINARY to test a built binary"),
+    # The module fixtures run the binary over whole corpora; under xdist
+    # (pytest.ini's --dist loadgroup) one worker builds them once.
+    pytest.mark.xdist_group("frozen_binary"),
+]
 
 RUN_TIMEOUT = 240
 

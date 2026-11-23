@@ -672,19 +672,38 @@ def cgroup_tree(tmp_path, monkeypatch):
     return root
 
 
+def _in_xdist_worker() -> bool:
+    return "PYTEST_XDIST_WORKER" in os.environ
+
+
+def pytest_sessionfinish(session):
+    """Sweep the shared working directory once every xdist worker is done.
+
+    Workers share the directory pytest started in, so a worker sweeping it
+    could delete a file another worker is still writing. They leave it to the
+    controller, which runs this after the last of them has finished.
+    """
+    if not hasattr(session.config, "workerinput"):
+        _cleanup_artifacts(Path(_ORIGINAL_CWD))
+
+
 @pytest.fixture(autouse=True)
 def cleanup_test_artifacts():
     """
     Automatically clean up any artifacts created during tests.
 
     This fixture runs before and after each test to ensure a clean state.
-    It also restores the working directory if a test changes it.
+    It also restores the working directory if a test changes it. Under xdist
+    the directory pytest started in is shared, so only pytest_sessionfinish
+    sweeps it.
     """
+    sweep_original = not _in_xdist_worker()
     # Store the current working directory
     test_start_cwd = os.getcwd()
 
     # Clean artifacts before test (in case previous test left any)
-    _cleanup_artifacts(Path(_ORIGINAL_CWD))
+    if sweep_original:
+        _cleanup_artifacts(Path(_ORIGINAL_CWD))
     if test_start_cwd != _ORIGINAL_CWD:
         _cleanup_artifacts(Path(test_start_cwd))
 
@@ -701,7 +720,8 @@ def cleanup_test_artifacts():
                 os.chdir(_ORIGINAL_CWD)
 
     # Clean artifacts after test
-    _cleanup_artifacts(Path(_ORIGINAL_CWD))
+    if sweep_original:
+        _cleanup_artifacts(Path(_ORIGINAL_CWD))
     # Also clean from test start directory if different
     if test_start_cwd != _ORIGINAL_CWD:
         _cleanup_artifacts(Path(test_start_cwd))

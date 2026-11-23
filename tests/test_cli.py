@@ -4738,7 +4738,7 @@ def test_nested_timestamp_mapping_works_for_auto_correlations(tmp_path):
     def run(*options):
         result = subprocess.run([sys.executable, str(ROOT/'zircolite.py'), '-e', str(source),
             '-c', str(config), '-r', str(rules), '-o', str(output), '-l', str(tmp_path/'run.log'),
-            '--quiet', *options], cwd=tmp_path, capture_output=True, text=True, timeout=30)
+            '--quiet', *options], cwd=tmp_path, capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
         return json.loads(output.read_text())
     assert run('--timefield', 'RecordedAt')[0]['alert_count'] == 1
@@ -4813,7 +4813,7 @@ def test_autodetected_directory_processes_equivalent_json_files(tmp_path, second
         [sys.executable, str(ROOT / 'zircolite.py'), '-e', str(inputs),
          '-r', str(rules), '-c', str(config), '-o', str(output),
          '-l', str(tmp_path / 'run.log'), '--quiet', '--no-parallel'],
-        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+        cwd=tmp_path, capture_output=True, text=True, timeout=120,
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
@@ -4915,7 +4915,7 @@ def run_cli(tmp_path, source, rules, *options):
         [sys.executable, str(ROOT / 'zircolite.py'), '-e', str(source),
          '-r', str(rules), '-o', str(output), '-l', str(tmp_path / 'run.log'),
          '--quiet', *map(str, options)],
-        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+        cwd=tmp_path, capture_output=True, text=True, timeout=120,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return json.loads(output.read_text())
