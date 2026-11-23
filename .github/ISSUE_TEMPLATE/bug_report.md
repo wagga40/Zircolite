@@ -9,7 +9,7 @@ assignees: ''
 ## Environment
 
 - **OS**: (e.g. Windows 11, macOS 14, Ubuntu 22.04)
-- **Python version**: (e.g. 3.11, 3.14)
+- **Python version**: (e.g. 3.12, 3.14)
 - **Zircolite version**: (run `python zircolite.py --version`)
 
 ## Steps to reproduce

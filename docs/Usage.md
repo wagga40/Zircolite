@@ -8,7 +8,7 @@ Zircolite runs on Linux, macOS and Windows. Pick one way to run it:
 |-------|-------|------------|
 | [Standalone binary](#standalone-binaries) | Nothing | Unzip, then run `./Zircolite` |
 | [Docker](#docker) | Docker | `docker pull wagga40/zircolite` |
-| [From source](#from-source) | Python 3.11 to 3.14 and, ideally, a C compiler | `pdm install` or `uv sync` |
+| [From source](#from-source) | Python 3.12 to 3.14 and, ideally, a C compiler | `pdm install` or `uv sync` |
 
 The examples in this documentation run `python3 zircolite.py`. With a binary, use the path
 to the executable instead.
@@ -129,6 +129,11 @@ works from any directory.
 > pdm use -f 3.14 && pdm install       # pdm python install 3.14 adds one if needed
 > uv sync --python 3.14+gil            # +gil excludes 3.14t; uv downloads 3.14 if needed
 > ```
+>
+> Python 3.11 is no longer supported. duckdb 2 publishes no wheels for it, so an install
+> would compile DuckDB from source, which needs a C++ toolchain and takes 15 to 50 minutes.
+> PDM, uv and Poetry now refuse 3.11 outright. Use Python 3.12 to 3.14, a
+> [binary](#standalone-binaries) or [Docker](#docker).
 
 Windows ARM64 has no `evtx` package on PyPI; see
 [Internals → Windows ARM64](Internals.md#windows-arm64), or use a binary.

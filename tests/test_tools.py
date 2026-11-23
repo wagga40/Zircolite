@@ -78,6 +78,30 @@ def test_benchmark_counts_a_worker_and_its_child():
             worker.stdin.close()
 
 
+def test_benchmark_disk_sample_survives_a_directory_deleted_mid_walk(tmp_path, monkeypatch):
+    """Zircolite removes its package build directory while the sampler walks it.
+
+    That race failed a CI run once: the walk listed the directory, Zircolite
+    deleted it, and reading it raised. The sample must skip it instead.
+    """
+    benchmark = load_tool("throughput-benchmark")
+    (tmp_path / "kept").mkdir()
+    (tmp_path / "kept" / "events").write_bytes(b"x" * 7)
+    gone = tmp_path / "build"
+    gone.mkdir()
+    (gone / "part").write_bytes(b"x" * 5)
+    real_scandir = os.scandir
+
+    def scandir(path):
+        if os.fspath(path) == os.fspath(gone):
+            raise FileNotFoundError(2, "The system cannot find the path specified", os.fspath(path))
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+
+    assert benchmark.visible_bytes([tmp_path]) == 7
+
+
 def test_benchmark_export_matrix_and_warmup(tmp_path, monkeypatch):
     benchmark = load_tool("throughput-benchmark")
     report = tmp_path / "report.json"

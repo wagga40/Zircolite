@@ -34,7 +34,7 @@ dependencies = [
     # zoneinfo reads its zone data from here on Windows, which has no system database
     "tzdata; sys_platform == 'win32'",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 readme = "README.md"
 license = "LGPL-3.0-or-later"
 
@@ -62,7 +62,7 @@ script = "setup.py"
 # RestrictedPython and PyInstaller both cap theirs below 3.16. PDM locks per
 # interpreter and uv ignores those caps, so requires-python itself stays open.
 [tool.poetry.dependencies]
-python = ">=3.11,<3.16"
+python = ">=3.12,<3.16"
 
 # uv reuses an editable build until one of these changes; without the kernel in
 # the list, `uv sync` would keep a kernel older than its source.
@@ -78,7 +78,7 @@ exclude-newer-package = { pysigma-backend-sqlite = false }
 # Without an explicit config ruff lints against whatever its current default
 # happens to be, so the result changed with the installed version and nobody
 # could tell a regression from an upgrade. Pin it.
-target-version = "py311"
+target-version = "py312"
 line-length = 100
 # Transform snippets are not modules: they are compiled by RestrictedPython
 # with `re`, `base64`, `chardet` and `math` injected into the sandbox, so a
@@ -95,7 +95,7 @@ extend-exclude = ["config/transforms", "tests/fixtures/transforms_pre_redos"]
 select = [
     "E", "W", "F",   # pycodestyle + pyflakes: real errors
     "I",             # import ordering
-    "UP",            # pyupgrade -- the floor is 3.11, so modern syntax applies
+    "UP",            # pyupgrade -- the floor is 3.12, so modern syntax applies
     "B",             # bugbear
     "SIM",           # simplifications
     "RUF",           # ruff-specific
@@ -134,7 +134,7 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 ignore_missing_imports = true
 check_untyped_defs = true
 

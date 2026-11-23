@@ -4,7 +4,7 @@
 
 ## Standalone Sigma-based detection for EVTX, Auditd, Sysmon for Linux, XML, CSV and JSON logs
 
-[![python](https://img.shields.io/badge/python-3.11--3.14-blue)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.12--3.14-blue)](https://www.python.org/)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 
 **Zircolite** runs [Sigma](https://github.com/SigmaHQ/sigma) rules over your logs. It
@@ -42,7 +42,7 @@ silicon, Windows x64 and ARM64).
 docker pull wagga40/zircolite:latest
 ```
 
-**From source** with [PDM](https://pdm-project.org/latest/) (or `uv sync --python 3.14+gil`), Python 3.11 to 3.14:
+**From source** with [PDM](https://pdm-project.org/latest/) (or `uv sync --python 3.14+gil`), Python 3.12 to 3.14:
 
 ```shell
 git clone https://github.com/wagga40/Zircolite.git
