@@ -1,5 +1,5 @@
 // Cross-checks the Overview, Detections and Timeline views, and full-text search through the index,
-// on an unpacked package from file:// in Chromium, Firefox and WebKit. A bare word's count is checked
+// on an unpacked package from file:// in each browser (browsers.mjs). A bare word's count is checked
 // against a scan of every field that @duckdb/node-api runs on the package's own Parquet.
 // Usage: npm run views -- <unpacked package dir>
 import fs from 'node:fs';

@@ -16,6 +16,7 @@ The mirror runs on one x86_64 Linux runner:
 | `tests` | {ubuntu, windows, macos} × {3.12, 3.14} | ubuntu × {3.12, 3.14} — 2 of 6 legs |
 | `external_tests` | ubuntu-latest | same, on the host label; push and manual runs only, no `pull_request` |
 | `tests` (`viewer` job) | ubuntu-latest | same, in the Ubuntu job container |
+| `tests` (`viewer-browsers` job) | ubuntu-latest × {chromium, firefox} | same, in the Ubuntu job container |
 | `build_pyinstaller` | linux x64/arm64, windows x64/arm64, macOS arm64; verify on clean runners and older distributions; release | linux x64 build, binary tests and package smoke in one job — 1 of 5 legs, no release |
 | `docs` | none: Pages serves `docs/` from master | copies `docs/` from master to the runner host's web root, on the host label |
 
@@ -41,15 +42,16 @@ as it does on GitHub.
 image as GitHub to target glibc 2.28. `tests/test_forgejo_workflows.py` checks
 that the tags agree.
 
-**The `tests` workflow's `viewer` job fetches its corpus with `git fetch`, not
+**The `tests` workflow's `viewer-browsers` job fetches its corpus with `git fetch`, not
 `actions/checkout`.** `repository:` resolves against this Forgejo instance, which
 does not hold `sbousseaden/EVTX-ATTACK-SAMPLES`, so the job fetches the same
-pinned commit from github.com by hand. It also runs in the Ubuntu job
-container, like `tests`, and installs pdm with pip.
+pinned commit from github.com by hand. It and the `viewer` job also run in the
+Ubuntu job container, like `tests`, and install pdm with pip.
 `npx playwright install --with-deps` runs unchanged, because that container's
-user is root and can use apt. All three engines (Chromium, Firefox and WebKit)
-run; none is dropped. Every run downloads the browsers and their system
-libraries again, since nothing caches them between jobs here.
+user is root and can use apt. Both forges drive the same browsers, Chromium and
+Firefox, one per job; `tests/test_forgejo_workflows.py` checks that the matrices
+agree. The browser download is cached as on GitHub; its system libraries are
+installed again in every job.
 
 **`external_tests` runs on the `self-hosted` (host) label, not in a container.**
 See the comment at the top of `external_tests.yml` — the harness computes its
