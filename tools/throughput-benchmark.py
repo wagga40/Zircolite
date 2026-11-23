@@ -252,6 +252,22 @@ def export_fingerprint(kind, path, *, detections_only=False):
     return count, f"{digest_sum:064x}"
 
 
+def visible_bytes(roots):
+    """Total size of the files under roots, as far as a walk can see them.
+
+    Zircolite deletes its working directories while the sampler walks them.
+    os.walk skips a directory that vanishes between being listed and being
+    read; Path.rglob raised FileNotFoundError there before Python 3.12.
+    """
+    total = 0
+    for root in roots:
+        for directory, _, files in os.walk(root):
+            for name in files:
+                with suppress(OSError):
+                    total += os.stat(os.path.join(directory, name)).st_size
+    return total
+
+
 def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, package_dir=None, env=None):
     """Run a command to completion, sampling the RSS of its whole process tree.
 
@@ -284,16 +300,10 @@ def run_sampled(command, log, *, cwd=ROOT, temp_dir=None, package_dir=None, env=
             except (psutil.Error, OSError):
                 pass
             if temp_dir is not None:
-                visible_bytes = 0
                 roots = [temp_dir]
                 if package_dir is not None:
                     roots.extend(package_dir.glob("tmp-zircolite-package-*"))
-                for root in roots:
-                    for path in root.rglob("*"):
-                        with suppress(OSError):
-                            if path.is_file():
-                                visible_bytes += path.stat().st_size
-                disk_peak = max(disk_peak, visible_bytes)
+                disk_peak = max(disk_peak, visible_bytes(roots))
             time.sleep(0.02)
         code = child.wait()
     elapsed = time.perf_counter() - start
