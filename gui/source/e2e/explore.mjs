@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { chromium, firefox, webkit } from 'playwright';
+import { forEachBrowser } from './browsers.mjs';
 
 const directory = process.argv[2];
 if (!directory) {
@@ -487,7 +487,7 @@ async function scenario(page, steps) {
 }
 
 let failed = false;
-for (const [name, type] of [['chromium', chromium], ['firefox', firefox], ['webkit', webkit]]) {
+await forEachBrowser(async (name, type) => {
   const browser = await type.launch();
   const started = Date.now();
   const steps = [];
@@ -512,5 +512,5 @@ for (const [name, type] of [['chromium', chromium], ['firefox', firefox], ['webk
   } finally {
     await browser.close();
   }
-}
+});
 process.exit(failed ? 1 : 0);

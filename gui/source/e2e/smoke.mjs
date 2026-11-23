@@ -3,7 +3,7 @@
 // network request and no page error. Usage: npm run smoke -- <unpacked package dir>
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { chromium, firefox, webkit } from 'playwright';
+import { forEachBrowser } from './browsers.mjs';
 
 const directory = process.argv[2];
 if (!directory) {
@@ -12,7 +12,7 @@ if (!directory) {
 }
 const url = pathToFileURL(path.resolve(directory, 'index.html')).href;
 let failed = false;
-for (const [name, type] of [['chromium', chromium], ['firefox', firefox], ['webkit', webkit]]) {
+await forEachBrowser(async (name, type) => {
   const browser = await type.launch();
   try {
     const page = await browser.newPage();
@@ -40,5 +40,5 @@ for (const [name, type] of [['chromium', chromium], ['firefox', firefox], ['webk
   } finally {
     await browser.close();
   }
-}
+});
 process.exit(failed ? 1 : 0);
