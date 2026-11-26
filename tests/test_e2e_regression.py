@@ -515,3 +515,106 @@ class TestAuditdEnrichedDetections:
         assert (mknod["ARCH"], mknod["archRaw"]) == ("x86_64", "c000003e")
         assert (mknod["auid"], mknod["AUIDEnriched"]) == ("1000", "alice")
 
+
+
+# Issue #192. The rules are the SQL pySigma-backend-sqlite 2.2 emits for
+# "Image|endswith", "Field: ''", "not Field: ''", "|exists: true" and "null",
+# so neither pySigma nor its version is part of the test.
+EMPTY_VALUE_EVENTS = (
+    '{"Event":{"System":{"EventID":1,"Channel":"Microsoft-Windows-Sysmon/Operational"},'
+    '"EventData":{"Image":"C:\\\\a.exe","CommandLine":"a.exe -x","ParentCommandLine":""}}}\n'
+    '{"Event":{"System":{"EventID":1,"Channel":"Microsoft-Windows-Sysmon/Operational"},'
+    '"EventData":{"Image":"C:\\\\b.exe","CommandLine":"b.exe -x","ParentCommandLine":"p.exe"}}}\n'
+)
+EMPTY_VALUE_XML = "".join(
+    '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System>'
+    '<Provider Name="Microsoft-Windows-Sysmon"></Provider>'
+    "<EventID>1</EventID><Channel>Microsoft-Windows-Sysmon/Operational</Channel></System>"
+    f'<EventData><Data Name="Image">{image}</Data><Data Name="CommandLine">{cmd}</Data>'
+    f"{parent}</EventData></Event>\n"
+    for image, cmd, parent in (
+        ("C:\\a.exe", "a.exe -x", '<Data Name="ParentCommandLine"/>'),
+        ("C:\\b.exe", "b.exe -x", '<Data Name="ParentCommandLine">p.exe</Data>'),
+    )
+)
+EMPTY_VALUE_RULESET = json.dumps([
+    {"title": title, "id": f"e2e-empty-{i}", "level": "low", "tags": [], "rule": [sql]}
+    for i, (title, sql) in enumerate([
+        ("control", "SELECT * FROM logs WHERE Image LIKE '%\\\\a.exe' ESCAPE '\\'"),
+        ("empty", "SELECT * FROM logs WHERE ParentCommandLine=''"),
+        ("not empty", "SELECT * FROM logs WHERE Image LIKE '%.exe' ESCAPE '\\' "
+                      "AND (NOT COALESCE((ParentCommandLine=''), 0))"),
+        ("exists", "SELECT * FROM logs WHERE ParentCommandLine IS NOT NULL"),
+        ("null", "SELECT * FROM logs WHERE ParentCommandLine IS NULL"),
+    ])
+])
+# The backend's "Bytes|gt: 1000", verbatim.
+BYTES_GT_1000_SQL = (
+    "SELECT * FROM logs WHERE (CASE WHEN (typeof(Bytes) != 'text' OR instr(Bytes, char(0)) = 0) "
+    "AND +Bytes = CAST(Bytes AS NUMERIC) AND CAST(Bytes AS NUMERIC) > -1e999 "
+    "AND CAST(Bytes AS NUMERIC) < 1e999 THEN CAST(Bytes AS NUMERIC) END) > 1000"
+)
+
+
+def matched_images(detections):
+    """Image of every match per rule title, merged across per-file entries."""
+    images: dict[str, list[str]] = {}
+    for detection in detections:
+        images.setdefault(detection["title"], []).extend(m["Image"] for m in detection["matches"])
+    return {title: sorted(found) for title, found in images.items()}
+
+
+class TestEmptyValues:
+    """An empty field is present: '' and |exists see it, null does not (#192)."""
+
+    # "null" matches nothing, so it has no entry.
+    EXPECTED: ClassVar[dict[str, list[str]]] = {
+        "control": ["C:\\a.exe"],
+        "empty": ["C:\\a.exe"],
+        "not empty": ["C:\\b.exe"],
+        "exists": ["C:\\a.exe", "C:\\b.exe"],
+    }
+
+    def test_json_events(self, tmp_path):
+        source = tmp_path / "ev.json"
+        source.write_text(EMPTY_VALUE_EVENTS, encoding="utf-8")
+        detections = run_zircolite(tmp_path, source, ["-j"], ruleset=EMPTY_VALUE_RULESET)
+        assert matched_images(detections) == self.EXPECTED
+
+    def test_xml_events(self, tmp_path):
+        source = tmp_path / "ev.xml"
+        source.write_text(EMPTY_VALUE_XML, encoding="utf-8")
+        detections = run_zircolite(tmp_path, source, ["-x"], ruleset=EMPTY_VALUE_RULESET)
+        assert matched_images(detections) == self.EXPECTED
+
+    # Auto-mode would run two tiny files unified whatever was asked, hence the
+    # explicit layouts borrowed from the mode-equivalence tests.
+    @pytest.mark.parametrize("mode", ["per-file", "unified", "parallel"])
+    def test_layouts_agree_when_a_file_holds_only_empty_values(self, tmp_path, mode):
+        logs = tmp_path / "logs"
+        logs.mkdir()
+        first, second = EMPTY_VALUE_EVENTS.splitlines(keepends=True)
+        (logs / "a.json").write_text(first, encoding="utf-8")
+        (logs / "b.json").write_text(second, encoding="utf-8")
+        flags = TestProcessingModeEquivalence.MODES[mode]
+        detections = run_zircolite(tmp_path, logs, ["-j", *flags], ruleset=EMPTY_VALUE_RULESET)
+        assert matched_images(detections) == self.EXPECTED
+
+    def test_numbers_still_compare_after_an_empty_first_value(self, tmp_path):
+        source = tmp_path / "ev.json"
+        source.write_text(
+            '{"Image":"C:\\\\a.exe","LogonType":"","Bytes":""}\n'
+            '{"Image":"C:\\\\b.exe","LogonType":3,"Bytes":900}\n'
+            '{"Image":"C:\\\\c.exe","LogonType":10,"Bytes":20000}\n',
+            encoding="utf-8",
+        )
+        ruleset = json.dumps([
+            {"title": "logon type 3", "id": "e2e-num-0", "level": "low", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE LogonType=3"]},
+            {"title": "bytes over 1000", "id": "e2e-num-1", "level": "low", "tags": [],
+             "rule": [BYTES_GT_1000_SQL]},
+        ])
+        detections = run_zircolite(tmp_path, source, ["-j"], ruleset=ruleset)
+        assert matched_images(detections) == {
+            "logon type 3": ["C:\\b.exe"], "bytes over 1000": ["C:\\c.exe"],
+        }

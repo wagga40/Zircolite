@@ -737,7 +737,6 @@ exclusions:               # drop these fields
 
 useless:                  # drop a field when its value is one of these
   - null
-  - ""
 
 mappings:                 # rename a (possibly nested) field
   Event.System.EventID: EventID
@@ -756,6 +755,11 @@ split:                    # parse key=value strings into separate fields
   simple column names.
 - **Aliases** copy a field and keep the original. They apply to raw and mapped names, not to
   fields made by splitting. The shipped file defines none.
+- **Empty values are kept.** An event with `"ParentCommandLine": ""`, or an empty `<Data>`
+  element in EVTX and XML, stores an empty string. So `ParentCommandLine: ''` and
+  `ParentCommandLine|exists: true` match it, and `ParentCommandLine: null` matches only events
+  without the field. A JSON field whose value is `null` is stored as absent: `exists` cannot
+  tell it from a missing field. CSV is the exception, see [CSV](#csv).
 - **Unnamed `<Data>` elements**, which many Application-log sources use, are joined with
   newlines into `Data` (what rules test with `Data|contains`) and copied to `Message` when the
   event has none.

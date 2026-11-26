@@ -315,3 +315,16 @@ class TestFieldMappingsEncoding:
         cfg.write_bytes(b"\xef\xbb\xbfmappings: {}\n")
         config = load_field_mappings(str(cfg), logger=test_logger)
         assert config["mappings"] == {}
+
+
+class TestUselessDefaults:
+    """Empty strings are values; only null makes a field absent."""
+
+    def test_missing_useless_drops_only_null(self, tmp_path):
+        config_file = tmp_path / "minimal.json"
+        config_file.write_text(json.dumps({"exclusions": [], "mappings": {}}))
+        assert load_field_mappings(str(config_file))["useless"] == [None]
+
+    def test_shipped_config_keeps_empty_strings(self):
+        shipped = Path(__file__).parent.parent / "config" / "config.yaml"
+        assert load_field_mappings(str(shipped))["useless"] == [None]

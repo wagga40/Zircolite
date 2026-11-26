@@ -9,7 +9,7 @@
 #   - event_filter: Configure channel/eventID field extraction for filtering
 #   - timestamp_detection: Configure timestamp field auto-detection
 #   - exclusions: Fields to exclude from processing
-#   - useless: Values to filter out (null, empty strings)
+#   - useless: Values that make a field absent (null)
 #   - mappings: Rename nested/complex field names to simpler ones
 #   - alias: Create additional field names with same values
 #   - split: Split field values into multiple fields
@@ -118,11 +118,11 @@ exclusions:
 # -----------------------------------------------------------------------------
 # VALUE EXCLUSIONS (USELESS VALUES)
 # -----------------------------------------------------------------------------
-# Values that should be filtered out from the final output.
-# Fields with these values will be removed from events.
+# A field holding one of these values is dropped, as if the event lacked it.
+# Empty strings are kept: rules test for '' and use |exists, and both need the
+# empty value to be there.
 useless:
   - null   # Null values
-  - ""     # Empty strings
 
 # -----------------------------------------------------------------------------
 # FIELD MAPPINGS

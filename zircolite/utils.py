@@ -165,7 +165,7 @@ def load_field_mappings(
     Returns:
         Dictionary containing field mappings configuration with keys:
         - exclusions: List of field name patterns to exclude
-        - useless: List of values to filter out (e.g., null, empty)
+        - useless: Values that make a field absent (default: null)
         - mappings: Dict mapping raw field names to simplified names
         - alias: Dict mapping field names to alias names
         - split: Dict defining field splitting rules
@@ -250,7 +250,7 @@ def load_field_mappings(
     ]
     defaults = {
         "exclusions": [],
-        "useless": [None, ""],
+        "useless": [None],
         "mappings": {},
         "alias": {},
         "split": {},

@@ -3823,3 +3823,10 @@ class TestEmptyValues:
         assert empty["CommandLine"] == ""
         assert "CommandLine_Seen" not in empty
         assert full["CommandLine_Seen"] == "seen"
+
+    def test_empty_string_is_kept_unless_configured_away(self):
+        kept = _empty_value_processor([None])._flatten_event({"A": "", "B": None}, "ev.json")
+        dropped = _empty_value_processor([None, ""])._flatten_event({"A": "", "B": None}, "ev.json")
+        assert kept["A"] == ""
+        assert "B" not in kept
+        assert "A" not in dropped
