@@ -5134,3 +5134,32 @@ class TestArchivePasswordChannels:
         zircolite_script._warn_ignored_db_flags(args, logger)
 
         assert not logger.warning.called
+
+
+class TestEmptyValueRuleWarning:
+    RULES: ClassVar[list[dict]] = [
+        {"title": "empty parent", "rule": ["SELECT * FROM logs WHERE ParentCommandLine=''"]},
+        {"title": "user exists", "rule": ["SELECT * FROM logs WHERE User IS NOT NULL"]},
+        {"title": "plain", "rule": ["SELECT * FROM logs WHERE Image LIKE '%a.exe'"]},
+        {"title": "burst", "correlation": True, "rule": ["SELECT * FROM logs WHERE X=''"]},
+    ]
+
+    def _warnings(self, caplog, field_config, rules):
+        logger = logging.getLogger("empty-values")
+        with caplog.at_level(logging.WARNING, logger="empty-values"):
+            zircolite_script._warn_empty_value_rules(field_config, rules, "old.yaml", logger)
+        return caplog.records
+
+    def test_warns_once_naming_the_rules(self, caplog):
+        records = self._warnings(caplog, {"useless": [None, ""]}, self.RULES)
+        assert len(records) == 1
+        assert "2 rule(s)" in caplog.text
+        assert "empty parent" in caplog.text and "user exists" in caplog.text
+        assert "burst" not in caplog.text and "plain" not in caplog.text
+
+    @pytest.mark.parametrize("field_config", [None, {"useless": [None]}, {"useless": []}])
+    def test_silent_unless_the_config_drops_empty_values(self, caplog, field_config):
+        assert not self._warnings(caplog, field_config, self.RULES)
+
+    def test_silent_when_no_rule_is_affected(self, caplog):
+        assert not self._warnings(caplog, {"useless": [None, ""]}, self.RULES[2:])

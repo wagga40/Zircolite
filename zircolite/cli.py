@@ -116,6 +116,7 @@ from zircolite.shutdown import (
     is_shutdown_requested,
     request_shutdown,
 )
+from zircolite.sqlscan import empty_value_columns
 from zircolite.timeline import (
     DEFAULT_TIMELINE,
     TIMELINE_FORMATS,
@@ -1285,6 +1286,36 @@ def _warn_correlations_across_databases(count: int, databases: int, logger: logg
         )
 
 
+def _warn_empty_value_rules(
+    field_config: dict[str, Any] | None,
+    rulesets: list[dict[str, Any]],
+    config_path: str | Path,
+    logger: logging.Logger,
+) -> None:
+    """Name the rules a config that drops empty strings keeps from matching."""
+    if field_config is None or "" not in (field_config.get("useless") or ()):
+        return
+    titles = [
+        str(rule.get("title", rule.get("id", "?")))
+        for rule in rulesets
+        if not (rule.get("correlation") or rule.get("result_type") == "correlation")
+        and any(
+            isinstance(query, str) and empty_value_columns(query)
+            for query in rule.get("rule") or ()
+        )
+    ]
+    if not titles:
+        return
+    examples = ", ".join(literal(title) for title in titles[:3])
+    logger.warning(
+        f"[yellow]   [!] {literal(config_path)} drops empty values (\"\" under useless): "
+        f"{len(titles)} rule(s) testing a field for '' or with |exists cannot match an empty "
+        f"field as written, e.g. {examples}. Remove \"\" from useless to evaluate them as "
+        f"written[/]"
+    )
+    logger.debug(f"Rules defeated by dropping empty values: {literal(', '.join(titles))}")
+
+
 def _template_outputs(args: argparse.Namespace) -> list[str]:
     """Every -T path, including the ones --timesketch and --navigator-output add."""
     return [output for spec in args.templateOutput or () for output in spec]
@@ -1312,6 +1343,7 @@ def _run_processing(
             field_mappings_config = load_field_mappings(args.config, logger=logger)
         except Exception:
             field_mappings_config = None
+        _warn_empty_value_rules(field_mappings_config, ctx.rulesets, args.config, logger)
 
     phase_setup_end = time.perf_counter()
 

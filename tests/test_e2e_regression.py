@@ -618,3 +618,17 @@ class TestEmptyValues:
         assert matched_images(detections) == {
             "logon type 3": ["C:\\b.exe"], "bytes over 1000": ["C:\\c.exe"],
         }
+
+    def test_a_config_that_drops_empty_values_says_so(self, tmp_path):
+        config = tmp_path / "drop-empty.json"
+        config.write_text(json.dumps({
+            "exclusions": [], "useless": [None, ""], "alias": {}, "split": {},
+            "transforms_enabled": False, "transforms": {},
+            "mappings": {"Event.EventData.Image": "Image",
+                         "Event.EventData.ParentCommandLine": "ParentCommandLine"},
+        }), encoding="utf-8")
+        source = tmp_path / "ev.json"
+        source.write_text(EMPTY_VALUE_EVENTS, encoding="utf-8")
+        detections = run_zircolite(tmp_path, source, ["-j", "-c", str(config)], ruleset=EMPTY_VALUE_RULESET)
+        assert "empty" not in matched_images(detections)
+        assert "drops empty values" in (tmp_path / "zircolite.log").read_text(encoding="utf-8")

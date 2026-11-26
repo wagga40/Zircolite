@@ -389,6 +389,40 @@ def regex_literals(sql: str) -> list[str]:
     return list(scan_query(sql).regex_patterns)
 
 
+_EMPTY = ("literal", "''")
+
+
+def empty_value_columns(sql: str) -> frozenset[str]:
+    """The columns whose test a configured "" in ``useless`` defeats.
+
+    With empty strings dropped at ingestion, ``col = ''`` and an IN list
+    holding ``''`` can never be true, and ``col IS NOT NULL`` (Sigma's
+    ``exists``) misses a field that is present but empty.
+    """
+    if "''" not in sql and "NULL" not in sql.upper():
+        return frozenset()
+    try:
+        tokens = _typed_tokens(sql)
+    except _Unsupported:
+        return frozenset()
+    found: set[str] = set()
+    for i, (kind, text) in enumerate(tokens):
+        if kind not in ("word", "name"):
+            continue
+        if (_peek(tokens, i + 1) == ("punct", "=") and _peek(tokens, i + 2) == _EMPTY) or (
+            [_peek_word(tokens, i + n) for n in (1, 2, 3)] == ["IS", "NOT", "NULL"]
+        ):
+            found.add(text.lower())
+        elif _peek_word(tokens, i + 1) == "IN" and _peek(tokens, i + 2) == ("punct", "("):
+            end = next(
+                (j for j in range(i + 3, len(tokens)) if tokens[j] == ("punct", ")")),
+                len(tokens),
+            )
+            if _EMPTY in tokens[i + 3:end]:
+                found.add(text.lower())
+    return frozenset(found)
+
+
 def _column_names(tokens: list[tuple[str, str]]) -> frozenset[str]:
     """Column names ``tokens`` compares against, minus SQL keywords and aliases.
 

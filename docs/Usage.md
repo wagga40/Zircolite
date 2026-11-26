@@ -759,7 +759,9 @@ split:                    # parse key=value strings into separate fields
   element in EVTX and XML, stores an empty string. So `ParentCommandLine: ''` and
   `ParentCommandLine|exists: true` match it, and `ParentCommandLine: null` matches only events
   without the field. A JSON field whose value is `null` is stored as absent: `exists` cannot
-  tell it from a missing field. CSV is the exception, see [CSV](#csv).
+  tell it from a missing field. CSV is the exception, see [CSV](#csv). Adding `""` to `useless`
+  makes empty fields absent again; Zircolite then warns that the loaded rules testing for `''`
+  or using `exists` cannot match an empty field.
 - **Unnamed `<Data>` elements**, which many Application-log sources use, are joined with
   newlines into `Data` (what rules test with `Data|contains`) and copied to `Message` when the
   event has none.

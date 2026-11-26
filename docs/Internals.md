@@ -785,7 +785,9 @@ which `REGEXP` patterns, and whether it keeps one output row per matching event
 All need the same quote-aware lexer, and lexing is most of what reading a ruleset costs.
 `sqlscan.scan_query` lexes each statement once and caches the result by text; the other
 readers (`column_refs`, `regex_literals`, `channel_constraints`, `eventid_constraints`) are
-folds over it.
+folds over it. `empty_value_columns` lexes on its own: it runs once per rule at startup, and
+only when the field configuration drops empty strings, to name the rules that then cannot
+match (see [field mappings](Usage.md#field-mappings-exclusions-and-aliases)).
 
 The lexer, not a regex, finds column names because the backend backtick-quotes every name
 outside `^[a-zA-Z0-9_]*$` (every ECS name, such as `event.code` or `@timestamp`), because a

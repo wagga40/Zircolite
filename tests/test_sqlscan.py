@@ -15,6 +15,7 @@ from zircolite.sqlscan import (
     channel_constraints,
     clear_scan_cache,
     column_refs,
+    empty_value_columns,
     eventid_constraints,
     normalize_rule_sql,
     null_safe_negation,
@@ -733,3 +734,32 @@ def test_channel_case_intersections_keep_matching_rules(
         assert core.metrics.data["pruned_rules"] == 0
     finally:
         core.close()
+
+
+class TestEmptyValueColumns:
+    """Columns whose test the useless "" drop defeats."""
+
+    def test_equality_with_the_empty_literal(self):
+        sql = ("SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND "
+               "(EventID=8 AND (TargetImage LIKE '%\\\\lsass.exe' ESCAPE '\\' AND StartModule=''))")
+        assert empty_value_columns(sql) == {"startmodule"}
+
+    def test_negated_filter(self):
+        sql = ("SELECT * FROM logs WHERE Image LIKE '%.exe' ESCAPE '\\' "
+               "AND (NOT COALESCE((ParentCommandLine=''), 0))")
+        assert empty_value_columns(sql) == {"parentcommandline"}
+
+    def test_in_list_with_an_empty_member(self):
+        assert empty_value_columns("SELECT * FROM logs WHERE \"Field A\" IN ('x', '')") == {"field a"}
+
+    def test_exists(self):
+        assert empty_value_columns("SELECT * FROM logs WHERE User IS NOT NULL") == {"user"}
+
+    @pytest.mark.parametrize("sql", [
+        "SELECT * FROM logs WHERE Image IS NULL",
+        "SELECT * FROM logs WHERE CommandLine LIKE '%''x''%' ESCAPE '\\'",
+        "SELECT * FROM logs WHERE CommandLine = 'it''s'",
+        "SELECT * FROM logs WHERE CommandLine IN ('a', 'b')",
+    ])
+    def test_other_tests_are_not_empty_value_tests(self, sql):
+        assert empty_value_columns(sql) == frozenset()
