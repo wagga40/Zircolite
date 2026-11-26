@@ -893,6 +893,17 @@ class TestStreamingEventProcessorCSV:
 
         conn.close()
 
+    @pytest.mark.parametrize("useless", [[], [None], [None, ""]])
+    def test_empty_cells_are_absent_fields(self, tmp_path, useless):
+        csv_file = tmp_path / "events.csv"
+        csv_file.write_text("EventID,CommandLine,User\n1,,alice\n2,cmd.exe\n", encoding="utf-8")
+        processor = _empty_value_processor(useless, csv_input=True)
+        events = list(processor.stream_csv_events(str(csv_file)))
+        assert "CommandLine" not in events[0]
+        assert events[0]["User"] == "alice"
+        assert "User" not in events[1]  # short row, filled by restval
+        assert events[1]["CommandLine"] == "cmd.exe"
+
 
 class TestStreamingEventProcessorJSONArrayChunked:
     """Tests for chunked JSON array streaming."""

@@ -543,6 +543,8 @@ Field names go on the first line, and the delimiter (comma, semicolon, tab or pi
 detected. Read CSV with `--csv-input`, and add `-LE` for files that are not UTF-8. `--csv`
 is the *output* option.
 
+An empty cell is an absent field, so `Field: null` matches it and `Field: ''` does not.
+
 ### Compressed and archived logs
 
 | Suffix | Notes |

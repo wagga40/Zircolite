@@ -1784,7 +1784,9 @@ class StreamingEventProcessor:
                     # CSV rows are already flat dicts, check filter on them directly
                     if not should_process(row):
                         continue
-                    flattened = flatten(row, filename)
+                    # CSV has no way to write "present but empty": an empty
+                    # cell is a field the row does not carry.
+                    flattened = flatten({k: v for k, v in row.items() if v != ""}, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
