@@ -762,9 +762,10 @@ split:                    # parse key=value strings into separate fields
   tell it from a missing field. CSV is the exception, see [CSV](#csv). Adding `""` to `useless`
   makes empty fields absent again; Zircolite then warns that the loaded rules testing for `''`
   or using `exists` may evaluate empty fields differently than written: a test for `''` or
-  `exists` cannot match one, and a filter on `''` stops excluding it. Database input (`-D`, or
-  a SQLite file found by auto-detection) was flattened by the run that built it, so `useless`
-  does not apply to it and nothing is reported.
+  `exists` cannot match one, and a filter on `''` stops excluding it. `--debug` writes the full
+  list of those rules to the log file. Database input (`-D`, or a SQLite file found by
+  auto-detection) was flattened by the run that built it, so `useless` does not apply to it
+  and nothing is reported.
 - **Unnamed `<Data>` elements**, which many Application-log sources use, are joined with
   newlines into `Data` (what rules test with `Data|contains`) and copied to `Message` when the
   event has none.

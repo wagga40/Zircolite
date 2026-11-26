@@ -1307,6 +1307,9 @@ def _warn_empty_value_rules(
     if not titles:
         return
     examples = ", ".join(literal(title) for title in titles[:3])
+    if len(titles) > 3:
+        # The console never shows debug lines, so the full list is only in the log file.
+        examples += f" (--debug writes all {len(titles)} to the log file)"
     logger.warning(
         f"[yellow]   [!] {literal(config_path)} drops empty values (\"\" under useless): "
         f"{len(titles)} rule(s) test a field for '' or with |exists and may evaluate empty "

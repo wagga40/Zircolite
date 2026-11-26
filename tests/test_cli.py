@@ -5166,3 +5166,9 @@ class TestEmptyValueRuleWarning:
 
     def test_silent_when_no_rule_is_affected(self, caplog):
         assert not self._warnings(caplog, {"useless": [None, ""]}, self.RULES[2:])
+
+    @pytest.mark.parametrize(("count", "hinted"), [(3, False), (4, True)])
+    def test_points_to_the_full_list_when_it_names_only_some(self, caplog, count, hinted):
+        rules = [{"title": f"empty {i}", "rule": [f"SELECT * FROM logs WHERE F{i}=''"]} for i in range(count)]
+        self._warnings(caplog, {"useless": [None, ""]}, rules)
+        assert (f"(--debug writes all {count} to the log file)" in caplog.text) is hinted
