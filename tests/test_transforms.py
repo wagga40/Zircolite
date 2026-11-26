@@ -36,7 +36,7 @@ def field_mappings_multi_transforms():
     """Field mappings with multiple transforms for testing."""
     return {
         "exclusions": ["xmlns"],
-        "useless": [None, ""],
+        "useless": [None],
         "mappings": {
             "Event.System.EventID": "EventID",
             "Event.EventData.CommandLine": "CommandLine",
@@ -105,7 +105,7 @@ def field_mappings_security_test():
     """Field mappings with potentially dangerous transforms for security testing."""
     return {
         "exclusions": [],
-        "useless": [None, ""],
+        "useless": [None],
         "mappings": {},
         "alias": {},
         "split": {},
@@ -150,7 +150,7 @@ def field_mappings_builtin_functions():
     """Field mappings using built-in functions available in RestrictedPython."""
     return {
         "exclusions": [],
-        "useless": [None, ""],
+        "useless": [None],
         "mappings": {},
         "alias": {},
         "split": {},
@@ -352,7 +352,7 @@ class TestTransformSourceCondition:
         # Create config with transform only for auditd_input
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -398,7 +398,7 @@ class TestTransformAlias:
         """Test that alias=true creates a new field without modifying original."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -445,7 +445,7 @@ class TestTransformAlias:
         """Test that alias=false modifies the original field value."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -494,7 +494,7 @@ class TestMultipleTransforms:
         """Test that multiple transforms on same field all execute."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -564,7 +564,7 @@ class TestDisabledTransforms:
         """Test that disabled transforms are not executed."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -608,7 +608,7 @@ class TestDisabledTransforms:
         """Test that transforms_enabled=false skips all transforms."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -725,7 +725,7 @@ class TestRestrictedPythonSecurity:
             "def transform(param):\n    return param"
         )
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {}, "alias": {}, "split": {},
+            "exclusions": [], "useless": [None], "mappings": {}, "alias": {}, "split": {},
             "transforms_enabled": True,
             "transforms": {"CommandLine": [{
                 "info": "top-level payload", "type": "python", "code": code,
@@ -1016,7 +1016,7 @@ class TestExternalFileTransforms:
         transform_file.write_text("def transform(param):\n    return param.upper()\n")
 
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {},
             "transforms_enabled": True,
             "transforms_dir": "transforms/",
@@ -1049,7 +1049,7 @@ class TestExternalFileTransforms:
         transforms_dir.mkdir()
 
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {},
             "transforms_enabled": True,
             "transforms_dir": "transforms/",
@@ -1077,7 +1077,7 @@ class TestExternalFileTransforms:
     def test_inline_python_still_works(self, tmp_path, test_logger):
         """Test that type: python with inline code still works (backward compat)."""
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {},
             "transforms_enabled": True,
             "transforms": {
@@ -1108,7 +1108,7 @@ class TestExternalFileTransforms:
         transform_file.write_text("def transform(param):\n    return param[::-1]\n")
 
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {},
             "transforms_enabled": True,
             "transforms_dir": "transforms/",
@@ -1152,7 +1152,7 @@ class TestExternalFileTransforms:
         (custom_dir / "exclaim.py").write_text("def transform(param):\n    return param + '!'\n")
 
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {},
             "transforms_enabled": True,
             "transforms_dir": "my_custom_transforms/",
@@ -1179,7 +1179,7 @@ class TestExternalFileTransforms:
     def test_python_file_no_file_key_warns(self, tmp_path, test_logger):
         """Test that python_file without 'file' key falls back to passthrough."""
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {},
             "transforms_enabled": True,
             "transforms": {
@@ -1209,7 +1209,7 @@ class TestTransformCategories:
     def test_all_transforms_enables_everything(self, tmp_path, test_logger):
         """Test that --all-transforms enables all defined transforms."""
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {}, "transforms_enabled": True,
             "transforms": {
                 "TestField": [
@@ -1249,7 +1249,7 @@ class TestTransformCategories:
     def test_transform_category_enables_category_transforms(self, tmp_path, test_logger):
         """Test that --transform-category enables transforms from the specified category."""
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {}, "transforms_enabled": True,
             "transforms": {
                 "TestField": [
@@ -1289,7 +1289,7 @@ class TestTransformCategories:
     def test_transform_category_multiple_categories(self, tmp_path, test_logger):
         """Test that multiple --transform-category flags combine."""
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {}, "transforms_enabled": True,
             "transforms": {
                 "TestField": [
@@ -1323,7 +1323,7 @@ class TestTransformCategories:
     def test_transform_category_unknown_warns(self, tmp_path, test_logger):
         """Test that unknown category name logs a warning."""
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {}, "transforms_enabled": True,
             "transforms": {},
             "enabled_transforms": [],
@@ -1343,7 +1343,7 @@ class TestTransformCategories:
     def test_transform_category_merges_with_existing(self, tmp_path, test_logger):
         """Test that --transform-category merges with existing enabled_transforms."""
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {}, "transforms_enabled": True,
             "transforms": {
                 "TestField": [
@@ -1430,7 +1430,7 @@ class TestHexToAsciiTransform:
         """Test hex to ASCII transformation for proctitle."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -1468,7 +1468,7 @@ class TestHexToAsciiTransform:
         """Test that invalid hex returns original value."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -1537,7 +1537,7 @@ class TestEdgeCases:
         """Test transform with special characters."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -1572,7 +1572,7 @@ class TestEdgeCases:
         """Test transform with very long string input."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -1604,7 +1604,7 @@ class TestEnabledTransformsList:
         """Test that only transforms in enabled_transforms list are executed."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -1676,7 +1676,7 @@ class TestEnabledTransformsList:
         """
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -1729,7 +1729,7 @@ class TestEnabledTransformsList:
         """--all-transforms must collect non-alias transforms by field name."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -1783,7 +1783,7 @@ class TestEnabledTransformsList:
         """Test that empty enabled_transforms list disables all transforms."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -1836,7 +1836,7 @@ class TestEnabledTransformsList:
         """Test that missing enabled_transforms list disables all transforms."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},
@@ -1895,7 +1895,7 @@ class TestStreamingProcessorTransformsEndToEnd:
         """Test that streaming processor creates alias fields from transforms."""
         config = {
             "exclusions": [],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {},
             "alias": {},
             "split": {},

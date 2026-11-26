@@ -70,7 +70,7 @@ def dummy_ctx(tmp_path, memory_tracker):
     config_file = tmp_path / "fieldMappings.json"
     config_file.write_text(json.dumps({
         "exclusions": ["xmlns"],
-        "useless": [None, ""],
+        "useless": [None],
         "mappings": {},
         "alias": {},
         "split": {},
@@ -763,7 +763,7 @@ class TestProcessDbInputSkippedFiles:
         logger = MagicMock()
         config_file = tmp_path / "fieldMappings.json"
         config_file.write_text(json.dumps({
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
         }))
         return ProcessingContext(
@@ -913,7 +913,7 @@ class TestParallelKeepflatEndToEnd:
         monkeypatch.chdir(tmp_path)
         config_file = tmp_path / "fieldMappings.json"
         config_file.write_text(json.dumps({
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
         }))
         files = []
@@ -985,7 +985,7 @@ class TestPerfileShutdownFinalization:
 
         config_file = tmp_path / "fieldMappings.json"
         config_file.write_text(json.dumps({
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
         }))
         outfile = tmp_path / "detected.json"

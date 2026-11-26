@@ -1163,7 +1163,7 @@ class TestEventFilterConfigKeys:
     def _write_config(self, tmp_path, event_filter_cfg):
         import json as std_json
         cfg = {
-            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "exclusions": [], "useless": [None], "mappings": {},
             "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
             "event_filter": event_filter_cfg,
         }

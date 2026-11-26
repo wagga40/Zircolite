@@ -2280,7 +2280,7 @@ class TestPreParsedConfig:
 
         raw_config = {
             "exclusions": ["xmlns"],
-            "useless": [None, ""],
+            "useless": [None],
             "mappings": {"Event.System.EventID": "EventID"},
             "alias": {},
             "split": {},
@@ -2763,7 +2763,7 @@ class TestStreamingRobustness:
     ):
         """A transform without source_condition must produce a load-time warning."""
         config = {
-            "exclusions": [], "useless": [None, ""], "mappings": {}, "alias": {},
+            "exclusions": [], "useless": [None], "mappings": {}, "alias": {},
             "split": {}, "transforms_enabled": True,
             "transforms": {
                 "Field": [{

@@ -112,7 +112,6 @@ exclusions:
   - xmlns
 useless:
   - null
-  - ""
 mappings:
   Event.System.EventID: EventID
 alias: {}

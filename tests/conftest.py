@@ -41,7 +41,7 @@ def minimal_field_mappings():
     """Minimal field mappings configuration for testing."""
     return {
         "exclusions": ["xmlns"],
-        "useless": [None, ""],
+        "useless": [None],
         "mappings": {
             "Event.System.EventID": "EventID",
             "Event.System.Channel": "Channel",
@@ -67,7 +67,7 @@ def field_mappings_with_transforms():
     """Field mappings with transforms enabled for testing."""
     return {
         "exclusions": ["xmlns"],
-        "useless": [None, ""],
+        "useless": [None],
         "mappings": {
             "Event.System.EventID": "EventID",
             "Event.EventData.CommandLine": "CommandLine",
@@ -142,7 +142,6 @@ exclusions:
 
 useless:
   - null
-  - ""
 
 # Map nested fields to simple names
 mappings:
