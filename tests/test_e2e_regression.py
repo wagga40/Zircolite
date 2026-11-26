@@ -23,6 +23,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import patch
@@ -636,7 +637,6 @@ class TestEmptyValues:
 
     @pytest.mark.parametrize("explicit", [True, False], ids=["-D", "auto-detected"])
     def test_database_input_gets_no_empty_value_warning(self, tmp_path, explicit):
-        from contextlib import closing
         source = tmp_path / "events.db"
         with closing(sqlite3.connect(source)) as db:
             db.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, Image TEXT, ParentCommandLine TEXT)")

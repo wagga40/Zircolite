@@ -7,7 +7,8 @@ import { parse } from '../src/search/parse';
 import { FIELDS, type Fixture, openFixture, schema, TACTICS } from './fixture';
 
 const kind = (name: string) => ENTITY_KINDS.find((k) => k.kind === name)!;
-// Event 4294967297 names cmd.exe as its parent, in lower case; event 3 runs it.
+// Event 4294967297 names cmd.exe as its parent, in lower case; event 3 runs it
+// and has an empty parent, which no entity may list.
 const PARENT: Field = { name: 'ParentImage', key: 'parentimage', type: 'VARCHAR', count: 1 };
 const wide = new Schema([...FIELDS, PARENT], TACTICS);
 const EXTRA = [

@@ -1,5 +1,5 @@
 exclusions: []
-useless: [null, ""]
+useless: [null]
 mappings:
   EventID: EventID
   CommandLine: CommandLine
