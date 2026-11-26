@@ -286,14 +286,15 @@ _Fields = tuple[tuple[str, ...], tuple[dict[str, str] | None, ...] | None]
 def _pairs(row: dict[str, Any], fields: _Fields) -> str | None:
     """``Name: value ¦ Name: value``, a mapped value followed by what it means."""
     names, maps = fields
+    # An empty value has nothing to show: listed, it would only add a bare "Name:".
     if maps is None:
         text = SEPARATOR.join([f"{name}: {value}" if value.__class__ in _SCALARS else f"{name}: {_text(value)}"
-                               for name in names if (value := row[name]) is not None])
+                               for name in names if (value := row[name]) is not None and value != ""])
         return text or None
     pairs = []
     for name, meanings in zip(names, maps, strict=True):
         value = row[name]
-        if value is None:
+        if value is None or value == "":
             continue
         shown = value if value.__class__ is str else _text(value)
         meaning = meanings.get(shown.lower()) if meanings is not None else None

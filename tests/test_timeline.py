@@ -158,6 +158,24 @@ class TestRows:
 
         assert jsonl(path)[0]["Details"] == "CommandLine: whoami ¦ Image: C:\\w.exe ¦ User: bob"
 
+    def test_details_and_extra_fields_skip_empty_values(self, tmp_path):
+        """An empty field has nothing to show: listed, it would only add a bare ``Name:``."""
+        spool = make_spool(tmp_path)
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(7, CommandLine="whoami", SubjectUserName="",
+                                                             RuleName="", User="bob")))
+
+        [row] = jsonl(path)
+        assert row["Details"] == "CommandLine: whoami"
+        assert row["ExtraFields"] == "User: bob"
+
+    def test_without_a_layout_details_skip_empty_values(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal")
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(EventID=9999, CommandLine="whoami", RuleName="")))
+
+        assert jsonl(path)[0]["Details"] == "CommandLine: whoami"
+
     def test_field_names_compare_ignoring_case(self, tmp_path):
         spool = make_spool(tmp_path, "minimal")
         row = event()

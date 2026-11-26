@@ -579,7 +579,8 @@ value_maps:
   detections, BITS jobs, remote desktop sessions, and auditd's SYSCALL, EXECVE and account
   records.
 - **Skip list.** Fields that describe the log rather than the activity, shown in neither
-  column. A field another column of the profile shows is left out too.
+  column. A field another column of the profile shows is left out too, and so is a field
+  whose value is empty.
 - **Value maps.** After a mapped value, `Details` and `ExtraFields` add its meaning in
   brackets: `LogonType: 3 (Network)`, `Status: 0xc000006a (wrong password)`. The value itself
   never changes, and rules always see it as logged. Quote a value YAML would read otherwise:
