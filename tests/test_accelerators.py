@@ -276,6 +276,7 @@ def test_cython_ingestion_matches_python_with_transforms(tmp_path):
                                  "List": [1, "two"], "Empty": None}}},
         {"EventID": 3, "eventid": None, "User": "DOMAIN\\user", "Message": "héllo", "Flag": False},
         {"Image": "C:\\a.exe", "Hashes": 'MD5=aa,image=b,x"];alert(1);//=c,=d'},
+        {"Image": "C:\\b.exe", "CommandLine": "", "LogonType": "", "QueryName": ""},
     ]
     args = argparse.Namespace(all_transforms=True, transform_categories=None)
     results = []

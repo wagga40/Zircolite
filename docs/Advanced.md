@@ -99,7 +99,8 @@ python config/transform_tester.py --list-builtins
 ```
 
 Return an empty string when nothing matches (so `!= ''` filters), prefer `alias: true`, keep
-it fast (it runs on every event), and scope it with `source_condition`.
+it fast (it runs on every event), and scope it with `source_condition`. A transform is not
+called for an empty value.
 
 ### The catalogue
 

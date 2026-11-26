@@ -3780,3 +3780,35 @@ def test_streaming_keeps_annotated_events_without_degraded_ingestion(
     assert events[0]["CommandLine"] == "example.exe"
     assert events[0]["SubjectUserName"] == "alice"
     assert not processor.ingest_degraded
+
+
+def _empty_value_processor(useless, transforms=None, backend="python", **args):
+    """Processor over a raw config, so useless can be varied per test."""
+    raw_config = {
+        "exclusions": [], "useless": useless, "mappings": {}, "alias": {}, "split": {},
+        "transforms_enabled": bool(transforms), "transforms": transforms or {},
+    }
+    return StreamingEventProcessor(
+        config_file="/nonexistent/path.json",
+        args_config=Namespace(**(args or {"json_input": True})),
+        processing_config=ProcessingConfig(flatten_backend=backend),
+        _raw_config=raw_config,
+    )
+
+
+class TestEmptyValues:
+    """An empty string is a value: kept unless configured away, never transformed."""
+
+    SEEN: ClassVar[dict] = {"CommandLine": [{
+        "type": "python", "alias": True, "alias_name": "CommandLine_Seen",
+        "source_condition": ["json_input"], "enabled": True,
+        "code": "def transform(param):\n    return 'seen'",
+    }]}
+
+    def test_transforms_skip_empty_values(self):
+        processor = _empty_value_processor([None], self.SEEN)
+        empty = processor._flatten_event({"CommandLine": ""}, "ev.json")
+        full = processor._flatten_event({"CommandLine": "cmd /c whoami"}, "ev.json")
+        assert empty["CommandLine"] == ""
+        assert "CommandLine_Seen" not in empty
+        assert full["CommandLine_Seen"] == "seen"

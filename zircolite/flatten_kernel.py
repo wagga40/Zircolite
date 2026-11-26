@@ -107,7 +107,9 @@ def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
             keys.append(alias_raw)
         transformed_keys: set | None = None
         transformed_values: dict[str, Any] = {}
-        if transforms_enabled:
+        # An empty value has nothing to transform, and some transforms would
+        # turn it into a score or a label that no event carried.
+        if transforms_enabled and value != "":
             transform_fields = (key,) if key == raw_field_name else (key, raw_field_name)
             for field_name in transform_fields:
                 field_transforms = transforms_get(field_name)
