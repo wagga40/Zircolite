@@ -248,24 +248,24 @@ def test_row_building_binds_missing_fields_as_null_and_merges_case_variants():
     assert _build_rows(uniform, columns, frozenset(columns), True) == [("v",) * 4] * 3
     collided = [{"EventID": None, "eventid": 4688}, {"EventID": 1, "eventid": 2}]
     assert _build_rows(collided, ("EventID",), frozenset(("EventID", "eventid")), False) == [(4688,), (1,)]
-    empties = [{"eventid": "", "EventID": 4688}, {"EventID": "", "eventid": None}, {"EventID": "", "eventid": ""}]
-    assert _build_rows(empties, ("EventID",), frozenset(("EventID", "eventid")), False) == [(4688,), ("",), ("",)]
+    empties = [{"eventid": "", "EventID": 4688}, {"EventID": "", "eventid": None}, {"EventID": "", "eventid": ""},
+               {"eventid": 0, "EventID": 4688}]
+    assert _build_rows(empties, ("EventID",), frozenset(("EventID", "eventid")), False) == [
+        (4688,), ("",), ("",), (0,)]
 
 
 def test_case_variant_batches_match_a_key_by_key_merge():
     from zircolite.streaming import _build_rows
 
     def reference(event, canonical):
-        merged = {}
-        for key, value in event.items():
-            kept = merged.get(key.lower())
-            if kept is None or (kept == "" and value is not None and value != ""):
-                merged[key.lower()] = value
-        return tuple(merged.get(name.lower()) for name in canonical)
+        def stored(column):
+            values = [value for key, value in event.items() if key.lower() == column.lower() and value is not None]
+            return next((value for value in values if value != ""), values[0] if values else None)
+        return tuple(stored(name) for name in canonical)
 
     rng = random.Random(4624)  # noqa: S311 -- reproducible test inputs
     spellings = ["ProcessId", "ProcessID", "processid", "Image", "IMAGE", "User"]
-    batch = [{name: rng.choice([None, "", "x", 7]) for name in spellings if rng.random() < 0.4} for _ in range(500)]
+    batch = [{name: rng.choice([None, "", "x", 7, 0]) for name in spellings if rng.random() < 0.4} for _ in range(500)]
     canonical = ("ProcessId", "Image", "User")
     assert _build_rows(batch, canonical, frozenset(spellings), False) == [reference(event, canonical) for event in batch]
 

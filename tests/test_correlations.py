@@ -154,11 +154,13 @@ class TestCorrelationPlansRun:
                           event(0, Computer=None), event(60, Computer=None)])
         result = core.execute_rule(rules[0])
         assert [alert["group_keys"] for alert in result["matches"]] == [{"Computer": ""}]
+        assert core._correlation_diagnostics == {"burst": {"missing_group_key": 2}}
 
     def test_value_count_counts_an_empty_value_once_and_null_never(self, tmp_path, make_core):
         rules = convert(tmp_path, [base(), correlation("value_count", condition={"gte": 2, "field": "User"})])
-        assert [a["metric_value"] for a in make_core([event(0, User=""), event(1, User="a")])
-                .execute_rule(rules[0])["matches"]] == [2]
+        # Two empty values and one other: counted once, no window reaches 3.
+        assert {a["metric_value"] for a in make_core([event(0, User=""), event(1, User="a"), event(2, User="")])
+                .execute_rule(rules[0])["matches"]} == {2}
         assert make_core([event(0, User=None), event(1, User="a")]).execute_rule(rules[0]) == {}
 
     def test_ordered_stages_need_increasing_timestamps(self, tmp_path, make_core):

@@ -617,6 +617,8 @@ def _build_rows(batch, all_columns, all_columns_frozen, uniform):
         # and bind against the canonical column. The first value that is not
         # empty wins, else the first that is not null: an empty spelling must
         # not hide the value another spelling of the field carries.
+        # StreamingEventProcessor._spelled_rows records the spelling by the same
+        # rule, so output prints each stored value under its own name.
         canonical_lower = tuple(col.lower() for col in all_columns)
         rows = []
         lower = str.lower
