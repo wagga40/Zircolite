@@ -1344,7 +1344,6 @@ def _run_processing(
             field_mappings_config = load_field_mappings(args.config, logger=logger)
         except Exception:
             field_mappings_config = None
-        _warn_empty_value_rules(field_mappings_config, ctx.rulesets, args.config, logger)
 
     phase_setup_end = time.perf_counter()
 
@@ -1415,6 +1414,10 @@ def _run_processing(
         ctx.parent_metrics.data["seconds"]["setup"] += time.perf_counter() - phase_setup_end
         zircolite_core, all_results = process_db_input(ctx, args, file_list=file_list)
         return zircolite_core, all_results, log_list, phase_setup_end
+
+    # Only now is a SQLite file known for what it is: its values were stored by
+    # the run that built it, so useless never applied to them.
+    _warn_empty_value_rules(field_mappings_config, ctx.rulesets, args.config, logger)
 
     # Auto-select processing mode
     use_parallel = False

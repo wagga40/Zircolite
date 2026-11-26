@@ -20,6 +20,7 @@ of the in-process CLI, so a built binary has to pass the same checks.
 import csv
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -632,6 +633,22 @@ class TestEmptyValues:
         detections = run_zircolite(tmp_path, source, ["-j", "-c", str(config)], ruleset=EMPTY_VALUE_RULESET)
         assert "empty" not in matched_images(detections)
         assert "drops empty values" in (tmp_path / "zircolite.log").read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("explicit", [True, False], ids=["-D", "auto-detected"])
+    def test_database_input_gets_no_empty_value_warning(self, tmp_path, explicit):
+        from contextlib import closing
+        source = tmp_path / "events.db"
+        with closing(sqlite3.connect(source)) as db:
+            db.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, Image TEXT, ParentCommandLine TEXT)")
+            db.execute("INSERT INTO logs(Image, ParentCommandLine) VALUES ('C:\\a.exe', '')")
+            db.commit()
+        config = tmp_path / "drop-empty.json"
+        config.write_text(json.dumps({"exclusions": [], "useless": [None, ""], "alias": {}, "split": {},
+                                      "transforms_enabled": False, "transforms": {}, "mappings": {}}))
+        flags = ["-c", str(config), *(["-D"] if explicit else [])]
+        detections = run_zircolite(tmp_path, source, flags, ruleset=EMPTY_VALUE_RULESET)
+        assert matched_images(detections)["empty"] == ["C:\\a.exe"]  # the database was read
+        assert "drops empty values" not in (tmp_path / "zircolite.log").read_text(encoding="utf-8")
 
 
 class TestEvtxXmlFieldParity:
