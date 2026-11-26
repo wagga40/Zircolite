@@ -116,6 +116,18 @@ def test_an_event_with_both_spellings_keeps_the_one_whose_value_was_stored(tmp_p
         ("whoami d1", "ProcessId", "0x3"), ("whoami d2", "ProcessID", "0x5"), ("whoami d3", "ProcessId", "0x7")}
 
 
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_an_empty_spelling_gives_way_to_a_value(tmp_path, layout):
+    inputs = write_inputs(tmp_path / "inputs", {"g.json": [
+        {"CommandLine": "whoami g1", "ProcessID": "", "ProcessId": "0x9"},
+        {"CommandLine": "whoami g2", "ProcessId": "", "ProcessID": "0xa"},
+        {"CommandLine": "whoami g3", "ProcessId": "", "ProcessID": ""},
+    ]})
+    results = run(tmp_path, inputs, "--json-input", *LAYOUTS[layout])
+    assert process_ids(matched_events(results)) == {
+        ("whoami g1", "ProcessId", "0x9"), ("whoami g2", "ProcessID", "0xa"), ("whoami g3", "ProcessId", "")}
+
+
 def test_one_files_record_never_renames_the_next_files_rows(tmp_path):
     # Per-file runs reuse the database and number each file's rows from one, so
     # a record left behind would rename the next file's rows, in either order.

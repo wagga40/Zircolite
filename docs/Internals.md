@@ -66,7 +66,9 @@ them. A correlation plan that identifies events by `rowid`, the backend's defaul
 refused; Zircolite converts rules with `row_id`.
 
 **Spellings.** SQLite column names are case-insensitive, so `ProcessId` and `ProcessID`
-share one column, named after the first spelling stored. Ingestion records every event that
+share one column, named after the first spelling stored. An event that carries two spellings
+stores the first value that is not empty, or its first empty value when neither holds text,
+and prints under that value's spelling. Ingestion records every event that
 spelled a field otherwise (tables `field_spellings` and `logs_spelling`), and output prints
 each event with its own spelling, so per-file, unified and parallel runs print an event the
 same way. The time field is the exception: it always prints under its `--timefield` name,

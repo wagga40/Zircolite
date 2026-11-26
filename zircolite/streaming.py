@@ -614,7 +614,9 @@ def _build_rows(batch, all_columns, all_columns_frozen, uniform):
     """
     if len(all_columns) != len(all_columns_frozen):
         # Case-collision batch: merge values across case variants per event
-        # (first non-None wins) and bind against the canonical column.
+        # and bind against the canonical column. The first value that is not
+        # empty wins, else the first that is not null: an empty spelling must
+        # not hide the value another spelling of the field carries.
         canonical_lower = tuple(col.lower() for col in all_columns)
         rows = []
         lower = str.lower
@@ -626,7 +628,8 @@ def _build_rows(batch, all_columns, all_columns_frozen, uniform):
                 merged = {}
                 for k, v in event.items():
                     kl = k.lower()
-                    if kl not in merged or merged[kl] is None:
+                    kept = merged.get(kl)
+                    if kept is None or (kept == "" and v is not None and v != ""):
                         merged[kl] = v
             rows.append(tuple(map(merged.get, canonical_lower)))
         return rows
@@ -2183,9 +2186,13 @@ class StreamingEventProcessor:
                 present = [key for key in keys if event.get(key) is not None]
                 if not present:
                     continue
-                # An event carrying both spellings keeps the first value that is
-                # not null, as _build_rows does, and that key's spelling with it.
-                stored = present[0] if len(present) == 1 else next(key for key in event if key in present)
+                # An event carrying both spellings keeps the value _build_rows
+                # stores, the first that is not empty, and that key's spelling with it.
+                if len(present) == 1:
+                    stored = present[0]
+                else:
+                    ordered = [key for key in event if key in present]
+                    stored = next((key for key in ordered if event[key] != ""), ordered[0])
                 if stored != column:
                     names.append(stored)
             if names:
