@@ -5154,6 +5154,9 @@ class TestEmptyValueRuleWarning:
         records = self._warnings(caplog, {"useless": [None, ""]}, self.RULES)
         assert len(records) == 1
         assert "2 rule(s)" in caplog.text
+        # Filters on '' over-match rather than miss, so "cannot match" would be wrong for them.
+        assert "may evaluate empty fields differently than written" in caplog.text
+        assert "a filter on '' stops excluding" in caplog.text
         assert "empty parent" in caplog.text and "user exists" in caplog.text
         assert "burst" not in caplog.text and "plain" not in caplog.text
 

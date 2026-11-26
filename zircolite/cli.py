@@ -1309,9 +1309,10 @@ def _warn_empty_value_rules(
     examples = ", ".join(literal(title) for title in titles[:3])
     logger.warning(
         f"[yellow]   [!] {literal(config_path)} drops empty values (\"\" under useless): "
-        f"{len(titles)} rule(s) testing a field for '' or with |exists cannot match an empty "
-        f"field as written, e.g. {examples}. Remove \"\" from useless to evaluate them as "
-        f"written[/]"
+        f"{len(titles)} rule(s) test a field for '' or with |exists and may evaluate empty "
+        f"fields differently than written (a test for '' or |exists cannot match one, a filter "
+        f"on '' stops excluding it), e.g. {examples}. Remove \"\" from useless to evaluate them "
+        f"as written[/]"
     )
     logger.debug(f"Rules defeated by dropping empty values: {literal(', '.join(titles))}")
 

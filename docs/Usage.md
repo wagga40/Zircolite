@@ -761,7 +761,8 @@ split:                    # parse key=value strings into separate fields
   without the field. A JSON field whose value is `null` is stored as absent: `exists` cannot
   tell it from a missing field. CSV is the exception, see [CSV](#csv). Adding `""` to `useless`
   makes empty fields absent again; Zircolite then warns that the loaded rules testing for `''`
-  or using `exists` cannot match an empty field.
+  or using `exists` may evaluate empty fields differently than written: a test for `''` or
+  `exists` cannot match one, and a filter on `''` stops excluding it.
 - **Unnamed `<Data>` elements**, which many Application-log sources use, are joined with
   newlines into `Data` (what rules test with `Data|contains`) and copied to `Message` when the
   event has none.
