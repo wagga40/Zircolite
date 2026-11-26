@@ -632,3 +632,27 @@ class TestEmptyValues:
         detections = run_zircolite(tmp_path, source, ["-j", "-c", str(config)], ruleset=EMPTY_VALUE_RULESET)
         assert "empty" not in matched_images(detections)
         assert "drops empty values" in (tmp_path / "zircolite.log").read_text(encoding="utf-8")
+
+
+class TestEvtxXmlFieldParity:
+    """An EVTX file and its XML rendering must store the same fields."""
+
+    def test_evtx_and_its_xml_rendering_store_the_same_fields(self, tmp_path):
+        from evtx import PyEvtxParser
+
+        evtx = FIXTURES / "sample_bitsadmin.evtx"
+        xml = tmp_path / "bitsadmin.xml"
+        xml.write_text(
+            "".join(record["data"].split("?>", 1)[-1] for record in PyEvtxParser(str(evtx)).records()),
+            encoding="utf-8",
+        )
+        (tmp_path / "evtx").mkdir()
+        (tmp_path / "xml").mkdir()
+        evtx_rows = run_zircolite(tmp_path / "evtx", evtx, [])[0]["matches"]
+        xml_rows = run_zircolite(tmp_path / "xml", xml, ["-x"])[0]["matches"]
+
+        # Values may differ in type (EVTX keeps EventData integers); the fields may not.
+        ignore = {"row_id", "OriginalLogfile"}
+        assert [sorted(set(row) - ignore) for row in xml_rows] == [
+            sorted(set(row) - ignore) for row in evtx_rows
+        ]

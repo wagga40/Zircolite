@@ -222,7 +222,11 @@ class EvtxExtractor:
                     continue
                 else:
                     child_node = cleaned_tag
-                    if elem.attrib:
+                    if raw_text is None and not elem.attrib:
+                        # The EVTX parser renders such an element, <Correlation/>
+                        # for one, as null; an empty <Data> stays "" in both.
+                        text = None
+                    elif elem.attrib:
                         # Classic providers write both, e.g.
                         # <EventID Qualifiers="16384">7045</EventID>. Keeping only
                         # the attributes would throw the EventID away.
