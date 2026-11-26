@@ -354,7 +354,8 @@ window, metric and the evidence events behind it:
   `unix_ms` or `unix_us`; a compiled ruleset keeps what it was converted with, and those
   `-U` installs expect `SystemTime` in ISO 8601. Events whose time cannot be read, or that
   lack a group-by field, are counted in `diagnostics`, and a warning at the end of the run
-  names the rule.
+  names the rule. An empty value is a value: events whose group-by field is empty form a
+  group of their own, and `value_count` counts an empty value once.
 - **One database.** A correlation sees the events of its own database, so several input
   files [force the unified layout](Advanced.md#automatic-processing-optimization). Several
   `--db-input` databases are always analysed apart. The

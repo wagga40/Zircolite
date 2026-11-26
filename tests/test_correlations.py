@@ -148,6 +148,19 @@ class TestCorrelationPlansRun:
         # Values compare case-insensitively, like the rest of Sigma
         assert [alert["metric_value"] for alert in result["matches"]] == [2]
 
+    def test_an_empty_group_by_value_is_a_group_and_null_is_none(self, tmp_path, make_core):
+        rules = convert(tmp_path, [base(), correlation()])
+        core = make_core([event(0, Computer=""), event(60, Computer=""),
+                          event(0, Computer=None), event(60, Computer=None)])
+        result = core.execute_rule(rules[0])
+        assert [alert["group_keys"] for alert in result["matches"]] == [{"Computer": ""}]
+
+    def test_value_count_counts_an_empty_value_once_and_null_never(self, tmp_path, make_core):
+        rules = convert(tmp_path, [base(), correlation("value_count", condition={"gte": 2, "field": "User"})])
+        assert [a["metric_value"] for a in make_core([event(0, User=""), event(1, User="a")])
+                .execute_rule(rules[0])["matches"]] == [2]
+        assert make_core([event(0, User=None), event(1, User="a")]).execute_rule(rules[0]) == {}
+
     def test_ordered_stages_need_increasing_timestamps(self, tmp_path, make_core):
         docs = [base("a", 1), base("b", 2), correlation("temporal_ordered", ("a", "b"))]
         rules = convert(tmp_path, docs)
