@@ -13,6 +13,7 @@ const wide = new Schema([...FIELDS, PARENT], TACTICS);
 const EXTRA = [
   'ALTER TABLE events ADD COLUMN "ParentImage" VARCHAR',
   "UPDATE events SET \"ParentImage\" = 'c:\\windows\\system32\\cmd.exe' WHERE _zl_uid = 4294967297",
+  "UPDATE events SET \"ParentImage\" = '' WHERE _zl_uid = 3",
 ];
 
 let db: Fixture;
@@ -56,6 +57,12 @@ describe('entities', () => {
         expect(listed.length, `${fields.map((f) => f.name)} ${row.v}`).toBe(row.events);
       }
     }
+  });
+
+  it('lists no empty text as an entity', async () => {
+    const values = (await rows(entityFields(kind('processes'), wide))).map((r) => r.v);
+    expect(values).not.toContain('');
+    expect(values.some((v) => v.toLowerCase().endsWith('cmd.exe'))).toBe(true);
   });
 
   it('counts an event once when two of its fields hold the value', async () => {
