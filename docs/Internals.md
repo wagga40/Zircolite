@@ -128,6 +128,9 @@ share one lexing pass. The command line keeps the results in the user's cache di
   hash of the analysing code (in a binary, the executable), with a SHA-256 checksum;
 - the eight newest files are kept, and a new selection reuses their statements and
   analyses only the rest;
+- the Docker image is built with one file holding every bundled statement
+  (`analysis_cache.seed`). No run selects exactly those, so each one recovers its own
+  statements from that file and saves them as its own selection;
 - process workers find the directory through `ZIRCOLITE_ANALYSIS_CACHE`, which the parent
   sets.
 

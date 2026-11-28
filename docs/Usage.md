@@ -89,6 +89,11 @@ docker run --rm --tty \
 ```
 
 - Put your own rules in a mounted directory: `--ruleset /case/input/my_rules.yml`.
+- Every bundled rule is [analysed](Internals.md#rule-execution) when the image is built, so
+  a run starts without that step (about 2 seconds with the default ruleset), whichever
+  bundled rulesets and rule filters it uses. What a run analyses itself, such as your own
+  rules, goes with the container; a named volume keeps it:
+  `-v zircolite-cache:/opt/zircolite/cache`.
 - Outputs that go to the working directory by default, such as `--package`, `--timeline`
   or `--keepflat`, disappear with the container: name a place under `/case/output`, as in
   `--package-dir /case/output` or `--timeline /case/output/timeline.csv`.

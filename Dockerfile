@@ -80,5 +80,13 @@ RUN chmod 0755 zircolite.py && \
     chown -R zircolite:zircolite ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
 USER zircolite
 
+# Analyse every bundled rule once, here, instead of at the start of each run.
+# A run recovers its rules from this file, whichever ruleset or rule filters it
+# uses. The path is fixed and readable by anyone, so a container started with
+# --user finds it too; only its owner adds to it.
+ENV ZIRCOLITE_CACHE_DIR="${ZIRCOLITE_INSTALL_PREFIX}/zircolite/cache"
+RUN python -c "from pathlib import Path; from zircolite.analysis_cache import seed; seed(Path('rules').rglob('rules_*.json'))" && \
+    chmod -R a+rX "${ZIRCOLITE_CACHE_DIR}"
+
 ENTRYPOINT ["python3", "zircolite.py"]
 CMD ["--help"]

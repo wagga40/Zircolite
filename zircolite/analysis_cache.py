@@ -13,6 +13,7 @@ in memory. Process workers inherit the directory through
 """
 
 import hashlib
+import json
 import logging
 import os
 import sys
@@ -127,6 +128,36 @@ def warm(rules: list[dict[str, Any]] | None) -> bool:
     return not missing
 
 
+def seed(rulesets: Iterable[Path], directory: Path | None = None) -> Path:
+    """Analyse every statement of these JSON rulesets into one file of ``directory``.
+
+    No run selects exactly these statements, so none finds the file by its key:
+    ``warm`` reads it as a recent file and recovers its own statements from it,
+    whichever of these rulesets and rule filters the run uses. The Docker image
+    calls this when it is built. Unlike a run, it raises when nothing can be
+    analysed or written, so an image never ships without the file.
+    """
+    directory = directory or default_directory()
+    if directory is None:
+        raise ValueError("the analysis cache is switched off")
+    rules: list[dict[str, Any]] = []
+    # Sorted, so rebuilding an image from the same rulesets writes the same file.
+    for ruleset in sorted(rulesets):
+        # The same decoder as RulesetHandler, so each statement is the same string.
+        parsed = json.loads(Path(ruleset).read_text(encoding="utf-8"))
+        if not isinstance(parsed, list) or not all(isinstance(rule, dict) for rule in parsed):
+            raise ValueError(f"{ruleset} is not a Zircolite ruleset")
+        rules.extend(parsed)
+    queries = rule_queries(rules)
+    if not queries:
+        raise ValueError("no rule statements to analyse")
+    index = _query_index(queries)
+    path = directory / f"analysis-{_selection_key(_code_fingerprint(), index)[:40]}.json"
+    _analyse(tuple(index.values()))
+    _write(path, index, {})
+    return path
+
+
 def _load(
     path: Path, wanted: dict[str, str], fingerprint: bytes, *, exact: bool = False,
 ) -> dict[str, tuple[bytes, bytes]]:
@@ -215,25 +246,29 @@ def _lines(index: dict[str, str], recovered: dict[str, tuple[bytes, bytes]]) -> 
 
 def _save(path: Path, index: dict[str, str], recovered: dict[str, tuple[bytes, bytes]]) -> None:
     try:
-        # Line by line: decoding them one at a time never holds the whole
-        # file as Python objects.
-        payload = b"\n".join(_lines(index, recovered))
-        header = orjson.dumps({"format": FORMAT, "queries": list(index),
-                               "sha256": hashlib.sha256(payload).hexdigest()})
-        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".analysis-", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(header + b"\n")
-                handle.write(payload)
-            os.replace(temporary, path)
-        except BaseException:
-            Path(temporary).unlink(missing_ok=True)
-            raise
-        for stale in _recent_files(path.parent)[KEEP:]:
-            stale.unlink(missing_ok=True)
+        _write(path, index, recovered)
     except (OSError, KeyError, TypeError, ValueError) as exc:
         logger.debug(f"Rule analysis cache not written: {exc}")
+
+
+def _write(path: Path, index: dict[str, str], recovered: dict[str, tuple[bytes, bytes]]) -> None:
+    # Line by line: decoding them one at a time never holds the whole
+    # file as Python objects.
+    payload = b"\n".join(_lines(index, recovered))
+    header = orjson.dumps({"format": FORMAT, "queries": list(index),
+                           "sha256": hashlib.sha256(payload).hexdigest()})
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".analysis-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(header + b"\n")
+            handle.write(payload)
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+    for stale in _recent_files(path.parent)[KEEP:]:
+        stale.unlink(missing_ok=True)
 
 
 def _recent_files(directory: Path) -> list[Path]:
