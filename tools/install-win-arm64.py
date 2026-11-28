@@ -7,7 +7,8 @@
 sdist, and jq cannot be built for the platform. So the lock is exported and
 installed with uv, minus those two:
 
-- evtx comes from a wheel built beforehand from pyevtx-rs with maturin;
+- evtx comes from a wheel built beforehand from pyevtx-rs with maturin, and
+  must be the version the lock pins;
 - jq is left out. pySigma imports it only inside its jq transformation, which
   Zircolite never uses.
 
@@ -37,6 +38,7 @@ REQUIREMENTS = Path("dist") / "reqs.txt"
 VENV = Path(".venv")
 DROPPED = frozenset({"evtx", "jq"})
 REQUIREMENT_NAME = re.compile(r"\s*([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)")
+PINNED_REQUIREMENT = re.compile(r"\s*([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)==([^\s;\\]+)")
 
 
 class InstallError(Exception):
@@ -86,6 +88,16 @@ def run(command: list[str]) -> None:
         raise InstallError(f"{command[0]} exited {result.returncode}")
 
 
+def pinned_version(text: str, name: str) -> str | None:
+    """The version a requirements export pins ``name`` to, if it pins one."""
+    wanted = canonical_name(name)
+    for record in requirement_records(text):
+        match = PINNED_REQUIREMENT.match(record[0])
+        if match and canonical_name(match.group(1)) == wanted:
+            return match.group(2)
+    return None
+
+
 def evtx_wheel(directory: Path) -> Path:
     wheels = sorted(directory.glob("evtx-*.whl"))
     if len(wheels) != 1:
@@ -106,6 +118,11 @@ def install(wheels: Path) -> None:
         # changed; both mean this recipe needs a look before it is trusted.
         raise InstallError(f"{REQUIREMENTS} has no requirement for: "
                            + ", ".join(sorted(DROPPED - removed)))
+    # A wheel left behind by an older pyevtx-rs commit would install without a
+    # word, and the binary would parse EVTX unlike every other target.
+    built, locked = wheel.name.split("-")[1], pinned_version(exported, "evtx")
+    if built != locked:
+        raise InstallError(f"{wheel.name} is evtx {built}, but the lock pins {locked}")
     (ROOT / REQUIREMENTS).write_text(filtered, encoding="utf-8")
     print(f"Dropped {', '.join(sorted(removed))} from {REQUIREMENTS.as_posix()}", flush=True)
 

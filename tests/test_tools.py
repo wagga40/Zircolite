@@ -1489,6 +1489,33 @@ class TestWinArm64Requirements:
         with pytest.raises(win_arm64.InstallError, match="exactly one evtx"):
             win_arm64.evtx_wheel(tmp_path)
 
+    def test_a_wheel_of_another_evtx_version_stops_the_recipe(self, win_arm64, tmp_path, monkeypatch, capsys):
+        commands = []
+
+        def fake_run(command):
+            commands.append(command)
+            if command[:2] == ["pdm", "export"]:
+                (tmp_path / "dist" / "reqs.txt").write_text(EXPORT, encoding="utf-8")
+
+        wheels = tmp_path / "wheels"
+        wheels.mkdir()
+        (wheels / "evtx-0.11.0-cp310-abi3-win_arm64.whl").write_bytes(b"")
+        monkeypatch.setattr(win_arm64, "ROOT", tmp_path)
+        monkeypatch.setattr(win_arm64, "run", fake_run)
+        assert win_arm64.main(["--wheels", str(wheels)]) == 1
+        assert "evtx 0.11.0, but the lock pins 0.12.1" in capsys.readouterr().err
+        assert len(commands) == 1
+
+    def test_the_workflow_builds_the_locked_evtx(self):
+        """The arm64 binary must parse EVTX with the same evtx as every other target."""
+        import tomllib
+
+        lock = tomllib.loads((WORKSPACE_ROOT / "pdm.lock").read_text(encoding="utf-8"))
+        locked = {package["version"] for package in lock["package"] if package["name"] == "evtx"}
+        workflow = (WORKSPACE_ROOT / ".github" / "workflows" / "build_pyinstaller.yml").read_text(encoding="utf-8")
+        built = re.findall(r"#\s*omerbenamram/pyevtx-rs tag (\S+)\n\s*PYEVTX_RS_COMMIT:", workflow)
+        assert len(locked) == 1 and built == list(locked)
+
 
 class TestSvgThemeVariants:
     """The README's fixed-palette copies of an explainer stay generated from it."""

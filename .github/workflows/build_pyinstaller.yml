@@ -108,8 +108,8 @@ jobs:
     timeout-minutes: 90
     env:
       EXE_NAME: ${{ startsWith(matrix.target, 'windows-') && 'Zircolite.exe' || 'Zircolite' }}
-      # omerbenamram/pyevtx-rs tag 0.12.1
-      PYEVTX_RS_COMMIT: a2479984c37e701a8546432c2443e3325d4335b5
+      # omerbenamram/pyevtx-rs tag 0.15.0
+      PYEVTX_RS_COMMIT: bab39e6b9a821fa46d3f519afbcd73d96095794a
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -155,9 +155,9 @@ jobs:
         if: matrix.target == 'windows-arm64'
         run: python -m pip install --upgrade --quiet uv
 
-      # evtx 0.12.1 publishes neither a win_arm64 wheel nor an sdist, so the
-      # wheel is built from the release commit. It is abi3: one build serves
-      # every Python, and the commit alone keys it.
+      # evtx publishes neither a win_arm64 wheel nor an sdist, so the wheel is
+      # built from the commit of the version pdm.lock pins. It is abi3: one
+      # build serves every Python, and the commit alone keys it.
       - name: Restore the evtx wheel (Windows arm64)
         if: matrix.target == 'windows-arm64'
         id: evtx-wheel
