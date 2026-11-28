@@ -205,3 +205,52 @@ def test_a_damaged_plan_is_recomputed_when_first_asked_for(cache_dir):
     assert text in prefilter._PENDING_PLANS
     assert prefilter._plan_for(text) == expected
     assert text not in prefilter._PENDING_PLANS
+
+
+def write_ruleset(path, statements):
+    path.write_bytes(orjson.dumps([{"title": f"r{i}", "rule": [sql]} for i, sql in enumerate(statements)]))
+    return path
+
+
+def test_a_seeded_file_serves_every_selection_of_its_rulesets(cache_dir, tmp_path_factory, monkeypatch):
+    a = "SELECT * FROM logs WHERE Image LIKE '%editor.exe'"
+    b = "SELECT * FROM logs WHERE EventID=2"
+    c = "  SELECT * FROM logs WHERE Channel='x'; "
+    expected = snapshot((a, b, c))
+    forget()
+    rules = tmp_path_factory.mktemp("rules")
+    one = write_ruleset(rules / "rules_one.json", [a, b])
+    two = write_ruleset(rules / "rules_two.json", [c, b])
+    seeded = analysis_cache.seed([two, one])
+    assert seeded.parent == cache_dir
+    assert analysis_cache.seed([one, two]) == seeded
+    forget()
+
+    def refuse(queries):
+        raise AssertionError(f"analysed {queries}")
+
+    monkeypatch.setattr(analysis_cache, "_analyse", refuse)
+    # Whole rulesets, a filtered rule and a mix of both: none is the seeded selection.
+    for selection in ([{"rule": [a]}, {"rule": [b]}], [{"rule": [c]}], [{"rule": [b]}, {"rule": [c]}]):
+        assert analysis_cache.warm(selection) is True
+        assert snapshot((a, b, c)) == expected
+        forget()
+
+
+@pytest.mark.parametrize("problem", ["no statements", "not a ruleset", "unwritable", "cache off"])
+def test_seeding_raises_instead_of_shipping_no_file(cache_dir, tmp_path_factory, monkeypatch, problem):
+    rules = tmp_path_factory.mktemp("rules")
+    ruleset = write_ruleset(rules / "rules_one.json", ["SELECT * FROM logs WHERE EventID=1"])
+    directory = None
+    if problem == "no statements":
+        ruleset = write_ruleset(ruleset, [])
+    elif problem == "not a ruleset":
+        ruleset.write_bytes(b'{"rule": []}')
+    elif problem == "unwritable":
+        directory = rules / "taken"
+        directory.write_bytes(b"")
+    else:
+        monkeypatch.setenv("ZIRCOLITE_NO_CACHE", "1")
+    with pytest.raises((ValueError, OSError)):
+        analysis_cache.seed([ruleset], directory)
+    assert not list(cache_dir.glob("analysis-*.json"))
