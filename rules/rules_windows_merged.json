@@ -27960,7 +27960,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((TargetFilename LIKE 'C:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%.exe' ESCAPE '\\') AND (NOT COALESCE((Image LIKE 'C:\\\\Windows\\\\Systems32\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((TargetFilename LIKE 'C:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%.exe' ESCAPE '\\') AND (NOT COALESCE((Image LIKE 'C:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -39966,6 +39966,44 @@
     "title": "Rhadamanthys Stealer Module Launch Via Rundll32.EXE - Generic"
   },
   {
+    "author": "Nasreddine Bencherchali (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-AppXDeploymentServer/Operational"
+    ],
+    "description": "Detects an appx package that was added to the pipeline of the \"to be processed\" packages that is located in a known folder often used as a staging directory.",
+    "eventid": [
+      854
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "rules/windows/builtin/appxdeployment_server/win_appxdeployment_server_appx_package_in_staging_directory.yml",
+    "id": "5cdeaf3d-1489-477c-95ab-c318559fc051",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "appxdeployment-server"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Path"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-AppXDeploymentServer/Operational' AND (EventID=854 AND ((Path LIKE '%:/Perflogs/%' ESCAPE '\\' OR Path LIKE '%:/Users/Public/%' ESCAPE '\\' OR Path LIKE '%:/Windows/Temp/%' ESCAPE '\\' OR Path LIKE '%/AppData/Local/Temp/%' ESCAPE '\\' OR Path LIKE '%/Desktop/%' ESCAPE '\\' OR Path LIKE '%/Downloads/%' ESCAPE '\\') OR (Path LIKE '%:\\\\PerfLogs\\\\%' ESCAPE '\\' OR Path LIKE '%:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR Path LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\Desktop\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\Downloads\\\\%' ESCAPE '\\')) AND (NOT COALESCE((Path LIKE '%/AppData/Local/Temp/WinGet/Microsoft.Winget.Source%' ESCAPE '\\' OR Path LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\WinGet\\\\Microsoft.Winget.Source%' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.stealth"
+    ],
+    "title": "AppX Located in Known Staging Directory Added to Deployment Pipeline"
+  },
+  {
     "author": "Andreas Braathen (mnemonic.io)",
     "channel": [
       "Security"
@@ -41708,7 +41746,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4103 AND (ContextInfo LIKE '%' ESCAPE '\\' AND (NOT COALESCE(((ContextInfo LIKE '%= powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/System32/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\') OR ContextInfo LIKE '%= C:\\\\WINDOWS\\\\System32\\\\sdiagnhost.exe -Embedding%' ESCAPE '\\' OR ContextInfo LIKE '%ConfigSyncRun.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\dsac.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\wsmprovhost.exe -Embedding%' ESCAPE '\\' OR (Payload LIKE '%Update-Help%' ESCAPE '\\' OR Payload LIKE '%Failed to update Help for the module%' ESCAPE '\\') OR ContextInfo LIKE '%Host Name = WaPSHost%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4103 AND (ContextInfo LIKE '%' ESCAPE '\\' AND (NOT COALESCE(((ContextInfo LIKE '%= powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/System32/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\') OR ContextInfo LIKE '%= C:\\\\WINDOWS\\\\System32\\\\sdiagnhost.exe -Embedding%' ESCAPE '\\' OR ContextInfo LIKE '%ConfigSyncRun.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\dsac.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\wsmprovhost.exe -Embedding%' ESCAPE '\\' OR (Payload LIKE '%Update-Help%' ESCAPE '\\' OR Payload LIKE '%Failed to update Help for the module%' ESCAPE '\\') OR ContextInfo LIKE '%Host Name = WaPSHost%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -50913,7 +50951,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\Foxmail\\\\V3.1%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\FoxmailPreview%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\DownloadManager\\\\Passwords%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\FTPWare\\\\COREFTP\\\\Sites%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\IncrediMail\\\\Identities%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Martin Prikryl\\\\WinSCP 2\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Mobatek\\\\MobaXterm\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenSSH\\\\Agent\\\\Keys%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenVPN-GUI\\\\configs%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\ORL\\\\WinVNC3\\\\Password%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Qualcomm\\\\Eudora\\\\CommandLine%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RealVNC\\\\WinVNC4%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RimArts\\\\B2\\\\Settings%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\SshHostKeys\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Sota\\\\FFFTP%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\TightVNC\\\\Server%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\WOW6432Node\\\\Radmin\\\\v3.0\\\\Server\\\\Parameters\\\\Radmin%' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%reg.exe' ESCAPE '\\' AND (CommandLine LIKE '%export%' ESCAPE '\\' OR CommandLine LIKE '%save%' ESCAPE '\\')), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\Foxmail\\\\V3.1%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\FoxmailPreview%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\DownloadManager\\\\Passwords%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\FTPWare\\\\COREFTP\\\\Sites%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\IncrediMail\\\\Identities%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Martin Prikryl\\\\WinSCP 2\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Mobatek\\\\MobaXterm\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenSSH\\\\Agent\\\\Keys%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenVPN-GUI\\\\configs%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\ORL\\\\WinVNC3\\\\Password%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Qualcomm\\\\Eudora\\\\CommandLine%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RealVNC\\\\WinVNC4%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RimArts\\\\B2\\\\Settings%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\SshHostKeys\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Sota\\\\FFFTP%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\TightVNC\\\\Server%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\WOW6432Node\\\\Radmin\\\\v3.0\\\\Server\\\\Parameters\\\\Radmin%' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%\\\\reg.exe' ESCAPE '\\' AND (CommandLine LIKE '%export%' ESCAPE '\\' OR CommandLine LIKE '%save%' ESCAPE '\\')), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -50953,7 +50991,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\Foxmail\\\\V3.1%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\FoxmailPreview%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\DownloadManager\\\\Passwords%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\FTPWare\\\\COREFTP\\\\Sites%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\IncrediMail\\\\Identities%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Martin Prikryl\\\\WinSCP 2\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Mobatek\\\\MobaXterm\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenSSH\\\\Agent\\\\Keys%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenVPN-GUI\\\\configs%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\ORL\\\\WinVNC3\\\\Password%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Qualcomm\\\\Eudora\\\\CommandLine%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RealVNC\\\\WinVNC4%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RimArts\\\\B2\\\\Settings%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\SshHostKeys\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Sota\\\\FFFTP%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\TightVNC\\\\Server%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\WOW6432Node\\\\Radmin\\\\v3.0\\\\Server\\\\Parameters\\\\Radmin%' ESCAPE '\\') AND (NOT COALESCE((NewProcessName LIKE '%reg.exe' ESCAPE '\\' AND (CommandLine LIKE '%export%' ESCAPE '\\' OR CommandLine LIKE '%save%' ESCAPE '\\')), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\Foxmail\\\\V3.1%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\FoxmailPreview%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\DownloadManager\\\\Passwords%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\FTPWare\\\\COREFTP\\\\Sites%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\IncrediMail\\\\Identities%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Martin Prikryl\\\\WinSCP 2\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Mobatek\\\\MobaXterm\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenSSH\\\\Agent\\\\Keys%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenVPN-GUI\\\\configs%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\ORL\\\\WinVNC3\\\\Password%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Qualcomm\\\\Eudora\\\\CommandLine%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RealVNC\\\\WinVNC4%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RimArts\\\\B2\\\\Settings%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\SshHostKeys\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Sota\\\\FFFTP%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\TightVNC\\\\Server%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\WOW6432Node\\\\Radmin\\\\v3.0\\\\Server\\\\Parameters\\\\Radmin%' ESCAPE '\\') AND (NOT COALESCE((NewProcessName LIKE '%\\\\reg.exe' ESCAPE '\\' AND (CommandLine LIKE '%export%' ESCAPE '\\' OR CommandLine LIKE '%save%' ESCAPE '\\')), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -52024,7 +52062,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND (DestinationHostname LIKE '%azurefd.net%' ESCAPE '\\' AND (NOT COALESCE(((Image LIKE '%brave.exe' ESCAPE '\\' OR Image LIKE '%chrome.exe' ESCAPE '\\' OR Image LIKE '%chromium.exe' ESCAPE '\\' OR Image LIKE '%firefox.exe' ESCAPE '\\' OR Image LIKE '%msedge.exe' ESCAPE '\\' OR Image LIKE '%msedgewebview2.exe' ESCAPE '\\' OR Image LIKE '%opera.exe' ESCAPE '\\' OR Image LIKE '%vivaldi.exe' ESCAPE '\\') OR Image LIKE '%searchapp.exe' ESCAPE '\\' OR (DestinationHostname LIKE '%afdxtest.z01.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%fp-afd.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%fp-afdx-bpdee4gtg6frejfd.z01.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%roxy.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%powershellinfraartifacts-gkhedzdeaghdezhr.z01.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%storage-explorer-publishing-feapcgfgbzc2cjek.b01.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%graph.azurefd.net%' ESCAPE '\\')), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND (DestinationHostname LIKE '%azurefd.net%' ESCAPE '\\' AND (NOT COALESCE(((Image LIKE '%\\\\brave.exe' ESCAPE '\\' OR Image LIKE '%\\\\chrome.exe' ESCAPE '\\' OR Image LIKE '%\\\\chromium.exe' ESCAPE '\\' OR Image LIKE '%\\\\firefox.exe' ESCAPE '\\' OR Image LIKE '%\\\\msedge.exe' ESCAPE '\\' OR Image LIKE '%\\\\msedgewebview2.exe' ESCAPE '\\' OR Image LIKE '%\\\\opera.exe' ESCAPE '\\' OR Image LIKE '%\\\\vivaldi.exe' ESCAPE '\\') OR Image LIKE '%\\\\searchapp.exe' ESCAPE '\\' OR (DestinationHostname LIKE '%afdxtest.z01.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%fp-afd.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%fp-afdx-bpdee4gtg6frejfd.z01.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%roxy.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%powershellinfraartifacts-gkhedzdeaghdezhr.z01.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%storage-explorer-publishing-feapcgfgbzc2cjek.b01.azurefd.net%' ESCAPE '\\' OR DestinationHostname LIKE '%graph.azurefd.net%' ESCAPE '\\')), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -85495,7 +85533,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects usage of namp/zenmap. Adversaries may attempt to get a listing of services running on remote hosts, including those that may be vulnerable to remote software exploitation",
+    "description": "Detects usage of nmap/zenmap. Adversaries may attempt to get a listing of services running on remote hosts, including those that may be vulnerable to remote software exploitation",
     "eventid": [
       1
     ],
@@ -85519,7 +85557,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\nmap.exe' ESCAPE '\\' OR Image LIKE '%\\\\zennmap.exe' ESCAPE '\\') OR (OriginalFileName='nmap.exe' OR OriginalFileName='zennmap.exe')))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\nmap.exe' ESCAPE '\\' OR Image LIKE '%\\\\zenmap.exe' ESCAPE '\\') OR (OriginalFileName='nmap.exe' OR OriginalFileName='zenmap.exe')))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -85536,7 +85574,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects usage of namp/zenmap. Adversaries may attempt to get a listing of services running on remote hosts, including those that may be vulnerable to remote software exploitation",
+    "description": "Detects usage of nmap/zenmap. Adversaries may attempt to get a listing of services running on remote hosts, including those that may be vulnerable to remote software exploitation",
     "eventid": [
       4688
     ],
@@ -85559,7 +85597,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\nmap.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\zennmap.exe' ESCAPE '\\') OR (OriginalFileName='nmap.exe' OR OriginalFileName='zennmap.exe')))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\nmap.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\zenmap.exe' ESCAPE '\\') OR (OriginalFileName='nmap.exe' OR OriginalFileName='zenmap.exe')))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -94824,7 +94862,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%Remove-EtwTraceProvider %' ESCAPE '\\' OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%0x11%' ESCAPE '\\') OR ((ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '% 17%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%\u201c''17''\u201d%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%\u201d17\u201d%' ESCAPE '\\'))))"
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%Remove-EtwTraceProvider %' ESCAPE '\\' OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%0x11%' ESCAPE '\\') OR ((ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '% 17%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%''17''%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%\"17\"%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -102983,7 +103021,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND ((Initiated='true' AND (DestinationHostname LIKE '%.t.me' ESCAPE '\\' OR DestinationHostname LIKE '%0x0.st' ESCAPE '\\' OR DestinationHostname LIKE '%4shared.com' ESCAPE '\\' OR DestinationHostname LIKE '%abuse.ch' ESCAPE '\\' OR DestinationHostname LIKE '%anonfiles.com' ESCAPE '\\' OR DestinationHostname LIKE '%bashupload.com' ESCAPE '\\' OR DestinationHostname LIKE '%cdn.discordapp.com' ESCAPE '\\' OR DestinationHostname LIKE '%chunk.io' ESCAPE '\\' OR DestinationHostname LIKE '%cloudflare.com' ESCAPE '\\' OR DestinationHostname LIKE '%ddns.net' ESCAPE '\\' OR DestinationHostname LIKE '%discord.com' ESCAPE '\\' OR DestinationHostname LIKE '%docs.google.com' ESCAPE '\\' OR DestinationHostname LIKE '%drive.google.com' ESCAPE '\\' OR DestinationHostname LIKE '%dropbox.com' ESCAPE '\\' OR DestinationHostname LIKE '%dropmefiles.com' ESCAPE '\\' OR DestinationHostname LIKE '%facebook.com' ESCAPE '\\' OR DestinationHostname LIKE '%feeds.rapidfeeds.com' ESCAPE '\\' OR DestinationHostname LIKE '%fotolog.com' ESCAPE '\\' OR DestinationHostname LIKE '%ghostbin.co/' ESCAPE '\\' OR DestinationHostname LIKE '%githubusercontent.com' ESCAPE '\\' OR DestinationHostname LIKE '%gofile.io' ESCAPE '\\' OR DestinationHostname LIKE '%hastebin.com' ESCAPE '\\' OR DestinationHostname LIKE '%imgur.com' ESCAPE '\\' OR DestinationHostname LIKE '%livejournal.com' ESCAPE '\\' OR DestinationHostname LIKE '%mediafire.com' ESCAPE '\\' OR DestinationHostname LIKE '%mega.co.nz' ESCAPE '\\' OR DestinationHostname LIKE '%mega.nz' ESCAPE '\\' OR DestinationHostname LIKE '%onedrive.com' ESCAPE '\\' OR DestinationHostname LIKE '%pages.dev' ESCAPE '\\' OR DestinationHostname LIKE '%paste.ee' ESCAPE '\\' OR DestinationHostname LIKE '%pastebin.com' ESCAPE '\\' OR DestinationHostname LIKE '%pastebin.pl' ESCAPE '\\' OR DestinationHostname LIKE '%pastetext.net' ESCAPE '\\' OR DestinationHostname LIKE '%pixeldrain.com' ESCAPE '\\' OR DestinationHostname LIKE '%privatlab.com' ESCAPE '\\' OR DestinationHostname LIKE '%privatlab.net' ESCAPE '\\' OR DestinationHostname LIKE '%reddit.com' ESCAPE '\\' OR DestinationHostname LIKE '%send.exploit.in' ESCAPE '\\' OR DestinationHostname LIKE '%sendspace.com' ESCAPE '\\' OR DestinationHostname LIKE '%steamcommunity.com' ESCAPE '\\' OR DestinationHostname LIKE '%storage.googleapis.com' ESCAPE '\\' OR DestinationHostname LIKE '%technet.microsoft.com' ESCAPE '\\' OR DestinationHostname LIKE '%temp.sh' ESCAPE '\\' OR DestinationHostname LIKE '%transfer.sh' ESCAPE '\\' OR DestinationHostname LIKE '%trycloudflare.com' ESCAPE '\\' OR DestinationHostname LIKE '%twitter.com' ESCAPE '\\' OR DestinationHostname LIKE '%ufile.io' ESCAPE '\\' OR DestinationHostname LIKE '%vimeo.com' ESCAPE '\\' OR DestinationHostname LIKE '%w3spaces.com' ESCAPE '\\' OR DestinationHostname LIKE '%wetransfer.com' ESCAPE '\\' OR DestinationHostname LIKE '%workers.dev' ESCAPE '\\' OR DestinationHostname LIKE '%x0.at' ESCAPE '\\' OR DestinationHostname LIKE '%youtube.com' ESCAPE '\\')) AND (NOT COALESCE(((Image LIKE 'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Users\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\AppData\\\\Local\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Users\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\AppData\\\\Local\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Program Files (x86)\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeWebView\\\\Application\\\\%' ESCAPE '\\' OR Image LIKE '%\\\\WindowsApps\\\\MicrosoftEdge.exe' ESCAPE '\\' OR (Image LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\')) OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\') AND (Image LIKE '%\\\\msedge.exe' ESCAPE '\\' OR Image LIKE '%\\\\msedgewebview2.exe' ESCAPE '\\')) OR ((Image LIKE '%C:\\\\Program Files (x86)\\\\Safari\\\\%' ESCAPE '\\' OR Image LIKE '%C:\\\\Program Files\\\\Safari\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\safari.exe' ESCAPE '\\') OR ((Image LIKE '%C:\\\\Program Files\\\\Windows Defender Advanced Threat Protection\\\\%' ESCAPE '\\' OR Image LIKE '%C:\\\\Program Files\\\\Windows Defender\\\\%' ESCAPE '\\' OR Image LIKE '%C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Platform\\\\%' ESCAPE '\\') AND (Image LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR Image LIKE '%\\\\MsSense.exe' ESCAPE '\\')) OR (Image LIKE '%C:\\\\Program Files (x86)\\\\PRTG Network Monitor\\\\PRTG Probe.exe' ESCAPE '\\' OR Image LIKE '%C:\\\\Program Files\\\\PRTG Network Monitor\\\\PRTG Probe.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Program Files\\\\BraveSoftware\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\brave.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Maxthon\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\maxthon.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Programs\\\\Opera\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\opera.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\SeaMonkey\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\SeaMonkey\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\seamonkey.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Vivaldi\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\vivaldi.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\Naver\\\\Naver Whale\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Naver\\\\Naver Whale\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\whale.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\Waterfox\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Waterfox\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\Waterfox.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Programs\\\\midori-ng\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Midori Next Generation.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\SlimBrowser\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\SlimBrowser\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\slimbrowser.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Flock\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Flock.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Phoebe\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Phoebe.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\Falkon\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Falkon\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\falkon.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\QtWeb\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\QtWeb\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\QtWeb.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\Avant Browser\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Avant Browser\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\avant.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\WindowsApps\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\WindowsApps\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\WhatsApp.exe' ESCAPE '\\' AND DestinationHostname LIKE '%facebook.com' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Roaming\\\\Telegram Desktop\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Telegram.exe' ESCAPE '\\' AND DestinationHostname LIKE '%.t.me' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\OneDrive.exe' ESCAPE '\\' AND DestinationHostname LIKE '%onedrive.com' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\Dropbox\\\\Client\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Dropbox\\\\Client\\\\%' ESCAPE '\\') AND (Image LIKE '%\\\\Dropbox.exe' ESCAPE '\\' OR Image LIKE '%\\\\DropboxInstaller.exe' ESCAPE '\\') AND DestinationHostname LIKE '%dropbox.com' ESCAPE '\\') OR ((Image LIKE '%\\\\MEGAsync.exe' ESCAPE '\\' OR Image LIKE '%\\\\MEGAsyncSetup32\\_%RC.exe' ESCAPE '\\' OR Image LIKE '%\\\\MEGAsyncSetup32.exe' ESCAPE '\\' OR Image LIKE '%\\\\MEGAsyncSetup64.exe' ESCAPE '\\' OR Image LIKE '%\\\\MEGAupdater.exe' ESCAPE '\\') AND (DestinationHostname LIKE '%mega.co.nz' ESCAPE '\\' OR DestinationHostname LIKE '%mega.nz' ESCAPE '\\')) OR ((Image LIKE '%C:\\\\Program Files\\\\Google\\\\Drive File Stream\\\\%' ESCAPE '\\' OR Image LIKE '%C:\\\\Program Files (x86)\\\\Google\\\\Drive File Stream\\\\%' ESCAPE '\\') AND Image LIKE '%GoogleDriveFS.exe' ESCAPE '\\' AND DestinationHostname LIKE '%drive.google.com' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Discord\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Discord.exe' ESCAPE '\\' AND (DestinationHostname LIKE '%discord.com' ESCAPE '\\' OR DestinationHostname LIKE '%cdn.discordapp.com' ESCAPE '\\')) OR Image IS NULL OR Image=''), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND ((Initiated='true' AND (DestinationHostname LIKE '%.t.me' ESCAPE '\\' OR DestinationHostname LIKE '%0x0.st' ESCAPE '\\' OR DestinationHostname LIKE '%4shared.com' ESCAPE '\\' OR DestinationHostname LIKE '%abuse.ch' ESCAPE '\\' OR DestinationHostname LIKE '%anonfiles.com' ESCAPE '\\' OR DestinationHostname LIKE '%bashupload.com' ESCAPE '\\' OR DestinationHostname LIKE '%cdn.discordapp.com' ESCAPE '\\' OR DestinationHostname LIKE '%chunk.io' ESCAPE '\\' OR DestinationHostname LIKE '%cloudflare.com' ESCAPE '\\' OR DestinationHostname LIKE '%ddns.net' ESCAPE '\\' OR DestinationHostname LIKE '%discord.com' ESCAPE '\\' OR DestinationHostname LIKE '%docs.google.com' ESCAPE '\\' OR DestinationHostname LIKE '%drive.google.com' ESCAPE '\\' OR DestinationHostname LIKE '%dropbox.com' ESCAPE '\\' OR DestinationHostname LIKE '%dropmefiles.com' ESCAPE '\\' OR DestinationHostname LIKE '%facebook.com' ESCAPE '\\' OR DestinationHostname LIKE '%feeds.rapidfeeds.com' ESCAPE '\\' OR DestinationHostname LIKE '%fotolog.com' ESCAPE '\\' OR DestinationHostname LIKE '%ghostbin.co/' ESCAPE '\\' OR DestinationHostname LIKE '%githubusercontent.com' ESCAPE '\\' OR DestinationHostname LIKE '%gofile.io' ESCAPE '\\' OR DestinationHostname LIKE '%hastebin.com' ESCAPE '\\' OR DestinationHostname LIKE '%imgur.com' ESCAPE '\\' OR DestinationHostname LIKE '%livejournal.com' ESCAPE '\\' OR DestinationHostname LIKE '%mediafire.com' ESCAPE '\\' OR DestinationHostname LIKE '%mega.co.nz' ESCAPE '\\' OR DestinationHostname LIKE '%mega.nz' ESCAPE '\\' OR DestinationHostname LIKE '%onedrive.com' ESCAPE '\\' OR DestinationHostname LIKE '%pages.dev' ESCAPE '\\' OR DestinationHostname LIKE '%paste.ee' ESCAPE '\\' OR DestinationHostname LIKE '%pastebin.com' ESCAPE '\\' OR DestinationHostname LIKE '%pastebin.pl' ESCAPE '\\' OR DestinationHostname LIKE '%pastetext.net' ESCAPE '\\' OR DestinationHostname LIKE '%pixeldrain.com' ESCAPE '\\' OR DestinationHostname LIKE '%privatlab.com' ESCAPE '\\' OR DestinationHostname LIKE '%privatlab.net' ESCAPE '\\' OR DestinationHostname LIKE '%reddit.com' ESCAPE '\\' OR DestinationHostname LIKE '%send.exploit.in' ESCAPE '\\' OR DestinationHostname LIKE '%sendspace.com' ESCAPE '\\' OR DestinationHostname LIKE '%steamcommunity.com' ESCAPE '\\' OR DestinationHostname LIKE '%storage.googleapis.com' ESCAPE '\\' OR DestinationHostname LIKE '%technet.microsoft.com' ESCAPE '\\' OR DestinationHostname LIKE '%temp.sh' ESCAPE '\\' OR DestinationHostname LIKE '%transfer.sh' ESCAPE '\\' OR DestinationHostname LIKE '%trycloudflare.com' ESCAPE '\\' OR DestinationHostname LIKE '%twitter.com' ESCAPE '\\' OR DestinationHostname LIKE '%ufile.io' ESCAPE '\\' OR DestinationHostname LIKE '%vimeo.com' ESCAPE '\\' OR DestinationHostname LIKE '%w3spaces.com' ESCAPE '\\' OR DestinationHostname LIKE '%wetransfer.com' ESCAPE '\\' OR DestinationHostname LIKE '%workers.dev' ESCAPE '\\' OR DestinationHostname LIKE '%x0.at' ESCAPE '\\' OR DestinationHostname LIKE '%youtube.com' ESCAPE '\\')) AND (NOT COALESCE(((Image LIKE 'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Users\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\AppData\\\\Local\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Users\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\AppData\\\\Local\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Program Files (x86)\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeWebView\\\\Application\\\\%' ESCAPE '\\' OR Image LIKE '%\\\\WindowsApps\\\\MicrosoftEdge.exe' ESCAPE '\\' OR (Image LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\')) OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\') AND (Image LIKE '%\\\\msedge.exe' ESCAPE '\\' OR Image LIKE '%\\\\msedgewebview2.exe' ESCAPE '\\')) OR ((Image LIKE '%C:\\\\Program Files (x86)\\\\Safari\\\\%' ESCAPE '\\' OR Image LIKE '%C:\\\\Program Files\\\\Safari\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\safari.exe' ESCAPE '\\') OR ((Image LIKE '%C:\\\\Program Files\\\\Windows Defender Advanced Threat Protection\\\\%' ESCAPE '\\' OR Image LIKE '%C:\\\\Program Files\\\\Windows Defender\\\\%' ESCAPE '\\' OR Image LIKE '%C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Platform\\\\%' ESCAPE '\\') AND (Image LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR Image LIKE '%\\\\MsSense.exe' ESCAPE '\\')) OR (Image LIKE '%C:\\\\Program Files (x86)\\\\PRTG Network Monitor\\\\PRTG Probe.exe' ESCAPE '\\' OR Image LIKE '%C:\\\\Program Files\\\\PRTG Network Monitor\\\\PRTG Probe.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Program Files\\\\BraveSoftware\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\brave.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Maxthon\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\maxthon.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Programs\\\\Opera\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\opera.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\SeaMonkey\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\SeaMonkey\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\seamonkey.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Vivaldi\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\vivaldi.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\Naver\\\\Naver Whale\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Naver\\\\Naver Whale\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\whale.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\Waterfox\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Waterfox\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\Waterfox.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Programs\\\\midori-ng\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Midori Next Generation.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\SlimBrowser\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\SlimBrowser\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\slimbrowser.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Flock\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Flock.exe' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Phoebe\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Phoebe.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files\\\\Falkon\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files (x86)\\\\Falkon\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\falkon.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\QtWeb\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\QtWeb\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\QtWeb.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\Avant Browser\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Avant Browser\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\avant.exe' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\WindowsApps\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\WindowsApps\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\WhatsApp.exe' ESCAPE '\\' AND DestinationHostname LIKE '%facebook.com' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Roaming\\\\Telegram Desktop\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Telegram.exe' ESCAPE '\\' AND DestinationHostname LIKE '%.t.me' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\OneDrive.exe' ESCAPE '\\' AND DestinationHostname LIKE '%onedrive.com' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Program Files (x86)\\\\Dropbox\\\\Client\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Dropbox\\\\Client\\\\%' ESCAPE '\\') AND (Image LIKE '%\\\\Dropbox.exe' ESCAPE '\\' OR Image LIKE '%\\\\DropboxInstaller.exe' ESCAPE '\\') AND DestinationHostname LIKE '%dropbox.com' ESCAPE '\\') OR ((Image LIKE '%\\\\MEGAsync.exe' ESCAPE '\\' OR Image LIKE '%\\\\MEGAsyncSetup32\\_%RC.exe' ESCAPE '\\' OR Image LIKE '%\\\\MEGAsyncSetup32.exe' ESCAPE '\\' OR Image LIKE '%\\\\MEGAsyncSetup64.exe' ESCAPE '\\' OR Image LIKE '%\\\\MEGAupdater.exe' ESCAPE '\\') AND (DestinationHostname LIKE '%mega.co.nz' ESCAPE '\\' OR DestinationHostname LIKE '%mega.nz' ESCAPE '\\')) OR ((Image LIKE '%C:\\\\Program Files\\\\Google\\\\Drive File Stream\\\\%' ESCAPE '\\' OR Image LIKE '%C:\\\\Program Files (x86)\\\\Google\\\\Drive File Stream\\\\%' ESCAPE '\\') AND Image LIKE '%\\\\GoogleDriveFS.exe' ESCAPE '\\' AND DestinationHostname LIKE '%drive.google.com' ESCAPE '\\') OR (Image LIKE '%\\\\AppData\\\\Local\\\\Discord\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\Discord.exe' ESCAPE '\\' AND (DestinationHostname LIKE '%discord.com' ESCAPE '\\' OR DestinationHostname LIKE '%cdn.discordapp.com' ESCAPE '\\')) OR Image IS NULL OR Image=''), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -119881,44 +119919,6 @@
   {
     "author": "Nasreddine Bencherchali (Nextron Systems)",
     "channel": [
-      "Microsoft-Windows-AppXDeploymentServer/Operational"
-    ],
-    "description": "Detects an appx package that was added to the pipeline of the \"to be processed\" packages that is located in a known folder often used as a staging directory.",
-    "eventid": [
-      854
-    ],
-    "falsepositives": [
-      "Unknown"
-    ],
-    "filename": "rules/windows/builtin/appxdeployment_server/win_appxdeployment_server_appx_package_in_staging_directory.yml",
-    "id": "5cdeaf3d-1489-477c-95ab-c318559fc051",
-    "level": "high",
-    "license": "DRL-1.1",
-    "logsource": {
-      "product": "windows",
-      "service": "appxdeployment-server"
-    },
-    "required_fields": [
-      "Channel",
-      "EventID",
-      "Path"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-AppXDeploymentServer/Operational' AND (EventID=854 AND ((Path LIKE '%:/Perflogs/%' ESCAPE '\\' OR Path LIKE '%:/Users/Public/%' ESCAPE '\\' OR Path LIKE '%:/Windows/Temp/%' ESCAPE '\\' OR Path LIKE '%/AppdData/Local/Temp/%' ESCAPE '\\' OR Path LIKE '%/Desktop/%' ESCAPE '\\' OR Path LIKE '%/Downloads/%' ESCAPE '\\') OR (Path LIKE '%:\\\\PerfLogs\\\\%' ESCAPE '\\' OR Path LIKE '%:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR Path LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\AppdData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\Desktop\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\Downloads\\\\%' ESCAPE '\\')))"
-    ],
-    "schema_version": 2,
-    "source": "sigmahq",
-    "source_table": "logs",
-    "status": "test",
-    "tags": [
-      "attack.stealth"
-    ],
-    "title": "AppX Located in Known Staging Directory Added to Deployment Pipeline"
-  },
-  {
-    "author": "Nasreddine Bencherchali (Nextron Systems)",
-    "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
     "description": "Detects the setting of a custom protocol handler with the name \"rogue\". Seen being created by Forest Blizzard APT as reported by MSFT.",
@@ -130636,7 +130636,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (OriginalFileName='vmnat.exe' AND (NOT COALESCE((Image LIKE '%vmnat.exe' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (OriginalFileName='vmnat.exe' AND (NOT COALESCE((Image LIKE '%\\\\vmnat.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -130679,7 +130679,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (OriginalFileName='vmnat.exe' AND (NOT COALESCE((NewProcessName LIKE '%vmnat.exe' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (OriginalFileName='vmnat.exe' AND (NOT COALESCE((NewProcessName LIKE '%\\\\vmnat.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -136124,7 +136124,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR OriginalFileName LIKE '\\\\REGSVR32.EXE' ESCAPE '\\') AND CommandLine LIKE '% \\\\\\\\%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR OriginalFileName='REGSVR32.EXE') AND CommandLine LIKE '% \\\\\\\\%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -136165,7 +136165,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR OriginalFileName LIKE '\\\\REGSVR32.EXE' ESCAPE '\\') AND CommandLine LIKE '% \\\\\\\\%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR OriginalFileName='REGSVR32.EXE') AND CommandLine LIKE '% \\\\\\\\%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -154449,7 +154449,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((((Image LIKE '%\\\\csrss.exe' ESCAPE '\\' OR Image LIKE '%\\\\lsass.exe' ESCAPE '\\' OR Image LIKE '%\\\\RuntimeBroker.exe' ESCAPE '\\' OR Image LIKE '%\\\\sihost.exe' ESCAPE '\\' OR Image LIKE '%\\\\smss.exe' ESCAPE '\\' OR Image LIKE '%\\\\wininit.exe' ESCAPE '\\' OR Image LIKE '%\\\\winlogon.exe' ESCAPE '\\') AND (TargetFilename LIKE '%.bat' ESCAPE '\\' OR TargetFilename LIKE '%.dll' ESCAPE '\\' OR TargetFilename LIKE '%.exe' ESCAPE '\\' OR TargetFilename LIKE '%.hta' ESCAPE '\\' OR TargetFilename LIKE '%.iso' ESCAPE '\\' OR TargetFilename LIKE '%.ps1' ESCAPE '\\' OR TargetFilename LIKE '%.txt' ESCAPE '\\' OR TargetFilename LIKE '%.vbe' ESCAPE '\\' OR TargetFilename LIKE '%.vbs' ESCAPE '\\')) OR ((Image LIKE '%\\\\dllhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\svchost.exe' ESCAPE '\\') AND (TargetFilename LIKE '%.bat' ESCAPE '\\' OR TargetFilename LIKE '%.hta' ESCAPE '\\' OR TargetFilename LIKE '%.iso' ESCAPE '\\' OR TargetFilename LIKE '%.ps1' ESCAPE '\\' OR TargetFilename LIKE '%.vbe' ESCAPE '\\' OR TargetFilename LIKE '%.vbs' ESCAPE '\\'))) AND (NOT COALESCE(((Image LIKE 'C:\\\\Windows\\\\System32\\\\dllhost.exe' ESCAPE '\\' AND (TargetFilename LIKE '%:\\\\Users\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\\\_\\_PSScriptPolicyTest\\_%' ESCAPE '\\') AND TargetFilename LIKE '%.ps1' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\system32\\\\svchost.exe' ESCAPE '\\' AND (TargetFilename LIKE '%C:\\\\Windows\\\\System32\\\\GroupPolicy\\\\DataStore\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\sysvol\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\Policies\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\Machine\\\\Scripts\\\\Startup\\\\%' ESCAPE '\\') AND (TargetFilename LIKE '%.ps1' ESCAPE '\\' OR TargetFilename LIKE '%.bat' ESCAPE '\\')) OR (Image LIKE 'C:\\\\Windows\\\\system32\\\\svchost.exe' ESCAPE '\\' AND (TargetFilename LIKE '%C:\\\\Program Files\\\\WindowsApps\\\\Clipchamp%' ESCAPE '\\' AND TargetFilename LIKE '%.ps1%' ESCAPE '\\')) OR ((Image LIKE 'C:\\\\Windows\\\\system32\\\\svchost.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\svchost.exe' ESCAPE '\\') AND (TargetFilename LIKE 'C:\\\\Program Files\\\\WindowsApps\\\\Microsoft.PowerShellPreview%' ESCAPE '\\' OR TargetFilename LIKE 'C:\\\\Program Files (x86)\\\\WindowsApps\\\\Microsoft.PowerShellPreview%' ESCAPE '\\') AND TargetFilename LIKE '%.ps1' ESCAPE '\\')), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((((Image LIKE '%\\\\csrss.exe' ESCAPE '\\' OR Image LIKE '%\\\\lsass.exe' ESCAPE '\\' OR Image LIKE '%\\\\RuntimeBroker.exe' ESCAPE '\\' OR Image LIKE '%\\\\sihost.exe' ESCAPE '\\' OR Image LIKE '%\\\\smss.exe' ESCAPE '\\' OR Image LIKE '%\\\\wininit.exe' ESCAPE '\\' OR Image LIKE '%\\\\winlogon.exe' ESCAPE '\\') AND (TargetFilename LIKE '%.bat' ESCAPE '\\' OR TargetFilename LIKE '%.dll' ESCAPE '\\' OR TargetFilename LIKE '%.exe' ESCAPE '\\' OR TargetFilename LIKE '%.hta' ESCAPE '\\' OR TargetFilename LIKE '%.iso' ESCAPE '\\' OR TargetFilename LIKE '%.ps1' ESCAPE '\\' OR TargetFilename LIKE '%.txt' ESCAPE '\\' OR TargetFilename LIKE '%.vbe' ESCAPE '\\' OR TargetFilename LIKE '%.vbs' ESCAPE '\\')) OR ((Image LIKE '%\\\\dllhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\svchost.exe' ESCAPE '\\') AND (TargetFilename LIKE '%.bat' ESCAPE '\\' OR TargetFilename LIKE '%.hta' ESCAPE '\\' OR TargetFilename LIKE '%.iso' ESCAPE '\\' OR TargetFilename LIKE '%.ps1' ESCAPE '\\' OR TargetFilename LIKE '%.vbe' ESCAPE '\\' OR TargetFilename LIKE '%.vbs' ESCAPE '\\'))) AND (NOT COALESCE(((Image LIKE 'C:\\\\Windows\\\\System32\\\\dllhost.exe' ESCAPE '\\' AND (TargetFilename LIKE '%:\\\\Users\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\\\_\\_PSScriptPolicyTest\\_%' ESCAPE '\\') AND TargetFilename LIKE '%.ps1' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\system32\\\\svchost.exe' ESCAPE '\\' AND (TargetFilename LIKE '%C:\\\\Windows\\\\System32\\\\GroupPolicy\\\\DataStore\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\sysvol\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\Policies\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\Machine\\\\Scripts\\\\Startup\\\\%' ESCAPE '\\') AND (TargetFilename LIKE '%.ps1' ESCAPE '\\' OR TargetFilename LIKE '%.bat' ESCAPE '\\')) OR (Image LIKE 'C:\\\\Windows\\\\system32\\\\svchost.exe' ESCAPE '\\' AND (TargetFilename LIKE '%C:\\\\Program Files\\\\WindowsApps\\\\Clipchamp%' ESCAPE '\\' AND TargetFilename LIKE '%.ps1%' ESCAPE '\\')) OR ((Image LIKE 'C:\\\\Windows\\\\system32\\\\svchost.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\svchost.exe' ESCAPE '\\') AND (TargetFilename LIKE 'C:\\\\Program Files\\\\WindowsApps\\\\Microsoft.PowerShellPreview%' ESCAPE '\\' OR TargetFilename LIKE 'C:\\\\Program Files (x86)\\\\WindowsApps\\\\Microsoft.PowerShellPreview%' ESCAPE '\\') AND TargetFilename LIKE '%.ps1' ESCAPE '\\') OR ((Image LIKE 'C:\\\\Windows\\\\system32\\\\svchost.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\svchost.exe' ESCAPE '\\') AND (TargetFilename LIKE 'C:\\\\Program Files\\\\WindowsApps\\\\%' ESCAPE '\\' OR TargetFilename LIKE 'C:\\\\Program Files (x86)\\\\WindowsApps\\\\%' ESCAPE '\\' OR TargetFilename LIKE 'C:\\\\Windows\\\\SoftwareDistribution\\\\Download\\\\%' ESCAPE '\\'))), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -162828,7 +162828,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\UMWorkerProcess.exe' ESCAPE '\\' AND (NOT COALESCE((Image LIKE '%wermgr.exe' ESCAPE '\\' OR Image LIKE '%WerFault.exe' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\UMWorkerProcess.exe' ESCAPE '\\' AND (NOT COALESCE((Image LIKE '%\\\\wermgr.exe' ESCAPE '\\' OR Image LIKE '%\\\\WerFault.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -162870,7 +162870,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (ParentProcessName LIKE '%\\\\UMWorkerProcess.exe' ESCAPE '\\' AND (NOT COALESCE((NewProcessName LIKE '%wermgr.exe' ESCAPE '\\' OR NewProcessName LIKE '%WerFault.exe' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (ParentProcessName LIKE '%\\\\UMWorkerProcess.exe' ESCAPE '\\' AND (NOT COALESCE((NewProcessName LIKE '%\\\\wermgr.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\WerFault.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -173672,7 +173672,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\wsl.exe' ESCAPE '\\' OR OriginalFileName='wsl') AND (CommandLine LIKE '% --install %' ESCAPE '\\' OR CommandLine LIKE '% -i %' ESCAPE '\\') AND CommandLine LIKE '%kali%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\wsl.exe' ESCAPE '\\' OR OriginalFileName='wsl.exe') AND (CommandLine LIKE '% --install %' ESCAPE '\\' OR CommandLine LIKE '% -i %' ESCAPE '\\') AND CommandLine LIKE '%kali%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -173713,7 +173713,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\wsl.exe' ESCAPE '\\' OR OriginalFileName='wsl') AND (CommandLine LIKE '% --install %' ESCAPE '\\' OR CommandLine LIKE '% -i %' ESCAPE '\\') AND CommandLine LIKE '%kali%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\wsl.exe' ESCAPE '\\' OR OriginalFileName='wsl.exe') AND (CommandLine LIKE '% --install %' ESCAPE '\\' OR CommandLine LIKE '% -i %' ESCAPE '\\') AND CommandLine LIKE '%kali%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "sigmahq",

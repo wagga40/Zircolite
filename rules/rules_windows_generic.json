@@ -20707,6 +20707,44 @@
     "title": "Rhadamanthys Stealer Module Launch Via Rundll32.EXE"
   },
   {
+    "author": "Nasreddine Bencherchali (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-AppXDeploymentServer/Operational"
+    ],
+    "description": "Detects an appx package that was added to the pipeline of the \"to be processed\" packages that is located in a known folder often used as a staging directory.",
+    "eventid": [
+      854
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "rules/windows/builtin/appxdeployment_server/win_appxdeployment_server_appx_package_in_staging_directory.yml",
+    "id": "5cdeaf3d-1489-477c-95ab-c318559fc051",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "appxdeployment-server"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Path"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-AppXDeploymentServer/Operational' AND (EventID=854 AND ((Path LIKE '%:/Perflogs/%' ESCAPE '\\' OR Path LIKE '%:/Users/Public/%' ESCAPE '\\' OR Path LIKE '%:/Windows/Temp/%' ESCAPE '\\' OR Path LIKE '%/AppData/Local/Temp/%' ESCAPE '\\' OR Path LIKE '%/Desktop/%' ESCAPE '\\' OR Path LIKE '%/Downloads/%' ESCAPE '\\') OR (Path LIKE '%:\\\\PerfLogs\\\\%' ESCAPE '\\' OR Path LIKE '%:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR Path LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\Desktop\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\Downloads\\\\%' ESCAPE '\\')) AND (NOT COALESCE((Path LIKE '%/AppData/Local/Temp/WinGet/Microsoft.Winget.Source%' ESCAPE '\\' OR Path LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\WinGet\\\\Microsoft.Winget.Source%' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.stealth"
+    ],
+    "title": "AppX Located in Known Staging Directory Added to Deployment Pipeline"
+  },
+  {
     "author": "Andreas Braathen (mnemonic.io)",
     "channel": [
       "Security"
@@ -21568,7 +21606,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4103 AND (ContextInfo LIKE '%' ESCAPE '\\' AND (NOT COALESCE(((ContextInfo LIKE '%= powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/System32/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\') OR ContextInfo LIKE '%= C:\\\\WINDOWS\\\\System32\\\\sdiagnhost.exe -Embedding%' ESCAPE '\\' OR ContextInfo LIKE '%ConfigSyncRun.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\dsac.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\wsmprovhost.exe -Embedding%' ESCAPE '\\' OR (Payload LIKE '%Update-Help%' ESCAPE '\\' OR Payload LIKE '%Failed to update Help for the module%' ESCAPE '\\') OR ContextInfo LIKE '%Host Name = WaPSHost%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4103 AND (ContextInfo LIKE '%' ESCAPE '\\' AND (NOT COALESCE(((ContextInfo LIKE '%= powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/System32/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= C:/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\' OR ContextInfo LIKE '%= \\\\??\\\\C:\\\\Windows\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell%' ESCAPE '\\') OR ContextInfo LIKE '%= C:\\\\WINDOWS\\\\System32\\\\sdiagnhost.exe -Embedding%' ESCAPE '\\' OR ContextInfo LIKE '%ConfigSyncRun.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\dsac.exe%' ESCAPE '\\' OR ContextInfo LIKE '%C:\\\\Windows\\\\system32\\\\wsmprovhost.exe -Embedding%' ESCAPE '\\' OR (Payload LIKE '%Update-Help%' ESCAPE '\\' OR Payload LIKE '%Failed to update Help for the module%' ESCAPE '\\') OR ContextInfo LIKE '%Host Name = WaPSHost%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -25978,7 +26016,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\Foxmail\\\\V3.1%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\FoxmailPreview%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\DownloadManager\\\\Passwords%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\FTPWare\\\\COREFTP\\\\Sites%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\IncrediMail\\\\Identities%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Martin Prikryl\\\\WinSCP 2\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Mobatek\\\\MobaXterm\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenSSH\\\\Agent\\\\Keys%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenVPN-GUI\\\\configs%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\ORL\\\\WinVNC3\\\\Password%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Qualcomm\\\\Eudora\\\\CommandLine%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RealVNC\\\\WinVNC4%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RimArts\\\\B2\\\\Settings%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\SshHostKeys\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Sota\\\\FFFTP%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\TightVNC\\\\Server%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\WOW6432Node\\\\Radmin\\\\v3.0\\\\Server\\\\Parameters\\\\Radmin%' ESCAPE '\\') AND (NOT COALESCE((NewProcessName LIKE '%reg.exe' ESCAPE '\\' AND (CommandLine LIKE '%export%' ESCAPE '\\' OR CommandLine LIKE '%save%' ESCAPE '\\')), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\Foxmail\\\\V3.1%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Aerofox\\\\FoxmailPreview%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\DownloadManager\\\\Passwords%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\FTPWare\\\\COREFTP\\\\Sites%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\IncrediMail\\\\Identities%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Martin Prikryl\\\\WinSCP 2\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Mobatek\\\\MobaXterm\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenSSH\\\\Agent\\\\Keys%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\OpenVPN-GUI\\\\configs%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\ORL\\\\WinVNC3\\\\Password%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Qualcomm\\\\Eudora\\\\CommandLine%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RealVNC\\\\WinVNC4%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\RimArts\\\\B2\\\\Settings%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\Sessions%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\SimonTatham\\\\PuTTY\\\\SshHostKeys\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\Sota\\\\FFFTP%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\TightVNC\\\\Server%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Software\\\\WOW6432Node\\\\Radmin\\\\v3.0\\\\Server\\\\Parameters\\\\Radmin%' ESCAPE '\\') AND (NOT COALESCE((NewProcessName LIKE '%\\\\reg.exe' ESCAPE '\\' AND (CommandLine LIKE '%export%' ESCAPE '\\' OR CommandLine LIKE '%save%' ESCAPE '\\')), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -43506,7 +43544,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects usage of namp/zenmap. Adversaries may attempt to get a listing of services running on remote hosts, including those that may be vulnerable to remote software exploitation",
+    "description": "Detects usage of nmap/zenmap. Adversaries may attempt to get a listing of services running on remote hosts, including those that may be vulnerable to remote software exploitation",
     "eventid": [
       4688
     ],
@@ -43529,7 +43567,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\nmap.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\zennmap.exe' ESCAPE '\\') OR (OriginalFileName='nmap.exe' OR OriginalFileName='zennmap.exe')))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\nmap.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\zenmap.exe' ESCAPE '\\') OR (OriginalFileName='nmap.exe' OR OriginalFileName='zenmap.exe')))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -47770,7 +47808,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%Remove-EtwTraceProvider %' ESCAPE '\\' OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%0x11%' ESCAPE '\\') OR ((ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '% 17%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%\u201c''17''\u201d%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%\u201d17\u201d%' ESCAPE '\\'))))"
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%Remove-EtwTraceProvider %' ESCAPE '\\' OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%0x11%' ESCAPE '\\') OR ((ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '% 17%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%''17''%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%\"17\"%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -60040,44 +60078,6 @@
   {
     "author": "Nasreddine Bencherchali (Nextron Systems)",
     "channel": [
-      "Microsoft-Windows-AppXDeploymentServer/Operational"
-    ],
-    "description": "Detects an appx package that was added to the pipeline of the \"to be processed\" packages that is located in a known folder often used as a staging directory.",
-    "eventid": [
-      854
-    ],
-    "falsepositives": [
-      "Unknown"
-    ],
-    "filename": "rules/windows/builtin/appxdeployment_server/win_appxdeployment_server_appx_package_in_staging_directory.yml",
-    "id": "5cdeaf3d-1489-477c-95ab-c318559fc051",
-    "level": "high",
-    "license": "DRL-1.1",
-    "logsource": {
-      "product": "windows",
-      "service": "appxdeployment-server"
-    },
-    "required_fields": [
-      "Channel",
-      "EventID",
-      "Path"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-AppXDeploymentServer/Operational' AND (EventID=854 AND ((Path LIKE '%:/Perflogs/%' ESCAPE '\\' OR Path LIKE '%:/Users/Public/%' ESCAPE '\\' OR Path LIKE '%:/Windows/Temp/%' ESCAPE '\\' OR Path LIKE '%/AppdData/Local/Temp/%' ESCAPE '\\' OR Path LIKE '%/Desktop/%' ESCAPE '\\' OR Path LIKE '%/Downloads/%' ESCAPE '\\') OR (Path LIKE '%:\\\\PerfLogs\\\\%' ESCAPE '\\' OR Path LIKE '%:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR Path LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\AppdData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\Desktop\\\\%' ESCAPE '\\' OR Path LIKE '%\\\\Downloads\\\\%' ESCAPE '\\')))"
-    ],
-    "schema_version": 2,
-    "source": "sigmahq",
-    "source_table": "logs",
-    "status": "test",
-    "tags": [
-      "attack.stealth"
-    ],
-    "title": "AppX Located in Known Staging Directory Added to Deployment Pipeline"
-  },
-  {
-    "author": "Nasreddine Bencherchali (Nextron Systems)",
-    "channel": [
       "Security"
     ],
     "description": "Detects the setting of a custom protocol handler with the name \"rogue\". Seen being created by Forest Blizzard APT as reported by MSFT.",
@@ -65305,7 +65305,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (OriginalFileName='vmnat.exe' AND (NOT COALESCE((NewProcessName LIKE '%vmnat.exe' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (OriginalFileName='vmnat.exe' AND (NOT COALESCE((NewProcessName LIKE '%\\\\vmnat.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -68133,7 +68133,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR OriginalFileName LIKE '\\\\REGSVR32.EXE' ESCAPE '\\') AND CommandLine LIKE '% \\\\\\\\%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR OriginalFileName='REGSVR32.EXE') AND CommandLine LIKE '% \\\\\\\\%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -81512,7 +81512,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (ParentProcessName LIKE '%\\\\UMWorkerProcess.exe' ESCAPE '\\' AND (NOT COALESCE((NewProcessName LIKE '%wermgr.exe' ESCAPE '\\' OR NewProcessName LIKE '%WerFault.exe' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (ParentProcessName LIKE '%\\\\UMWorkerProcess.exe' ESCAPE '\\' AND (NOT COALESCE((NewProcessName LIKE '%\\\\wermgr.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\WerFault.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -86728,7 +86728,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\wsl.exe' ESCAPE '\\' OR OriginalFileName='wsl') AND (CommandLine LIKE '% --install %' ESCAPE '\\' OR CommandLine LIKE '% -i %' ESCAPE '\\') AND CommandLine LIKE '%kali%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\wsl.exe' ESCAPE '\\' OR OriginalFileName='wsl.exe') AND (CommandLine LIKE '% --install %' ESCAPE '\\' OR CommandLine LIKE '% -i %' ESCAPE '\\') AND CommandLine LIKE '%kali%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
