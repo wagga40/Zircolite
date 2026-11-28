@@ -6,6 +6,7 @@ Security updates are provided for the release lines listed below. Use the latest
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 4.9.x   | :white_check_mark: |
 | 4.8.x   | :white_check_mark: |
 | 4.7.x   | :white_check_mark: |
 | 4.6.x   | :white_check_mark: |
